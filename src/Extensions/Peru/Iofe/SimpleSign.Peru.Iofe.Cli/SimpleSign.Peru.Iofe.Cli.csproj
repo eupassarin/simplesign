@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- An extension loads into the CLI, a net8.0 dotnet tool: one target framework, the CLI's. -->
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>SimpleSign.Peru.Iofe.Cli</AssemblyName>
+    <RootNamespace>SimpleSign.Peru.Iofe.Cli</RootNamespace>
+    <PackageId>SimpleSign.Peru.Iofe.Cli</PackageId>
+    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets, --tsl-profile iofe, and 'simplesign iofe sign|verify|view' — the configuration of INDECOPI's accreditation guide, sections 4.2 to 4.4.</Description>
+    <PackageTags>iofe;indecopi;peru;simplesign;cli;extension</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Spectre.Console.Cli instantiates commands and settings via reflection. -->
+    <NoWarn>$(NoWarn);CA1812</NoWarn>
+    <!-- Every assembly the extension needs is next to it: the CLI loads from its folder what it does not have itself. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- The package is an extension, not a library to reference: its payload is the cli-extension/ folder. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+    <IncludeSymbols>false</IncludeSymbols>
+    <!-- The oldest CLI this extension runs in: raise it when the extension starts using something a newer CLI brought. -->
+    <CliExtensionMinCliVersion>0.12.0</CliExtensionMinCliVersion>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackCliExtension</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\SimpleSign.Peru.Iofe.Accredited\SimpleSign.Peru.Iofe.Accredited.csproj" />
+    <ProjectReference Include="..\..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Peru.Iofe.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    The manifest the CLI reads (extension.json), written at build with the version of the package, so a release sets it
+    in one place. It travels with the assemblies, in the build output and in the package.
+  -->
+  <Target Name="GenerateCliExtensionManifest" BeforeTargets="AssignTargetPaths">
+    <PropertyGroup>
+      <_CliExtensionManifest>$(IntermediateOutputPath)extension.json</_CliExtensionManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_CliExtensionManifest)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="{ &quot;name&quot;: &quot;iofe&quot;, &quot;assembly&quot;: &quot;$(AssemblyName).dll&quot;, &quot;type&quot;: &quot;SimpleSign.Peru.Iofe.Cli.IofeCliExtension&quot;, &quot;contract&quot;: 1, &quot;minCliVersion&quot;: &quot;$(CliExtensionMinCliVersion)&quot;, &quot;version&quot;: &quot;$(Version)&quot;, &quot;package&quot;: &quot;$(PackageId)&quot; }" />
+    <ItemGroup>
+      <None Include="$(_CliExtensionManifest)" Link="extension.json" CopyToOutputDirectory="PreserveNewest" />
+      <FileWrites Include="$(_CliExtensionManifest)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The assemblies of the build output (the extension, SimpleSign.Peru.Iofe*, what they need) and the manifest, under cli-extension/. -->
+  <Target Name="PackCliExtension">
+    <ItemGroup>
+      <_CliExtensionFile Include="$(OutDir)*.dll;$(OutDir)extension.json" />
+      <TfmSpecificPackageFile Include="@(_CliExtensionFile)" PackagePath="cli-extension/" />
+    </ItemGroup>
+  </Target>
+</Project>

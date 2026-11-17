@@ -22,19 +22,22 @@ Update `<Version>` in all `.csproj` files:
 | `src/Formats/SimpleSign/SimpleSign.csproj` | Meta-package |
 | `src/Core/SimpleSign.Core/SimpleSign.Core.csproj` | Core crypto |
 | `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
-| `src/TrustFrameworks/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj` | Brazil (shared) |
-| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj` | ICP-Brasil |
-| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
-| `src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
-| `src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
-| `src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
-| `src/TrustFrameworks/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj` | eIDAS (EU) |
+| `src/Extensions/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj` | Brazil (shared) |
+| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj` | ICP-Brasil |
+| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
+| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
+| `src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
+| `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
+| `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj` | IOFE accredited configuration |
+| `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj` | IOFE CLI extension (its `extension.json` takes the version from here) |
+| `src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj` | eIDAS (EU) |
 | `src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj` | PKCS#11 tokens and HSMs |
 | `src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj` | Cloud certificates (PSC, CSC) |
 | `src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj` | CAdES signing |
 | `src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj` | XAdES signing |
 | `src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj` | HTML→PDF |
 | `src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj` | CLI tool |
+| `src/Apps/SimpleSign.Cli.Extensibility/SimpleSign.Cli.Extensibility.csproj` | CLI extension contract |
 
 ### Quick sed (macOS):
 
@@ -46,19 +49,22 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Formats/SimpleSign/SimpleSign.csproj \
   src/Core/SimpleSign.Core/SimpleSign.Core.csproj \
   src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
-  src/TrustFrameworks/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj \
-  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj \
-  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
-  src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
-  src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
-  src/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
-  src/TrustFrameworks/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj \
+  src/Extensions/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj \
+  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj \
+  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
+  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
+  src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
+  src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
+  src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj \
+  src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj \
+  src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj \
   src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
   src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj \
   src/Formats/SimpleSign.CAdES/SimpleSign.CAdES.csproj \
   src/Formats/SimpleSign.XAdES/SimpleSign.XAdES.csproj \
   src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
-  src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj
+  src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \
+  src/Apps/SimpleSign.Cli.Extensibility/SimpleSign.Cli.Extensibility.csproj
 ```
 
 ## Version Bump — Other Files with Hardcoded Versions
@@ -130,7 +136,7 @@ dotnet test tests/unit/Formats/SimpleSign.CAdES.Tests --no-restore
 dotnet test tests/unit/Formats/SimpleSign.XAdES.Tests --no-restore
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests --no-restore
 dotnet test tests/unit/Core/SimpleSign.Core.Tests --no-restore
-dotnet test tests/unit/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe.Tests --no-restore
+dotnet test tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Tests --no-restore
 ```
 
 Run the AOT smoke publish on a Linux x64 runner (the release workflow is the

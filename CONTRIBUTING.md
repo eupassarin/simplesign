@@ -96,18 +96,21 @@ src/
     SimpleSign.CAdES/              # CAdES signing and validation
     SimpleSign.XAdES/              # XAdES signing and validation; ETSI trusted lists
     SimpleSign/                    # meta-package
-  TrustFrameworks/
+  Extensions/
     Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Fiscal, .IcpBrasil.Xades
-    Peru/Iofe/                     # SimpleSign.Peru.Iofe
+    Peru/Iofe/                     # SimpleSign.Peru.Iofe, .Accredited, .Cli (CLI extension), docs, playbooks, tools
+    Europe/Eidas/                  # SimpleSign.Europe.Eidas
   Signers/
     SimpleSign.Signers.Pkcs11/     # tokens, smartcards, HSMs
     SimpleSign.Signers.Cloud/      # cloud certificates (PSC, CSC v2)
   Extras/SimpleSign.HtmlToPdf/     # HTML-to-PDF converter
   Apps/
     SimpleSign.Cli/                # dotnet tool
+    SimpleSign.Cli.Extensibility/  # the contract of CLI extensions
     SimpleSign.Agent/              # tray app with a local signing API
-    SimpleSign.TestBench/          # local web app to try every option
-    SimpleSign.Sandbox/            # test PKI (CRL, OCSP, TSA, CSC) for the TestBench and the playbooks
+    Development/
+      SimpleSign.TestBench/        # local web app to try every option
+      SimpleSign.Sandbox/          # test PKI (CRL, OCSP, TSA, CSC) for the TestBench and the playbooks
 tests/
   unit/        # unit tests, one project per library and app, mirroring src/ (CLI tests in unit/Apps)
   integration/ # network-dependent tests

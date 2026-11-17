@@ -31,6 +31,7 @@ dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
+dotnet add package SimpleSign.Peru.Iofe.Accredited   # IOFE: the accreditation guide's sections 4.2–4.4, nothing to relax
 dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
@@ -48,6 +49,8 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
+| `SimpleSign.Peru.Iofe.Accredited` | The configuration INDECOPI's accreditation guide asks for (sections 4.2–4.4): signing and verification agents with the key in a PKCS#11 module, fixed policies, audit trails, the notice to the sender |
+| `SimpleSign.Peru.Iofe.Cli` | IOFE for the `simplesign` command line, as an extension: `simplesign extension install SimpleSign.Peru.Iofe.Cli` |
 | `SimpleSign.Europe.Eidas` | eIDAS (Regulation 910/2014): anchors from the EU list of trusted lists, and the qualification of a signature (QESig, AdESig-QC…) |
 | `SimpleSign.Brazil.IcpBrasil.Xades` | ICP-Brasil XAdES signature policies |
 | `SimpleSign.Brazil.Fiscal` | XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf |
@@ -133,9 +136,9 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](docs/articles/icp-brasil.md) / [Fiscal XML](docs/articles/fiscal-xml.md) | Brazilian PKI and NF-e/eSocial signing |
 | [eIDAS (EU)](docs/articles/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |
-| [IOFE (Peru)](docs/articles/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
+| [IOFE (Peru)](src/Extensions/Peru/Iofe/docs/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
 | [The apps](docs/articles/apps.md) | The CLI, the signing Agent, the TestBench and the Sandbox: what each is for |
-| [CLI](docs/articles/cli.md) | `simplesign sign`, `validate`, `augment`, `cades`, `xades`… |
+| [CLI](docs/articles/cli.md) / [CLI extensions](docs/articles/cli-extensions.md) | `simplesign sign`, `validate`, `augment`, `cades`, `xades`…; what an extension adds and how to write one |
 | [Signing agent](docs/articles/agent.md) / [TestBench](docs/articles/testbench.md) | Tray app with a local signing API; local web app to try every option |
 | [Standard coverage](docs/articles/coverage.md) | Every option with the clause that defines it, and what is not implemented |
 | [Conformance](docs/conformance.md) / [ADRs](docs/adr/) | Standards coverage and design decisions |

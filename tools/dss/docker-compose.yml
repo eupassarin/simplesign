@@ -50,10 +50,10 @@ services:
       # Certificates (PEM or DER) in this folder are trusted too.
       - ./trust:/trust:ro
       # The library's own copies of the ICP-Brasil and Gov.br roots, so DSS and SimpleSign trust the same ones.
-      - ../../src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs:/trust-icp-brasil:ro
-      - ../../src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs:/trust-govbr:ro
+      - ../../src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs:/trust-icp-brasil:ro
+      - ../../src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs:/trust-govbr:ro
       # The TestBench's copies of the public TSAs' roots (its "Public TSA roots" trust choice reads the same files).
-      - ../../src/Apps/SimpleSign.TestBench/TsaRoots:/trust-tsa:ro
+      - ../../src/Apps/Development/SimpleSign.TestBench/TsaRoots:/trust-tsa:ro
       # What is downloaded (EU trusted lists, Peruvian trusted list), kept between runs.
       - tl-cache:/var/cache/dss
 

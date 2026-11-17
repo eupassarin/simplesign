@@ -12,12 +12,12 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, iofe, eidas, icp-brasil, govbr). Write one with 'simplesign policy export validation [[--preset NAME]]'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, eidas, icp-brasil, govbr, or one an extension adds). Write one with 'simplesign policy export validation [[--preset NAME]]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>The trust profile: its validation policy (unless --policy) and its trust (unless --tsl/--lotl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, iofe, eidas, icp-brasil or gov-br. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, eidas, icp-brasil, gov-br, or one an extension adds. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added (their policies are not used).</summary>
@@ -27,7 +27,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
     [CommandOption("--sandbox <URL>")]
-    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and --profile iofe reads its list instead of INDECOPI's")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (eidas, or an extension's) reads the Sandbox's instead of the real one")]
     public string? Sandbox { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -134,7 +134,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>Which services of <c>--tsl</c> become anchors.</summary>
     [CommandOption("--tsl-profile <NAME>")]
-    [Description("Which services of --tsl become anchors: default (CA and TSA services) or iofe (INDECOPI's list: its 'unspecified' TSAs too, never a code-signing certificate; an expired list is kept for the policy's TLNotExpired to judge)")]
+    [Description("Which services of --tsl become anchors: default (CA and TSA services), or the profile an extension adds for its trust framework's list. An expired list is kept for the policy's TLNotExpired to judge")]
     public string? TrustedListProfile { get; init; }
 
     /// <summary>A list of trusted lists (LOTL); its national lists become trust anchors.</summary>
@@ -201,9 +201,9 @@ internal class TrustedValidationSettings : CommonSettings
             return Spectre.Console.ValidationResult.Error($"Unknown --tsl-profile '{TrustedListProfile}': use {TrustedListProfiles.Names}.");
         }
 
-        if (TrustedList is not null && TrustedListSignerPath is null && !TrustedListProfiles.IsIofe(TrustedListProfile))
+        if (TrustedList is not null && TrustedListSignerPath is null && !TrustedListProfiles.HasBundledSigner(TrustedListProfile))
         {
-            return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with (with --tsl-profile iofe, INDECOPI's bundled one is used).");
+            return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with (a --tsl-profile of an extension may bring its own).");
         }
 
         if (CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: false) is { } profileError)
@@ -274,7 +274,7 @@ internal class TrustedValidationSettings : CommonSettings
         if (TrustedList is not null)
         {
             var options = TrustedListProfiles.Options(TrustedListProfile, TrustedListSignerPath is null ? null : LoadCertificate(TrustedListSignerPath)) with { RejectExpired = false };
-            bool iofe = TrustedListProfile is not null && TrustedListProfile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
+            bool tolerant = TrustedListProfiles.UnverifiableListGivesNoAnchors(TrustedListProfile);
 
             try
             {
@@ -285,9 +285,9 @@ internal class TrustedValidationSettings : CommonSettings
                 LoadedTrustedLists.AddRange(list.TrustedLists);
                 LoadedTimedAnchors.Add(list);
             }
-            catch (System.Security.Cryptography.CryptographicException ex) when (iofe)
+            catch (System.Security.Cryptography.CryptographicException ex) when (tolerant)
             {
-                // A list not signed by INDECOPI gives no anchors: the signatures are INDETERMINATE, as with a LOTL's lists.
+                // A list not signed by its operator gives no anchors: the signatures are INDETERMINATE, as with a LOTL's lists.
                 Spectre.Console.AnsiConsole.MarkupLine($"[yellow]TSL:[/] {Spectre.Console.Markup.Escape($"{TrustedList}: {ex.Message} No anchor comes from it.")}");
             }
         }

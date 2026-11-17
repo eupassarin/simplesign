@@ -1,39 +1,58 @@
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Peru.Iofe;
+using SimpleSign.Cli.Extensibility;
 using SimpleSign.XAdES.TrustedLists;
 
 namespace SimpleSign.Cli.Commands;
 
 /// <summary>
 /// The ways the CLI reads a single trusted list (<c>--tsl</c>), by name (<c>--tsl-profile</c>): which services become
-/// anchors.
+/// anchors. <c>default</c> is the CLI's own (the CA and TSA services); the others come from the installed extensions
+/// (<see cref="ICliExtension.TrustedListProfiles"/>).
 /// </summary>
 internal static class TrustedListProfiles
 {
-    /// <summary>The profile names, for messages and validation.</summary>
-    internal const string Names = "default, iofe";
+    private const string Default = "default";
 
-    /// <summary>Whether <paramref name="profile"/> is known (null is the default).</summary>
-    internal static bool IsKnown(string? profile) => profile is null || profile.Equals("default", StringComparison.OrdinalIgnoreCase)
-        || profile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// The options of a profile: <c>default</c>, the CA and TSA services (<see cref="TrustedListOptions"/>); <c>iofe</c>,
-    /// INDECOPI's list (<see cref="IofeExtension.DefaultListOptions"/>: the <c>unspecified</c> services too, never a
-    /// code-signing certificate).
-    /// </summary>
-    /// <param name="profile">The profile name; null for the default.</param>
-    /// <param name="signer">The certificate the list must be signed with; null with <c>iofe</c> for INDECOPI's bundled one (<see cref="IofeExtension.IndecopiSigners"/>).</param>
-    internal static TrustedListOptions Options(string? profile, X509Certificate2? signer)
+    private static readonly CliTrustedListProfile s_default = new()
     {
-        if (IsIofe(profile))
+        Name = Default,
+        Options = signer => new TrustedListOptions { SignerCertificates = [signer ?? throw new ArgumentNullException(nameof(signer))] },
+    };
+
+    private static List<CliTrustedListProfile> s_profiles = [s_default];
+
+    /// <summary>The profile names, for messages.</summary>
+    internal static string Names => string.Join(", ", s_profiles.Select(p => p.Name));
+
+    /// <summary>Sets the profiles to <c>default</c> plus those of <paramref name="extensions"/>.</summary>
+    internal static void Use(IEnumerable<ICliExtension> extensions)
+    {
+        List<CliTrustedListProfile> profiles = [s_default];
+        foreach (var profile in extensions.SelectMany(e => e.TrustedListProfiles))
         {
-            return IofeExtension.DefaultListOptions with { SignerCertificates = signer is null ? IofeExtension.IndecopiSigners : [signer] };
+            if (!profiles.Exists(p => p.Name.Equals(profile.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                profiles.Add(profile);
+            }
         }
 
-        return new TrustedListOptions { SignerCertificates = [signer ?? throw new ArgumentNullException(nameof(signer))] };
+        s_profiles = profiles;
     }
 
-    /// <summary>Whether <paramref name="profile"/> is <c>iofe</c>.</summary>
-    internal static bool IsIofe(string? profile) => profile is not null && profile.Equals("iofe", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Whether <paramref name="profile"/> is known (null is the default).</summary>
+    internal static bool IsKnown(string? profile) => Find(profile) is not null;
+
+    /// <summary>The options the list is read with.</summary>
+    /// <param name="profile">The profile name; null for the default.</param>
+    /// <param name="signer">The certificate the list must be signed with; null only for a profile that brings its own.</param>
+    internal static TrustedListOptions Options(string? profile, X509Certificate2? signer) => Find(profile)!.Options(signer);
+
+    /// <summary>Whether the profile knows the certificate the list is signed with, so <c>--tsl-signer</c> may be left out.</summary>
+    internal static bool HasBundledSigner(string? profile) => Find(profile)?.HasBundledSigner ?? false;
+
+    /// <summary>Whether, when validating, a list not signed by its operator gives no anchors instead of stopping the command.</summary>
+    internal static bool UnverifiableListGivesNoAnchors(string? profile) => Find(profile)?.UnverifiableListGivesNoAnchors ?? false;
+
+    private static CliTrustedListProfile? Find(string? profile) =>
+        s_profiles.Find(p => p.Name.Equals(profile ?? Default, StringComparison.OrdinalIgnoreCase));
 }

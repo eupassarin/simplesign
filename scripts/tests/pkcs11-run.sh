@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SimpleSign - PKCS#11 tests against SoftHSM2 (runs on Linux with softhsm2 + opensc + openssl)
 # Usage: scripts/tests/pkcs11-run.sh           (from the repository root)
-# Runs the token tests (Category=Pkcs11) and the Native AOT smoke test with a real PKCS#11 module.
+# Runs the token tests (Category=Pkcs11), the IOFE accredited configuration on a token and the Native AOT smoke test
+# with a real PKCS#11 module.
 # On macOS/Windows use scripts/tests/pkcs11.sh, which runs this script in Docker.
 
 set -euo pipefail
@@ -27,6 +28,10 @@ export SOFTHSM2_CONF="$WORK/softhsm2.conf"
 
 echo "-> PKCS#11 tests (unit + SoftHSM token)"
 dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests -c Release --filter "Category=Pkcs11|Category=Unit" \
+  --logger "console;verbosity=normal"
+
+echo "-> IOFE accredited configuration (signing agent and time-stamp checks on a SoftHSM token)"
+dotnet test tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited.Tests -c Release --filter "Category=Pkcs11|Category=Unit" \
   --logger "console;verbosity=normal"
 
 echo "-> Native AOT smoke test with a SoftHSM token"

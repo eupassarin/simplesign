@@ -27,5 +27,5 @@ else {
 }
 
 $sandbox = if ($env:SANDBOX_URL) { $env:SANDBOX_URL } else { 'http://localhost:5300' }
-& dotnet run --project (Join-Path $repoRoot 'src/Apps/SimpleSign.TestBench') -- --sandbox $sandbox @args
+& dotnet run --project (Join-Path $repoRoot 'src/Apps/Development/SimpleSign.TestBench') -- --sandbox $sandbox @args
 exit $LASTEXITCODE

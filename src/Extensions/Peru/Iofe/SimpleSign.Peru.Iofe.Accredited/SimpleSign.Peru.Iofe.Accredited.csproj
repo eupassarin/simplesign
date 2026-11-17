@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Peru.Iofe.Accredited</AssemblyName>
+    <RootNamespace>SimpleSign.Peru.Iofe.Accredited</RootNamespace>
+    <PackageId>SimpleSign.Peru.Iofe.Accredited</PackageId>
+    <Description>The configuration of SimpleSign that INDECOPI's accreditation guide for signature software (v4.0, sections 4.2 to 4.4) asks for, with nothing to relax: signing by an automated agent with the key in a PKCS#11 module, verification by an automated agent with a notice to the sender, the checks of each time-stamp, the viewer and the audit trails.</Description>
+    <PackageTags>iofe;indecopi;peru;digital-signature;accreditation;pkcs11</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Public API only: no InternalsVisibleTo from these (the rule SimpleSign.Brazil follows). -->
+    <ProjectReference Include="..\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+    <ProjectReference Include="..\..\..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Peru.Iofe.Accredited.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

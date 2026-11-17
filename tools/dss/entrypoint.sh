@@ -156,7 +156,7 @@ if [ "${DSS_TRUST_PERU:-true}" = "true" ]; then
   trust_peru
 fi
 
-# The SimpleSign Sandbox (src/Apps/SimpleSign.Sandbox): its root, served at /root.pem.
+# The SimpleSign Sandbox (src/Apps/Development/SimpleSign.Sandbox): its root, served at /root.pem.
 group=sandbox
 sandbox_trusted=false
 # How the Sandbox ended up trusted, for config.json: list, anchor, testbench (its root through the TestBench) or none.

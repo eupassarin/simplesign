@@ -9,6 +9,12 @@ inspect PAdES, CAdES, and XAdES documents.
 dotnet tool install --global SimpleSign.Cli
 ```
 
+Trust frameworks beyond the built-in ones (ICP-Brasil, Gov.br, eIDAS) are extensions, installed afterwards:
+
+```bash
+simplesign extension install SimpleSign.Peru.Iofe.Cli     # Peru (IOFE): --profile iofe, 'simplesign iofe …'
+```
+
 ## Usage
 
 ```bash

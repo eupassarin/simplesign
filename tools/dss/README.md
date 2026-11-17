@@ -12,7 +12,7 @@ This folder runs the DSS demo web application in Docker and exposes its REST val
 Start the Sandbox first (any port), then DSS:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --ephemeral
 docker compose -f tools/dss/docker-compose.yml up -d
 ```
 
@@ -47,7 +47,7 @@ its trust store (below) and how it fetches revocation data.
 ## Trusting the Sandbox certificates
 
 DSS only knows the trust anchors it is given. The test certificates come from the SimpleSign
-Sandbox (`src/Apps/SimpleSign.Sandbox`, see [docs/articles/sandbox.md](../../docs/articles/sandbox.md)). There are
+Sandbox (`src/Apps/Development/SimpleSign.Sandbox`, see [docs/articles/sandbox.md](../../docs/articles/sandbox.md)). There are
 two ways to trust them, chosen with `DSS_SANDBOX_TRUST`:
 
 - **`list` (default): through the Sandbox's trusted list.**
@@ -110,7 +110,7 @@ only lets a request to a private address through when it is loopback.
 A Sandbox on another port needs the same ports here:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral --port 5310
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --ephemeral --port 5310
 SANDBOX_URL=http://host.docker.internal:5310 SANDBOX_FORWARD_PORTS="5310 5311 5312" \
   docker compose -f tools/dss/docker-compose.yml up -d
 ```
@@ -132,8 +132,8 @@ The Sandbox root is a test root. Do not add it to a validator that is used for r
 The container also trusts the ICP-Brasil roots (Autoridade Certificadora Raiz Brasileira) and
 the Gov.br root (Autoridade Certificadora Raiz do Governo Federal do Brasil v1), so DSS can
 validate real Brazilian signatures. It reads them from the library's own copies
-(`src/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs` and
-`src/TrustFrameworks/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs`), so DSS and SimpleSign trust
+(`src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/Certs` and
+`src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/Certs`), so DSS and SimpleSign trust
 the same roots. Only the roots are trust anchors; DSS fetches the intermediates from each
 certificate's AIA. Set `DSS_TRUST_ICP_BRASIL=false` or `DSS_TRUST_GOVBR=false` to turn them off.
 
@@ -157,7 +157,7 @@ trust anchors: it validates the chain but does not report a qualification (QES/Q
 The container also trusts the roots of the public TSAs the TestBench offers: DigiCert Trusted Root G4,
 Sectigo Public Time Stamping Root R46 and the FreeTSA Root CA. Without them, DSS reports for any signature
 timestamped by these TSAs "The certificate chain for time-stamp is not trusted, it does not contain a trust
-anchor". It reads them from the TestBench's own copies (`src/Apps/SimpleSign.TestBench/TsaRoots`), which its
+anchor". It reads them from the TestBench's own copies (`src/Apps/Development/SimpleSign.TestBench/TsaRoots`), which its
 **Public TSA roots** trust choice (on by default) reads too, so DSS and SimpleSign trust the same roots. Set
 `DSS_TRUST_TSA_ROOTS=false` to turn them off.
 
@@ -269,7 +269,7 @@ or in the `SIMPLESIGN_DSS_URL` environment variable.
 With the container up, the test suite also uses it:
 
 ```bash
-dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~DssCrossValidationTests|FullyQualifiedName~DssScenarioCrossValidationTests"
+dotnet test tests/unit/Apps/Development/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~DssCrossValidationTests|FullyQualifiedName~DssScenarioCrossValidationTests"
 ```
 
 `DssScenarioCrossValidationTests` signs every Sandbox scenario (each signer, TSA and failure, in
@@ -320,7 +320,7 @@ at 05:00 UTC:
 2. then pulls the published image (the `6.3-<hash>` of the commit's `tools/dss`, else `6.3`) and starts it with
    `--network host`, `SANDBOX_FORWARD_PORTS=""` and `DSS_TRUST_PERU=false`, and waits (up to 10 minutes) for
    `/services/`;
-3. runs `dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~Dss"` with
+3. runs `dotnet test tests/unit/Apps/Development/SimpleSign.TestBench.Tests --filter "FullyQualifiedName~Dss"` with
    `SIMPLESIGN_REQUIRE_SANDBOX=true` and `SIMPLESIGN_REQUIRE_DSS=true`, so nothing is skipped;
 4. uploads the results (`dss-cross-validation`: the `.trx`, the DSS container's log and the Sandbox's log).
 

@@ -16,7 +16,7 @@ namespace SimpleSign.Cli;
 /// <item><c>--tls-trust PEM</c> (<c>SIMPLESIGN_TLS_TRUST</c>): a root (and its intermediates) accepted for HTTPS, next to the system's.</item>
 /// <item><c>--sandbox URL</c>: a running SimpleSign Sandbox, read once (<c>/api/info</c>): its origins are allowed, LDAP
 /// too, and its chain is accepted for HTTPS. The option stays on the command line: <c>--profile sandbox</c> and
-/// <c>--profile iofe</c> read the Sandbox's trusted lists with it.</item>
+/// <c>--profile eidas</c> (or a profile of an extension) read the Sandbox's trusted lists with it.</item>
 /// </list>
 /// </summary>
 internal static class CliNetwork

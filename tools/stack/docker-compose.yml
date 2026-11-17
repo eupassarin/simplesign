@@ -11,7 +11,7 @@ services:
   sandbox:
     build:
       context: ../..
-      dockerfile: src/Apps/SimpleSign.Sandbox/Dockerfile
+      dockerfile: src/Apps/Development/SimpleSign.Sandbox/Dockerfile
     image: simplesign-sandbox:local
     pull_policy: build
     # HTTP (services, admin API, UI), HTTPS (CRLs over TLS), LDAP (CRLs over LDAP). The certificates name

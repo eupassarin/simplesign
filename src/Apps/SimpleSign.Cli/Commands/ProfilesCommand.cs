@@ -16,14 +16,17 @@ internal sealed class ProfilesCommand : Command<ProfilesCommand.Settings>
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var table = new Table().AddColumns("Profile", "For", "Signing policy", "Validation policy", "Trust");
-        foreach (var (name, title, signing, validation, trust) in CliProfiles.Catalog)
+        foreach (var profile in CliProfiles.Catalog)
         {
-            table.AddRow(Markup.Escape(name), Markup.Escape(title), Markup.Escape(signing), Markup.Escape(validation), Markup.Escape(trust));
+            table.AddRow(
+                Markup.Escape(profile.Name), Markup.Escape(profile.Title), Markup.Escape(profile.SigningPolicy),
+                Markup.Escape(profile.ValidationPolicy), Markup.Escape(profile.Trust));
         }
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine("[dim]--profile NAME sets the policy and the trust; an explicit --signing-policy/--policy or --tsl/--lotl wins. "
-            + "--trust-profile NAME (repeatable) adds another profile's trust only. Write a profile's policy with 'simplesign policy export'.[/]");
+            + "--trust-profile NAME (repeatable) adds another profile's trust only. Write a profile's policy with 'simplesign policy export'. "
+            + "Other trust frameworks come with extensions: 'simplesign extension install PACKAGE'.[/]");
         return 0;
     }
 }

@@ -1,6 +1,6 @@
 # Standard coverage
 
-<!-- Generated from src/Apps/SimpleSign.TestBench/Schema/OptionSchema.cs. Do not edit by hand:
+<!-- Generated from src/Apps/Development/SimpleSign.TestBench/Schema/OptionSchema.cs. Do not edit by hand:
      run the TestBench tests with SIMPLESIGN_UPDATE_DOCS=1 to write it again. -->
 
 What SimpleSign implements of each signature standard, option by option: the clause that

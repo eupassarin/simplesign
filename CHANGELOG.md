@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`SimpleSign.Peru.Iofe.Accredited`: the configuration INDECOPI's accreditation guide asks for, with nothing to
+  relax** (*Guía de Acreditación de Aplicaciones de Software* v4.0, sections 4.2, 4.3 and 4.4). What the checklist
+  left to "the accredited product" is now what the API guarantees:
+  - `IofeSigningAgent` (section 4.2) signs PDF, CMS and XML for a transaction. Its only key source is a PKCS#11
+    module, which must be the one the operator declares (`IofeModuleDeclaration`) and whose key the driver reports
+    as sensitive and not extractable; it takes no policy (`IofePolicies.AgentSigning`), does not open without an
+    audit sink, and refuses a kind of transaction it was not set up for. Refusals of its own are
+    `IofeAccreditationException` with an `IofeRefusal`; those of the policy stay `SigningException`.
+  - `IofeVerificationAgent` (section 4.3) checks every signature of a received document under
+    `IofePolicies.AgentValidation`, rejects the document when any is not valid, hands an `IofeRejectionNotice` (in
+    Spanish) to the `IIofeSenderNotifier`, and records each verification (`IVerificationAuditSink`,
+    `JsonLinesVerificationAuditSink`: the hash chain `simplesign audit verify` reads).
+  - `IofeTimestampAuthority` (section 4.4): the authority with its certificate, so a token of any other is refused,
+    besides the checks of its signature and of the authority's certificate.
+  - `IofeContingency`: the one exception the guide allows (a procedure INDECOPI approved, with its validity), written
+    to every audit record made under it; a revoked certificate is still refused.
+  - `IofeViewer` (Req. 18, 28), and `IofeTrust`: INDECOPI's trusted list (default), a list already loaded, or roots
+    the operator installed.
+  - CLI: `simplesign iofe sign`, `iofe verify` and `iofe view`, in the IOFE extension (below).
+  - The manuals the guide asks for, in Spanish, under `src/Extensions/Peru/Iofe/docs/acreditacion/` (administration,
+    user, programmer, security configuration, scope); `src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md` marks
+    what the package guarantees (**A**).
+  - Not there yet: the code signing of the release (Req. 17, 27), which needs a code-signing certificate.
+- **CLI extensions: `simplesign extension install PACKAGE`.** A package installed into a CLI that is already there
+  adds commands, trust profiles (`--profile`), signing and validation policies by name and trusted-list profiles
+  (`--tsl-profile`). The contract is the new package `SimpleSign.Cli.Extensibility` (`ICliExtension`); an extension
+  is a NuGet package with a `cli-extension/` folder (an `extension.json` manifest and the assemblies), extracted to
+  `~/.simplesign/extensions/NAME` (`SIMPLESIGN_EXTENSIONS_DIR`). `extension list` shows what each adds and why one
+  was not loaded; `extension remove NAME` removes it. `install` takes a package from nuget.org, from
+  `--source <folder|https url>` or from a `.nupkg` file, shows its SHA-512 and does not verify a package signature:
+  an extension is code that runs each time `simplesign` starts (ADR 0030, `docs/articles/cli-extensions.md`).
+- **`SimpleSign.Peru.Iofe.Cli`, the first extension**: `--profile iofe`, the `iofe` and `iofe-agent` policies,
+  `--tsl-profile iofe` and `simplesign iofe sign|verify|view`.
+- **`Pkcs11Signer.KeyProtection`** (`Pkcs11KeyProtection`): whether the driver reports the signing key as sensitive,
+  extractable, generated on the token, and whether the slot is hardware; `IsConfinedToToken` to refuse a key that can
+  leave its token. Also `TokenManufacturer`, `TokenModel` and `TokenSerialNumber`.
+- **`IofePolicies.AgentSigning` and `IofePolicies.AgentValidation`**: the IOFE policies of an automated agent
+  (nonRepudiation required), until now a one-line adjustment in the documentation.
+
+### Changed
+
+- **The CLI no longer comes with IOFE (Peru): it is an extension.**
+  - *Before:* `--profile iofe`, `--signing-policy iofe`, `--policy iofe`, `policy export --preset iofe` and
+    `--tsl-profile iofe` worked in every `simplesign`.
+  - *After:* they need `simplesign extension install SimpleSign.Peru.Iofe.Cli`; without it the CLI says the name is
+    unknown and how to get it. ICP-Brasil, Gov.br, eIDAS and the Sandbox are still built in. Scripts that use the
+    `iofe` names must install the extension first. The TestBench bundles it for the CLI it runs.
+- **Repository layout** (ADR 0030; package, assembly and namespace names are the same):
+  - `src/TrustFrameworks` is now `src/Extensions` (and `tests/unit/TrustFrameworks`, `tests/unit/Extensions`).
+  - Everything of Peru/IOFE is under `src/Extensions/Peru/Iofe`: the three packages, `docs/` (the article that was
+    `docs/articles/iofe.md`, and `acreditacion/`), `playbooks/` (`indecopi-checklist.md`, `indecopi-guia-v4.json`,
+    which were in `docs/playbooks/`) and `tools/indecopi.py` (which was in `tools/playbooks/`).
+  - The TestBench and the Sandbox, which are development tools, are under `src/Apps/Development` (and
+    `tests/unit/Apps/Development`): `dotnet run --project src/Apps/Development/SimpleSign.Sandbox`.
+
+### Removed
+
+- `src/Apps/SimpleSign.Playbook`: a leftover web bundle nothing used (the playbooks run in the TestBench's Playbook tab).
+
 ## [0.12.0] - 2026-11-16
 
 ### Added

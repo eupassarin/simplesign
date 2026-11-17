@@ -28,6 +28,7 @@ internal sealed class Pkcs11Module
     private const int IndexInitialize = 0;
     private const int IndexFinalize = 1;
     private const int IndexGetSlotList = 4;
+    private const int IndexGetSlotInfo = 5;
     private const int IndexGetTokenInfo = 6;
     private const int IndexOpenSession = 12;
     private const int IndexCloseSession = 13;
@@ -46,6 +47,7 @@ internal sealed class Pkcs11Module
     private readonly CInitialize _initialize;
     private readonly CFinalize _finalize;
     private readonly CGetSlotList _getSlotList;
+    private readonly CGetSlotInfo _getSlotInfo;
     private readonly CGetTokenInfo _getTokenInfo;
     private readonly COpenSession _openSession;
     private readonly CCloseSession _closeSession;
@@ -70,6 +72,9 @@ internal sealed class Pkcs11Module
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nuint CGetSlotList(byte tokenPresent, nint slotList, nint count);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate nuint CGetSlotInfo(nuint slotId, nint info);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nuint CGetTokenInfo(nuint slotId, nint info);
@@ -128,6 +133,7 @@ internal sealed class Pkcs11Module
         _initialize = Function<CInitialize>(functionList, IndexInitialize);
         _finalize = Function<CFinalize>(functionList, IndexFinalize);
         _getSlotList = Function<CGetSlotList>(functionList, IndexGetSlotList);
+        _getSlotInfo = Function<CGetSlotInfo>(functionList, IndexGetSlotInfo);
         _getTokenInfo = Function<CGetTokenInfo>(functionList, IndexGetTokenInfo);
         _openSession = Function<COpenSession>(functionList, IndexOpenSession);
         _closeSession = Function<CCloseSession>(functionList, IndexCloseSession);
@@ -247,6 +253,20 @@ internal sealed class Pkcs11Module
 
         return result;
     }
+
+    /// <summary>Reads the flags of CK_SLOT_INFO for a slot, or <see langword="null"/> when the driver does not report them.</summary>
+    internal ulong? GetSlotFlags(ulong slotId)
+    {
+        using var memory = new NativeAllocations();
+        nint info = memory.Allocate(CkLayout.SlotInfoBufferSize);
+        return Layout.Normalize(_getSlotInfo((nuint)slotId, info)) == CkConstants.CkrOk
+            ? Layout.ReadULong(info, CkLayout.SlotInfoFlagsOffset)
+            : null;
+    }
+
+    /// <summary>Reads a CK_BBOOL attribute, or <see langword="null"/> when the object does not report it.</summary>
+    internal bool? GetBooleanAttribute(ulong session, ulong objectHandle, ulong type) =>
+        GetAttribute(session, objectHandle, type) is { Length: > 0 } value ? value[0] != 0 : null;
 
     /// <summary>Reads CK_TOKEN_INFO for a slot.</summary>
     internal CkTokenInfo GetTokenInfo(ulong slotId)

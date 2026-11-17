@@ -41,7 +41,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>The trust profile: its signing policy (unless --signing-policy) and its trust (unless --tsl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, iofe, eidas or icp-brasil (gov-br validates only). Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, eidas, icp-brasil (gov-br validates only), or one an extension adds. Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added before signing (their policies are not used).</summary>
@@ -51,7 +51,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
     [CommandOption("--sandbox <URL>")]
-    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and --profile iofe reads its list instead of INDECOPI's")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (eidas, or an extension's) reads the Sandbox's instead of the real one")]
     public string? Sandbox { get; init; }
 
     /// <summary>Trust anchor certificate files for the checks made before signing.</summary>
@@ -81,7 +81,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>Which services of <c>--tsl</c> become anchors.</summary>
     [CommandOption("--tsl-profile <NAME>")]
-    [Description("Which services of --tsl become anchors: default (CA and TSA services) or iofe (INDECOPI's list: its 'unspecified' TSAs too, never a code-signing certificate)")]
+    [Description("Which services of --tsl become anchors: default (CA and TSA services), or the profile an extension adds for its trust framework's list")]
     public string? SigningTrustedListProfile { get; init; }
 
     /// <summary>The certificate the TSA must sign with.</summary>
@@ -177,9 +177,9 @@ internal abstract class TimestampedSigningSettings : CommonSettings
             return $"Unknown --tsl-profile '{SigningTrustedListProfile}': use {TrustedListProfiles.Names}.";
         }
 
-        if (SigningTrustedList is not null && SigningTrustedListSigner is null && !TrustedListProfiles.IsIofe(SigningTrustedListProfile))
+        if (SigningTrustedList is not null && SigningTrustedListSigner is null && !TrustedListProfiles.HasBundledSigner(SigningTrustedListProfile))
         {
-            return "--tsl requires --tsl-signer: the certificate the trusted list must be signed with (with --tsl-profile iofe, INDECOPI's bundled one is used).";
+            return "--tsl requires --tsl-signer: the certificate the trusted list must be signed with (a --tsl-profile of an extension may bring its own).";
         }
 
         return CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: true);

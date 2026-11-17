@@ -100,7 +100,7 @@ Environment: `SANDBOX_URL`, `SOFTHSM_TOKEN_LABEL`, `SOFTHSM_PIN`, `SOFTHSM_SO_PI
 
 ## The Sandbox container
 
-`src/Apps/SimpleSign.Sandbox/Dockerfile`, built from the repository root. It runs with
+`src/Apps/Development/SimpleSign.Sandbox/Dockerfile`, built from the repository root. It runs with
 `--listen-any` (HTTP, HTTPS and LDAP answer outside the container's loopback) and
 `--allow-remote-admin` (requests published from the host arrive from the Docker bridge, not from
 loopback). The ports are published on `127.0.0.1` only, so the admin API, which hands out private

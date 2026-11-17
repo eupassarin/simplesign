@@ -3,6 +3,7 @@ using SimpleSign.Brazil;
 using SimpleSign.CAdES;
 using SimpleSign.Cli;
 using SimpleSign.Cli.Commands;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.XAdES;
 using Spectre.Console;
@@ -40,13 +41,15 @@ services.AddSimpleSignXades();
 
 var registry = new SimpleSignServiceRegistry(services);
 var app = new CommandApp(registry);
-ConfigureApp(app);
+ConfigureApp(app, CliExtensions.LoadInstalled());
 return await app.RunAsync(commandArgs);
 
 internal static partial class Program
 {
-    internal static void ConfigureApp(CommandApp app)
+    /// <summary>Sets the command line up, with the commands, profiles and policies of <paramref name="extensions"/> (none when null).</summary>
+    internal static void ConfigureApp(CommandApp app, IReadOnlyList<SimpleSign.Cli.Extensibility.ICliExtension>? extensions = null)
     {
+        CliExtensions.Use(extensions ?? []);
         app.Configure(config =>
         {
             config.SetApplicationName("simplesign");
@@ -142,6 +145,16 @@ internal static partial class Program
                     .WithDescription("Check the hash chain of an audit trail written by --audit-log");
             });
 
+            config.AddBranch("extension", extension =>
+            {
+                extension.AddCommand<ExtensionInstallCommand>("install")
+                    .WithDescription("Install an extension from a NuGet package: more trust profiles, policies and commands");
+                extension.AddCommand<ExtensionListCommand>("list")
+                    .WithDescription("List the installed extensions");
+                extension.AddCommand<ExtensionRemoveCommand>("remove")
+                    .WithDescription("Remove an installed extension");
+            });
+
             config.AddBranch("fiscal", fiscal =>
             {
                 fiscal.AddCommand<FiscalSignCommand>("sign")
@@ -149,6 +162,9 @@ internal static partial class Program
                 fiscal.AddCommand<FiscalValidateCommand>("validate")
                     .WithDescription("Validate the XMLDSig signatures of fiscal XML");
             });
+
+            // What the installed extensions add: their own branches (the Peruvian 'iofe', for one).
+            CliExtensions.AddCommands(config);
 
             config.SetExceptionHandler((ex, _) =>
             {

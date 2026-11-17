@@ -215,26 +215,9 @@ public sealed class CliCommandTests : IDisposable
     {
         string signed = await SignAsync("tsl.pdf");
 
-        var (exit, _) = await RunAsync("validate", signed, "--tsl", "https://iofe.indecopi.gob.pe/TSL/tsl-pe.xml");
+        var (exit, _) = await RunAsync("validate", signed, "--tsl", "https://example.org/tsl.xml");
 
         exit.ShouldNotBe(0);
-    }
-
-    [Fact]
-    public async Task Validate_ExpiredTslUnderIofePolicy_IsTryLater()
-    {
-        string signed = await SignAsync("tsl-expired-iofe.pdf");
-        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
-
-        // The list is kept, and the policy's TLNotExpired (FAIL in IOFE) judges it.
-        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
-            "--tsl", tsl, "--tsl-signer", signer, "--policy", "iofe", "--json");
-
-        exit.ShouldBe(1, output);
-        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
-        var signature = json.RootElement.GetProperty("signatures")[0];
-        signature.GetProperty("indication").GetString().ShouldBe("Indeterminate");
-        signature.GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
     }
 
     [Fact]
@@ -243,10 +226,22 @@ public sealed class CliCommandTests : IDisposable
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "iofe", "eidas", "icp-brasil", "gov-br" })
+        foreach (string name in new[] { "sandbox", "eidas", "icp-brasil", "gov-br" })
         {
             output.ShouldContain(name);
         }
+    }
+
+    [Fact]
+    public async Task Validate_ProfileOfAnExtensionNotInstalled_SaysHowToGetIt()
+    {
+        string signed = await SignAsync("no-extension.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--profile", "iofe");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("Unknown profile 'iofe'");
+        output.ShouldContain("simplesign extension install");
     }
 
     [Fact]
@@ -281,21 +276,6 @@ public sealed class CliCommandTests : IDisposable
 
         exit.ShouldNotBe(0, output);
         output.ShouldContain("UntrustedRoot");
-    }
-
-    [Fact]
-    public async Task Validate_ProfileIofeWithAnExplicitTsl_UsesTheIofePolicyAndThatList()
-    {
-        string signed = await SignAsync("tsl-expired-profile.pdf");
-        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
-
-        // --profile iofe gives the policy (TLNotExpired FAIL); the explicit --tsl replaces INDECOPI's list.
-        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
-            "--tsl", tsl, "--tsl-signer", signer, "--profile", "iofe", "--json");
-
-        exit.ShouldBe(1, output);
-        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
-        json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
     }
 
     [Fact]
@@ -507,26 +487,13 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Sign_IofePresetWithoutTrustAnchors_IsRefusedAsUntrusted()
+    public async Task Sign_WithAuditLog_SignsAndTheTrailVerifies()
     {
-        string input = WriteMinimalPdf("iofe-untrusted-input.pdf");
-
-        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
-            "--output", Path.Combine(_tempDir, "iofe-untrusted.pdf"), "--signing-policy", "iofe", "--json");
-
-        exit.ShouldNotBe(0);
-        using var json = JsonDocument.Parse(text);
-        json.RootElement.GetProperty("error").GetProperty("reason").GetString().ShouldBe("UntrustedRoot");
-    }
-
-    [Fact]
-    public async Task Sign_IofePresetWithTrustAndAuditLog_SignsAndTheTrailVerifies()
-    {
-        string input = WriteMinimalPdf("iofe-trusted-input.pdf");
+        string input = WriteMinimalPdf("audited-input.pdf");
         string audit = Path.Combine(_tempDir, "audit.jsonl");
 
         var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
-            "--output", Path.Combine(_tempDir, "iofe-trusted.pdf"), "--signing-policy", "iofe", "--trust", _cerPath, "--audit-log", audit);
+            "--output", Path.Combine(_tempDir, "audited.pdf"), "--signing-policy", "default", "--trust", _cerPath, "--audit-log", audit);
         var (verifyExit, verifyText) = await RunAsync("audit", "verify", audit);
         File.WriteAllText(audit, File.ReadAllText(audit).Replace("\"signed\":true", "\"signed\":false", StringComparison.Ordinal));
         var (tamperedExit, _) = await RunAsync("audit", "verify", audit);
@@ -546,8 +513,6 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData("signing", "iofe", "INDECOPI")]
-    [InlineData("validation", "iofe", "INDECOPI")]
     [InlineData("signing", "eidas", "eIDAS")]
     [InlineData("validation", "eidas", "eIDAS")]
     public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset, string name)
@@ -567,10 +532,10 @@ public sealed class CliCommandTests : IDisposable
 
         string report = Path.Combine(_tempDir, "named-policy.json");
 
-        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--policy", "iofe", "--simple-report", report);
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--trust", _cerPath, "--policy", "strict", "--simple-report", report);
 
         exit.ShouldBe(0, output);
-        File.ReadAllText(report).ShouldContain("INDECOPI");
+        File.ReadAllText(report).ShouldContain("SimpleSign default, strict");
     }
 
     [Theory]

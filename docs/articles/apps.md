@@ -21,7 +21,7 @@ Sandbox gives you a PKI whose every edge case you can produce on demand (a revok
 expired TSA, a CRL without `nextUpdate`, a trusted list signed by the wrong key). The TestBench's
 Playbook tab runs a list of steps written beforehand against it, through the library *and* through
 the CLI, and exports the evidence as an HTML page and a zip. That is how
-[INDECOPI's guide v4.0](iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
+[INDECOPI's guide v4.0](../../src/Extensions/Peru/Iofe/docs/iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
 [eIDAS checklist](../playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
 
 **For signing in a browser** — the Agent. A web page cannot reach a smartcard or the OS certificate
@@ -139,7 +139,7 @@ Everything the CLI takes is in [cli.md](cli.md).
 ## SimpleSign.TestBench
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.TestBench
+dotnet run --project src/Apps/Development/SimpleSign.TestBench
 # → http://127.0.0.1:5199, loopback only
 ```
 
@@ -184,7 +184,7 @@ to an auditor. See [playbook.md](playbook.md) and [AUTHORING.md](../playbooks/AU
 ## SimpleSign.Sandbox
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --ephemeral
 # → http://localhost:5300, HTTPS on 5301, LDAP on 5302
 ```
 

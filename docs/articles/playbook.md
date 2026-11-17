@@ -168,8 +168,8 @@ that shows it, and the test names it.
   trusted list in INDECOPI's layout (signature, expiry, listed roots and the 'unspecified' TSA), nonRepudiation for an
   automated agent, a TSA of the TSL when a signature is raised to B-LTA later, the validation report and the audit
   trail, through the library and the CLI. The other items marked
-  P in [indecopi-checklist.md](../playbooks/indecopi-checklist.md) name steps of `sandbox-basics` and `etsi-baseline`;
-  see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
+  P in [indecopi-checklist.md](../../src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md) name steps of `sandbox-basics` and `etsi-baseline`;
+  see [iofe.md](../../src/Extensions/Peru/Iofe/docs/iofe.md). Written by `src/Extensions/Peru/Iofe/tools/indecopi.py`.
 - `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
@@ -194,7 +194,7 @@ that shows it, and the test names it.
   enveloping); a section whose file is missing is skipped. Through the library, with the Sandbox's TSA (change
   `timestamp.provider` to keep the result).
 
-Tests: `tests/unit/Apps/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
+Tests: `tests/unit/Apps/Development/SimpleSign.TestBench.Tests/Playbooks` checks the format, the kept results and the preview, and
 runs every sample against the Sandbox; it checks that the ETSI, INDECOPI and eIDAS samples cover every P item of their
 checklists, that every step and section of a sample has a description, and that no framework sample repeats a generic
 step. The schema is `docs/schemas/playbook.schema.json` (also
