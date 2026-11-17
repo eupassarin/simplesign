@@ -182,7 +182,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
             return "--tsl requires --tsl-signer: the certificate the trusted list must be signed with (a --tsl-profile of an extension may bring its own).";
         }
 
-        return CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: true);
+        return CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: true, hasTrustedList: SigningTrustedList is not null);
     }
 
     private SimpleSign.Core.Extensions.TrustProfile? _profile;

@@ -53,7 +53,7 @@ public sealed class AatlCliExtensionTests : IDisposable
         var (exit, output) = await AatlCli.RunAsync(new AatlCliExtension(), "profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "aatl", "Adobe Approved Trust List" })
+        foreach (string name in new[] { "sandbox", "tsl", "aatl", "Adobe Approved Trust List" })
         {
             output.ShouldContain(name);
         }

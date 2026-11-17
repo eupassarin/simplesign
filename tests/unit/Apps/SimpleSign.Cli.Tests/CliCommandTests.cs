@@ -216,12 +216,13 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Profiles_NoExtension_ListsTheSandboxOnly()
+    public async Task Profiles_NoExtension_ListsTheSandboxAndTheTrustedListOnly()
     {
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
         output.ShouldContain("sandbox");
+        output.ShouldContain("tsl");
         foreach (string name in new[] { "eidas", "icp-brasil", "gov-br", "iofe" })
         {
             output.ShouldNotContain(name);
@@ -335,6 +336,70 @@ public sealed class CliCommandTests : IDisposable
         json.RootElement.GetProperty("signatures")[0].GetProperty("constraints").EnumerateArray()
             .ShouldContain(c => c.GetProperty("id").GetString() == "TrustedLists/TLNotExpired"
                 && c.GetProperty("status").GetString() == "Warning");
+    }
+
+    [Fact]
+    public async Task Validate_ProfileTslWithTheList_TrustsTheListsServices()
+    {
+        string signed = await SignAsync("tsl-profile.pdf");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddMonths(6));
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--profile", "tsl", "--tsl", tsl, "--tsl-signer", signer, "--json");
+
+        exit.ShouldBe(0, output);
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("indication").GetString().ShouldBe("Valid");
+    }
+
+    [Fact]
+    public async Task Validate_ProfileTslWithAListThatDoesNotNameTheSigner_IsIndeterminate()
+    {
+        string signed = await SignAsync("tsl-profile-other.pdf");
+        using var other = TestCertificateFactory.CreateSelfSignedCert("CN=Another CA, O=Tests");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddMonths(6), service: other);
+
+        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--profile", "tsl", "--tsl", tsl, "--tsl-signer", signer, "--json");
+
+        exit.ShouldBe(1, output);
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("indication").GetString().ShouldBe("Indeterminate");
+    }
+
+    [Fact]
+    public async Task Validate_ProfileTslWithoutAList_IsRefused()
+    {
+        string signed = await SignAsync("tsl-profile-nolist.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, "--profile", "tsl");
+
+        exit.ShouldNotBe(0);
+        output.ShouldContain("--tsl");
+        output.ShouldContain("--sandbox");
+    }
+
+    [Fact]
+    public async Task Validate_TrustProfileTslWithAList_IsRefused()
+    {
+        string signed = await SignAsync("tsl-trust-profile.pdf");
+        var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddMonths(6));
+
+        var (exit, output) = await RunAsync("validate", signed, "--trust-profile", "tsl", "--tsl", tsl, "--tsl-signer", signer);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain(Flat("use --profile tsl"));
+    }
+
+    [Fact]
+    public async Task Sign_ProfileTslWithoutAList_IsRefused()
+    {
+        string output = Path.Combine(_tempDir, "tsl-profile-sign.pdf");
+
+        var (exit, text) = await RunAsync("sign", WriteMinimalPdf("tsl-profile-sign-input.pdf"), "--cert", _pfxPath, "--password", Password,
+            "--output", output, "--profile", "tsl");
+
+        exit.ShouldNotBe(0);
+        text.ShouldContain("--tsl");
+        File.Exists(output).ShouldBeFalse();
     }
 
     [Fact]
@@ -1019,7 +1084,7 @@ public sealed class CliCommandTests : IDisposable
     }
 
     /// <summary>A trusted list naming the test signer as a granted CA/QC service, signed by a scheme operator, and the operator's certificate.</summary>
-    private (string List, string Signer) WriteTrustedList(DateTimeOffset nextUpdate)
+    private (string List, string Signer) WriteTrustedList(DateTimeOffset nextUpdate, X509Certificate2? service = null)
     {
         using var operatorKey = System.Security.Cryptography.RSA.Create(2048);
         using var schemeOperator = new System.Security.Cryptography.X509Certificates.CertificateRequest(
@@ -1041,7 +1106,7 @@ public sealed class CliCommandTests : IDisposable
                 <TSPServices><TSPService><ServiceInformation>
                   <ServiceTypeIdentifier>http://uri.etsi.org/TrstSvc/Svctype/CA/QC</ServiceTypeIdentifier>
                   <ServiceName><Name xml:lang="en">Service</Name></ServiceName>
-                  <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String(_cert.RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
+                  <ServiceDigitalIdentity><DigitalId><X509Certificate>{Convert.ToBase64String((service ?? _cert).RawData)}</X509Certificate></DigitalId></ServiceDigitalIdentity>
                   <ServiceStatus>http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted</ServiceStatus>
                 </ServiceInformation></TSPService></TSPServices>
               </TrustServiceProvider></TrustServiceProviderList>

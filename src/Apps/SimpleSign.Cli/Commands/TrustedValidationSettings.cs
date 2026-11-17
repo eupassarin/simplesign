@@ -207,7 +207,7 @@ internal class TrustedValidationSettings : CommonSettings
             return Spectre.Console.ValidationResult.Error("--tsl needs --tsl-signer: the certificate the list must be signed with (a --tsl-profile of an extension may bring its own).");
         }
 
-        if (CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: false) is { } profileError)
+        if (CliProfiles.Check(Profile, TrustProfiles, Sandbox, signing: false, hasTrustedList: TrustedList is not null) is { } profileError)
         {
             return Spectre.Console.ValidationResult.Error(profileError);
         }
