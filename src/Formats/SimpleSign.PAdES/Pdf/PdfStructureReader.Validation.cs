@@ -98,6 +98,9 @@ public sealed partial class PdfStructureReader
         return permissionLevel is >= 1 and <= 3 ? permissionLevel : 1;
     }
 
+    /// <summary>Whether the PDF is encrypted (its trailer has an /Encrypt entry).</summary>
+    internal static bool IsEncrypted(ReadOnlySpan<byte> data) => DetectEncryption(data);
+
     /// <summary>
     /// Detects whether a PDF contains an /Encrypt dictionary in the trailer.
     /// </summary>
