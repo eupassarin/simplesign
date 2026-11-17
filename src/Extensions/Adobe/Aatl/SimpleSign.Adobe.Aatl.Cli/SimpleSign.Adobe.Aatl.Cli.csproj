@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Adobe.Aatl.Cli</AssemblyName>
+    <RootNamespace>SimpleSign.Adobe.Aatl.Cli</RootNamespace>
+    <PackageId>SimpleSign.Adobe.Aatl.Cli</PackageId>
+    <Description>The Adobe Approved Trust List (AATL) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Adobe.Aatl.Cli': --profile aatl (the anchors Acrobat trusts, read from Adobe's signed list, with its certificate policy restrictions). Not affiliated with or endorsed by Adobe.</Description>
+    <PackageTags>aatl;adobe;acrobat;trust-list;simplesign;cli;extension</PackageTags>
+    <Version>0.15.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CliExtensionName>aatl</CliExtensionName>
+    <CliExtensionType>SimpleSign.Adobe.Aatl.Cli.AatlCliExtension</CliExtensionType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Adobe.Aatl\SimpleSign.Adobe.Aatl.csproj" />
+    <ProjectReference Include="..\..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Adobe.Aatl.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="..\..\..\CliExtension.targets" />
+</Project>

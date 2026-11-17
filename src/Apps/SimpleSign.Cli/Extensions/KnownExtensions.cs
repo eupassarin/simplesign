@@ -9,6 +9,7 @@ internal static class KnownExtensions
     private const string Brazil = "SimpleSign.Brazil.Cli";
     private const string Eidas = "SimpleSign.Europe.Eidas.Cli";
     private const string Iofe = "SimpleSign.Peru.Iofe.Cli";
+    private const string Aatl = "SimpleSign.Adobe.Aatl.Cli";
 
     /// <summary>The package that adds the profile <paramref name="name"/> (<c>--profile</c>); null when none is known.</summary>
     internal static string? PackageOfProfile(string name) => name.ToLowerInvariant() switch
@@ -16,6 +17,7 @@ internal static class KnownExtensions
         "icp-brasil" or "gov-br" => Brazil,
         "eidas" => Eidas,
         "iofe" => Iofe,
+        "aatl" => Aatl,
         _ => null,
     };
 

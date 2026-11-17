@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Adobe.Aatl</AssemblyName>
+    <RootNamespace>SimpleSign.Adobe.Aatl</RootNamespace>
+    <PackageId>SimpleSign.Adobe.Aatl</PackageId>
+    <Description>Adobe Approved Trust List (AATL) for SimpleSign: the trust anchors Acrobat trusts for signatures, read from Adobe's signed list at run time and checked against the Adobe root, with the list's certificate policy restrictions. Not affiliated with or endorsed by Adobe.</Description>
+    <PackageTags>aatl;adobe;acrobat;trust-list;pades;pdf;digital-signature</PackageTags>
+    <Version>0.15.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Adobe.Aatl.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The root the AATL's signature chains to (AatlExtension.ListSigners; see PACKAGE.md). The list itself is not bundled. -->
+    <EmbeddedResource Include="Certs/*.pem" LogicalName="SimpleSign.Adobe.Aatl.Certs.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

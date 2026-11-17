@@ -233,6 +233,7 @@ public sealed class CliCommandTests : IDisposable
     [InlineData("icp-brasil", "SimpleSign.Brazil.Cli")]
     [InlineData("gov-br", "SimpleSign.Brazil.Cli")]
     [InlineData("eidas", "SimpleSign.Europe.Eidas.Cli")]
+    [InlineData("aatl", "SimpleSign.Adobe.Aatl.Cli")]
     public async Task Validate_ProfileOfAnExtensionNotInstalled_SaysWhichPackageToInstall(string profile, string package)
     {
         string signed = await SignAsync("no-extension.pdf");
