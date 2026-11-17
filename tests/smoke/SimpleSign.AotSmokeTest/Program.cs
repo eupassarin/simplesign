@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using SimpleSign.Adobe.Aatl;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
@@ -122,6 +123,22 @@ try
         new HttpClient(cloud, disposeHandler: false)).GetInfoAsync();
     Console.WriteLine($"[PASS] Cloud: PSC signature {cloudResults[0].Indication}, CSC service '{cscInfo.Name}'");
 
+    // A trust list laid out as Adobe's AATL: a signed PDF that embeds the identities (embedded files, LINQ to XML,
+    // the policy restrictions of an anchor) — read here against this test's own certificate, not Adobe's.
+    string settings = "<SecuritySettings><TrustedIdentities><Identity><ImportAction>1</ImportAction><Certificate>"
+        + Convert.ToBase64String(cert.RawData)
+        + "</Certificate><Trust><Root>1</Root></Trust><PolicyRestrictions><CertificatePolicies><OID>1.2.3.4</OID></CertificatePolicies>"
+        + "</PolicyRestrictions><Identification><Source>AATL</Source></Identification></Identity></TrustedIdentities></SecuritySettings>";
+    byte[] trustListPdf = await PadesSigner.Document(CreatePdfWithAttachment(AatlList.SettingsFileName, settings)).WithCertificate(cert).SignAsync();
+    var trustList = await AatlList.LoadAsync(trustListPdf, new AatlOptions { ListSigners = [cert], CheckRevocation = false });
+    var aatl = AatlProfile.Create(new AatlExtension(trustList));
+    if (trustList.GetTrustAnchors().Count != 1 || aatl.ConstrainedTrustAnchors.Count != 1 || trustList.WhyRefused(cert, [cert]) is null)
+    {
+        throw new InvalidOperationException("The trust list was not read as expected.");
+    }
+
+    Console.WriteLine($"[PASS] AATL: {trustList.Identities.Count} identity read from a signed list, policy restriction applied");
+
     Console.WriteLine("\n✅ All AOT smoke tests passed.");
     return 0;
 }
@@ -163,6 +180,36 @@ static byte[] CreateMinimalPdf()
               "xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n" +
               "0000000107 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n176\n%%EOF";
     return System.Text.Encoding.ASCII.GetBytes(pdf);
+}
+
+// A one-page PDF with one embedded file (uncompressed), with a cross-reference table so it can be signed.
+static byte[] CreatePdfWithAttachment(string name, string content)
+{
+    string[] objects =
+    [
+        "<</Type/Catalog/Pages 2 0 R/Names<</EmbeddedFiles<</Names[(" + name + ") 4 0 R]>>>>>>",
+        "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+        "<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>",
+        "<</Type/Filespec/F(" + name + ")/EF<</F 5 0 R>>>>",
+        "<</Type/EmbeddedFile/Length " + System.Text.Encoding.ASCII.GetByteCount(content) + ">>\nstream\n" + content + "\nendstream",
+    ];
+    var pdf = new System.Text.StringBuilder("%PDF-1.7\n");
+    var offsets = new List<int>();
+    for (int i = 0; i < objects.Length; i++)
+    {
+        offsets.Add(pdf.Length);
+        pdf.Append(i + 1).Append(" 0 obj\n").Append(objects[i]).Append("\nendobj\n");
+    }
+
+    int xref = pdf.Length;
+    pdf.Append("xref\n0 ").Append(objects.Length + 1).Append("\n0000000000 65535 f \n");
+    foreach (int offset in offsets)
+    {
+        pdf.Append(offset.ToString("D10", System.Globalization.CultureInfo.InvariantCulture)).Append(" 00000 n \n");
+    }
+
+    pdf.Append("trailer<</Size ").Append(objects.Length + 1).Append("/Root 1 0 R>>\nstartxref\n").Append(xref).Append("\n%%EOF");
+    return System.Text.Encoding.ASCII.GetBytes(pdf.ToString());
 }
 
 /// <summary>Minimal PSC/CSC simulator for the AOT smoke test.</summary>
