@@ -867,6 +867,14 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             bool built = chain.Build(signerCert);
             reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, built);
 
+            // An anchor with conditions (IConstrainedTrustAnchorProvider) may refuse the chain that reached it.
+            if (reachesAnchor && ConstrainedTrust.Refusal(chain, _options.ConstrainedTrustAnchors) is { } refusal)
+            {
+                errors.Add($"Certificate chain refused by its trust anchor: {refusal}");
+                reachesAnchor = false;
+                return false;
+            }
+
             foreach (var element in chain.ChainElements)
             {
                 foreach (var status in element.ChainElementStatus)

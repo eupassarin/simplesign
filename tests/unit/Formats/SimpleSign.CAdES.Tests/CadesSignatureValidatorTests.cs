@@ -118,6 +118,24 @@ public sealed class CadesSignatureValidatorTests : IDisposable
     }
 
     [Fact]
+    public async Task Validate_AnchorWithConditionsRefusesTheChain_TheChainIsNotTrusted()
+    {
+        using var pki = new SyntheticPki();
+        var cms = await CadesSigner.Document(_data)
+            .WithCertificate(pki.Leaf, pki.IntermediatesAndRoot())
+            .SignAsync();
+        ValidationOptions Options(ConstrainedTrustAnchors anchors) =>
+            new() { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [pki.RootCa], ConstrainedTrustAnchors = [anchors] };
+
+        var accepted = new CadesSignatureValidator(Options(ConstrainedTrustAnchors.Accepting(pki.RootCa))).Validate(cms, _data);
+        var refused = new CadesSignatureValidator(Options(ConstrainedTrustAnchors.Refusing("not for this policy", pki.RootCa))).Validate(cms, _data);
+
+        accepted.IsCertificateChainValid.ShouldBeTrue(string.Join("; ", accepted.Errors));
+        refused.IsCertificateChainValid.ShouldBeFalse();
+        refused.Errors.ShouldContain(e => e.Contains("not for this policy", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Validate_OnlyRootTrusted_UsesIntermediateEmbeddedInCms()
     {
         using var pki = new SyntheticPki();

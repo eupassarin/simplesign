@@ -223,6 +223,9 @@ internal class TrustedValidationSettings : CommonSettings
     /// <summary>The trusted lists <see cref="LoadTrustAsync"/> loaded, as anchors at a time (their service history).</summary>
     internal List<ITimedTrustAnchorProvider> LoadedTimedAnchors { get; } = [];
 
+    /// <summary>The profile's anchors that have conditions (the AATL's policy restrictions): they may refuse a chain.</summary>
+    internal List<IConstrainedTrustAnchorProvider> LoadedConstrainedAnchors { get; } = [];
+
     /// <summary>The profile's qualifiers (eIDAS): each signature's qualification, QESig, AdESig-QC…</summary>
     internal List<ISignatureQualifier> LoadedQualifiers { get; } = [];
 
@@ -261,6 +264,7 @@ internal class TrustedValidationSettings : CommonSettings
                 anchors.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()));
                 LoadedTrustedLists.AddRange(profile.TrustAnchorProviders.OfType<ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists));
                 LoadedTimedAnchors.AddRange(profile.TrustAnchorProviders.OfType<ITimedTrustAnchorProvider>());
+                LoadedConstrainedAnchors.AddRange(profile.ConstrainedTrustAnchors);
             }
         }
         if (TrustDirectory is not null)

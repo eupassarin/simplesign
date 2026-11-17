@@ -858,6 +858,14 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
 
             bool chainValid = chain.Build(signerCert);
             reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, chainValid);
+
+            // An anchor with conditions (IConstrainedTrustAnchorProvider) may refuse the chain that reached it.
+            if (reachesAnchor && ConstrainedTrust.Refusal(chain, _options.ConstrainedTrustAnchors) is { } refusal)
+            {
+                errors.Add($"Certificate chain refused by its trust anchor: {refusal}");
+                reachesAnchor = false;
+                return false;
+            }
             if (!chainValid)
             {
                 foreach (var status in chain.ChainStatus)

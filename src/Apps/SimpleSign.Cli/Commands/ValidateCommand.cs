@@ -116,6 +116,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             TrustedRoots = roots.Count == 0 ? null : roots,
             TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
             TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
+            ConstrainedTrustAnchors = settings.LoadedConstrainedAnchors.Count > 0 ? settings.LoadedConstrainedAnchors : null,
             SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
             Policy = policy,
             Level = settings.ValidationLevel,

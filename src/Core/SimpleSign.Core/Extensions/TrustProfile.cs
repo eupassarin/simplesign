@@ -49,6 +49,13 @@ public sealed record TrustProfile(
     /// </summary>
     public IReadOnlyList<ISignatureQualifier> SignatureQualifiers { get; init; } = [];
 
+    /// <summary>
+    /// The providers of <see cref="TrustAnchorProviders"/> whose anchors have conditions
+    /// (<see cref="IConstrainedTrustAnchorProvider"/>), each accepting a chain whose anchor another provider of this
+    /// profile gives without conditions. Empty for none.
+    /// </summary>
+    public IReadOnlyList<IConstrainedTrustAnchorProvider> ConstrainedTrustAnchors => Validation.ConstrainedTrust.From(TrustAnchorProviders);
+
     /// <summary>Whether signatures are made under this profile (it has a signing policy).</summary>
     public bool CanSign => SigningPolicy is not null;
 
