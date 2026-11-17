@@ -166,7 +166,7 @@ signature is returned (`TimestampUntrusted`); give `TimestampOptions.ExpectedTsa
 
 ## The INDECOPI playbook
 
-The TestBench's Playbook tab runs `docs/playbooks/indecopi-guia-v4.json` (written by `tools/playbooks/indecopi.py`):
+The TestBench's Playbook tab runs `docs/playbooks/indecopi-guia-v4.json`:
 the automated part of annex B, about 70 steps through the library and the CLI against a Sandbox.
 
 1. Start a Sandbox and the TestBench and connect them ([testbench.md](testbench.md)); start DSS for cross-validation.

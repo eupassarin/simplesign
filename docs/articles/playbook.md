@@ -170,16 +170,15 @@ that shows it, and the test names it.
   automated agent, a TSA of the TSL when a signature is raised to B-LTA later, the validation report and the audit
   trail, through the library and the CLI. The other items marked
   P in [indecopi-checklist.md](../playbooks/indecopi-checklist.md) name steps of `sandbox-basics` and `etsi-baseline`;
-  see [iofe.md](iofe.md). Written by `tools/playbooks/indecopi.py`.
+  see [iofe.md](iofe.md).
 - `etsi-baseline` — SimpleSign against the ETSI standards: PAdES, CAdES and XAdES baseline (EN 319 142-1, 319 122-1,
   319 132-1), the extended forms, time-stamps, EN 319 102-1 validation (indication and sub-indication) and trusted
   lists, cross-validated with EU DSS. It covers the items [etsi-checklist.md](../playbooks/etsi-checklist.md) marks P;
-  each step is tagged with its item id and standard. Written by `tools/playbooks/etsi.py`.
+  each step is tagged with its item id and standard.
 - `eidas-baseline` — the eIDAS profile on the Sandbox's list of trusted lists: the faults of the LOTL and the TL
   (`sandbox.lotl`, `sandbox.trustedList`), the qualification of each signature (`expect.qualification`: QESig, QESeal,
   AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), including those an
   augmentation adds later (a QESig raised to B-LTA and renewed), through the library and the CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
-  Written by `tools/playbooks/eidas.py`.
 - `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
   `icp-brasil` profile and its policies, through the library and the CLI: the profile's trust, the policies, two-phase
   signing, PDF fields and a pt-BR stamp, validation under the ICP-Brasil policy and augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.
