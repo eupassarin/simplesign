@@ -31,8 +31,8 @@ internal static class CliProfiles
         (Sandbox, "SimpleSign Sandbox (test)", "default", "default", "the Sandbox's LOTL and trusted list (needs --sandbox URL)"),
         (IofeProfile.Name, "Peru (IOFE)", "iofe", "iofe", "INDECOPI's trusted list, checked against the bundled signer (with --sandbox: the Sandbox's list)"),
         (EidasProfile.Name, "EU (eIDAS)", "eidas", "eidas", "the EU LOTL and its lists, checked against the bundled signers (pivots followed); qualifies each signature (with --sandbox: the Sandbox's LOTL)"),
-        (IcpBrasilProfile.Name, "ICP-Brasil", "icp-brasil", "icp-brasil", "the AC Raiz roots and the ICP-Brasil chain validation"),
-        (GovBrProfile.Name, "Gov.br", "— (validates only)", "govbr", "the Gov.br roots and their chain validation"),
+        (IcpBrasilProfile.Name, "Brazil (ICP-Brasil)", "icp-brasil", "icp-brasil", "the AC Raiz roots and the ICP-Brasil chain validation (with --sandbox: the Sandbox's root added as an AC Raiz)"),
+        (GovBrProfile.Name, "Brazil (Gov.br)", "— (validates only)", "govbr", "the Gov.br roots and their chain validation"),
     ];
 
     /// <summary>Whether <paramref name="name"/> is a profile (null: none given).</summary>
@@ -155,14 +155,20 @@ internal static class CliProfiles
                 }
 
             case IcpBrasilProfile.Name:
-                return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = http.GetClient() });
+                {
+                    // With --sandbox, the Sandbox's root is trusted as one more AC Raiz: its certificates and TSAs chain to it.
+                    IReadOnlyList<X509Certificate2> roots = sandbox is null
+                        ? []
+                        : [await SignerAsync(http, new Uri(new Uri(sandbox.TrimEnd('/') + "/"), "root.pem"), cancellationToken)];
+                    return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = http.GetClient(), AdditionalRoots = roots });
+                }
             default:
                 return GovBrProfile.Create(new GovBrExtensionOptions { HttpClient = http.GetClient() });
         }
     }
 #pragma warning restore CA2000
 
-    /// <summary>A trusted list's signer as the Sandbox publishes it (a test PKI: its own address is trusted for it).</summary>
+    /// <summary>A certificate as the Sandbox publishes it, PEM (a test PKI: its own address is trusted for it): a trusted list's signer, its root.</summary>
     private static async Task<X509Certificate2> SignerAsync(IHttpClientProvider http, Uri url, CancellationToken cancellationToken) =>
         X509Certificate2.CreateFromPem(await http.GetClient().GetStringAsync(url, cancellationToken));
 }

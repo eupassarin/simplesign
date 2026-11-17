@@ -651,7 +651,7 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
         }
 
         if (s.Profile == TrustFrameworks.TrustProfileChoice.Sandbox || s.TrustProfiles.Contains(TrustFrameworks.TrustProfileChoice.Sandbox)
-            || (s.Profile is TrustFrameworks.TrustProfileChoice.Iofe or TrustFrameworks.TrustProfileChoice.Eidas
+            || (s.Profile is TrustFrameworks.TrustProfileChoice.Iofe or TrustFrameworks.TrustProfileChoice.Eidas or TrustFrameworks.TrustProfileChoice.IcpBrasil
                 && s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox))
         {
             line.Add("--sandbox", sandbox.Current?.Url.AbsoluteUri ?? "http://localhost:5300/");
@@ -685,7 +685,9 @@ internal sealed class ValidationService(SandboxEnvironment sandbox, DocumentStor
             TrustFrameworks.TrustProfileChoice.Eidas => s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox
                 ? "await EidasProfile.LoadAsync(new EidasExtensionOptions { LotlUrl = new Uri(\"http://localhost:5300/tl/lotl.xml\"), LotlSigners = [lotlSigner] })"
                 : "await EidasProfile.LoadAsync() /* the EU LOTL, checked against the bundled signers; qualifies each signature */",
-            TrustFrameworks.TrustProfileChoice.IcpBrasil => "IcpBrasilProfile.Create()",
+            TrustFrameworks.TrustProfileChoice.IcpBrasil => s.ProfileSource == TrustFrameworks.ProfileListSource.Sandbox
+                ? "IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { AdditionalRoots = [sandboxRoot] }) /* the Sandbox's root as an AC Raiz */"
+                : "IcpBrasilProfile.Create() /* the bundled AC Raiz roots */",
             TrustFrameworks.TrustProfileChoice.GovBr => "GovBrProfile.Create()",
             TrustFrameworks.TrustProfileChoice.Sandbox => "new TrustProfile(\"sandbox\", \"Sandbox\", SigningPolicy.Default, ValidationPolicy.Default, [lists], [])",
             _ => null,
