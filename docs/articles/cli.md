@@ -383,7 +383,6 @@ simplesign augment signed.xml --level BLTA --tsa http://timestamp.digicert.com -
 | `pkcs11 list`, `pkcs11 drivers` | The tokens and certificates of a PKCS#11 driver, or of every installed driver | [PKCS#11](pkcs11.md) |
 | `psc certificates` | Logs in to an ICP-Brasil cloud provider (PSC) and lists its certificates | [Cloud signing](cloud-signing.md) |
 | `csc list` | The credentials of a Cloud Signature Consortium (CSC v2) service | [Cloud signing](cloud-signing.md) |
-| `fiscal sign`, `fiscal validate` | XMLDSig of NF-e, CT-e, MDF-e, events, NFS-e, eSocial and EFD-Reinf | [Fiscal XML](fiscal-xml.md) |
 | `inspect`, `extract`, `explain` | Signature metadata without validating, the CMS out of a PDF, and what an ETSI term means | |
 | `html-to-pdf` | Renders an HTML file to PDF (no signing) | [HTML to PDF](html-to-pdf.md) |
 

@@ -97,7 +97,7 @@ src/
     SimpleSign.XAdES/              # XAdES signing and validation; ETSI trusted lists
     SimpleSign/                    # meta-package
   Extensions/
-    Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Fiscal, .IcpBrasil.Xades
+    Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr
     Peru/Iofe/                     # SimpleSign.Peru.Iofe, .Accredited, .Cli (CLI extension), docs, playbooks, tools
     Europe/Eidas/                  # SimpleSign.Europe.Eidas
   Signers/

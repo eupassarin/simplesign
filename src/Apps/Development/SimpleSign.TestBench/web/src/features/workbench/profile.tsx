@@ -111,7 +111,7 @@ export function rememberPolicies(options: Options): ProfileMemory {
  * presets (or back to <paramref name="memory"/> when the previous profile's preset is still there), and on Sign the
  * ICP-Brasil levels in place of the baseline ones.
  */
-export function applyProfile(options: Options, next: ProfileChoice | null, page: ProfilePage, memory: ProfileMemory): Options {
+export function applyProfile(options: Options, next: ProfileChoice | null, page: ProfilePage, memory: ProfileMemory, icpPolicies = true): Options {
   const previous = activeProfile(options)
   let o = options
   for (const holder of holders(o, page)) {
@@ -130,7 +130,8 @@ export function applyProfile(options: Options, next: ProfileChoice | null, page:
   policy("validation.policyId", memory.validationPolicyId)
   if (page === "sign") {
     policy("signingPolicyId", memory.signingPolicyId)
-    const icp = next?.profile === "IcpBrasil"
+    // The ICP-Brasil policies replace the baseline levels only where the format has them (PAdES and CAdES).
+    const icp = icpPolicies && next?.profile === "IcpBrasil"
     if (icp && asText(o.kind) !== "IcpBrasil") {
       o = setPath(setPath(o, "kind", "IcpBrasil"), "icpPolicy", icpOfLevel[asText(o.level)] ?? "AdRb")
     } else if (!icp && asText(o.kind) === "IcpBrasil") {
@@ -148,7 +149,7 @@ export function applyExtras(options: Options, extras: Profile[], page: ProfilePa
 }
 
 /** What a profile changes on a page, one line per field, for the menu, the strip and the toast. */
-function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof useT>): string[] {
+function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof useT>, icpPolicies = true): string[] {
   const definition = profiles[choice.profile]
   const lines: string[] = []
   const name = (preset: string) => preset.split(":")[2]
@@ -162,7 +163,7 @@ function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof 
     GovBr: "wb.profile.effect.trustGovBr",
   }
   lines.push(t(trust[choice.profile]))
-  if (page === "sign" && choice.profile === "IcpBrasil") lines.push(t("wb.profile.effect.levels"))
+  if (page === "sign" && icpPolicies && choice.profile === "IcpBrasil") lines.push(t("wb.profile.effect.levels"))
   if (choice.profile === "Eidas") lines.push(t("wb.profile.effect.qualification"))
   const test = choice.profile === "Sandbox" || choice.source === "Sandbox" && withSource.includes(choice.profile)
   lines.push(t(test ? "wb.profile.effect.sandboxCertificates" : "wb.profile.effect.realCertificates"))
@@ -177,10 +178,12 @@ const same = (a: ProfileChoice | null, b: ProfileChoice | null) =>
  * changes, then "Also trust" with the other profiles' trust. The button shows the profile on; turning one on or off
  * says it in a toast.
  */
-export function ProfileMenu({ page, options, update }: {
+export function ProfileMenu({ page, options, update, icpPolicies = true }: {
   page: ProfilePage
   options: Options
   update: (change: (current: Options) => Options) => void
+  /** Whether the format signs under the ICP-Brasil policies (the schema's ICP-Brasil presets list it). */
+  icpPolicies?: boolean
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -196,8 +199,8 @@ export function ProfileMenu({ page, options, update }: {
     if (next && withSource.includes(next.profile)) setPickedSources((picked) => ({ ...picked, [next.profile]: next.source }))
     if (same(next, active)) return
     if (!active) memory.current = rememberPolicies(options)
-    update((current) => applyProfile(current, next, page, memory.current))
-    if (next) toast.success(t("wb.profile.on", { name: profileTitle(next, t) }), { description: effects(next, page, t).join(" · ") })
+    update((current) => applyProfile(current, next, page, memory.current, icpPolicies))
+    if (next) toast.success(t("wb.profile.on", { name: profileTitle(next, t) }), { description: effects(next, page, t, icpPolicies).join(" · ") })
     else if (active) toast(t("wb.profile.off", { name: profileTitle(active, t) }), { description: t("wb.profile.offHint") })
   }
   const toggleExtra = (profile: Profile, on: boolean) =>
@@ -234,7 +237,7 @@ export function ProfileMenu({ page, options, update }: {
                 <span className="min-w-0">
                   <span className="block text-sm font-medium"><span aria-hidden>{profiles[profile].flag}</span> {t(profiles[profile].title)}</span>
                   <span className="text-muted-foreground mt-0.5 block space-y-0.5 text-xs">
-                    {effects(choice, page, t).map((line) => <span key={line} className="block">{line}</span>)}
+                    {effects(choice, page, t, icpPolicies).map((line) => <span key={line} className="block">{line}</span>)}
                   </span>
                 </span>
               </button>
@@ -272,7 +275,7 @@ export function ProfileMenu({ page, options, update }: {
 }
 
 /** The strip under the top bar while a profile is on (or others' trust is added): what it changed, in one line. */
-export function ProfileStrip({ page, options }: { page: ProfilePage; options: Options }) {
+export function ProfileStrip({ page, options, icpPolicies = true }: { page: ProfilePage; options: Options; icpPolicies?: boolean }) {
   const t = useT()
   const active = activeProfile(options)
   const extras = extraProfiles(options).filter((p) => p !== active?.profile)
@@ -281,7 +284,7 @@ export function ProfileStrip({ page, options }: { page: ProfilePage; options: Op
     <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-1.5 text-xs">
       <ShieldCheck className="text-primary size-3.5 shrink-0" />
       {active && <span className="font-medium">{t("wb.profile.on", { name: `${profiles[active.profile].flag} ${profileTitle(active, t)}` })}</span>}
-      {active && <span className="text-muted-foreground">{effects(active, page, t).join(" · ")}</span>}
+      {active && <span className="text-muted-foreground">{effects(active, page, t, icpPolicies).join(" · ")}</span>}
       {extras.length > 0 && (
         <span className="text-muted-foreground">{t("wb.profile.alsoTrusted", { names: extras.map((p) => t(profiles[p].title)).join(", ") })}</span>
       )}

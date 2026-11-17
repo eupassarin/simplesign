@@ -255,11 +255,6 @@ await builder
 await CadesSigner.Document(data).WithCertificate(cert)
     .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
     .SignAsync();
-
-// XAdES (package SimpleSign.Brazil.IcpBrasil.Xades): AD-RB … AD-RA
-await XadesSigner.Document(xml).WithCertificate(cert)
-    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
-    .SignAsync();
 ```
 
 `IcpBrasilPadesOptions` also takes a separate document-timestamp TSA (`ArchiveTimestamp`), the
@@ -267,39 +262,13 @@ revocation settings for the DSS (`LongTermValidation`) and a specific `Version` 
 (refused when it is not in force or does not accept the signer's root). The catalog also holds the 45 XAdES policies of
 `LPA_XAdES.xml` (version 2), with their rules.
 
-#### XAdES (SimpleSign.Brazil.IcpBrasil.Xades)
+#### XAdES
 
-```bash
-dotnet add package SimpleSign.Brazil.IcpBrasil.Xades
-```
-
-The XML PAs mandate the XAdES 1.3.2 `SigningCertificate` (not `SigningCertificateV2`) and, per
-policy, these unsigned properties (ETSI TS 101 903 v1.3.2):
-
-| Policy | Unsigned properties |
-|--------|---------------------|
-| AD-RB | none |
-| AD-RT | SignatureTimeStamp |
-| AD-RV | SignatureTimeStamp, CompleteCertificateRefs, CompleteRevocationRefs, SigAndRefsTimeStamp |
-| AD-RC | AD-RV plus CertificateValues and RevocationValues |
-| AD-RA | SignatureTimeStamp, references, values and ArchiveTimeStamp |
-
-`XadesSignerBuilder.WithIcpBrasilPolicy` writes them all: it picks the newest XML PA that accepts
-the signer's AC Raiz, sets `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`, the policy
-reference and `WithExtendedValidationData(XadesExtendedForm…)`. The forms are also available
-without a policy, in SimpleSign.XAdES. Validate with:
-
-```csharp
-var result = new XadesSignatureValidator().Validate(signedXml);   // HasValidSigAndRefsTimeStamp, HasValidCompleteReferences
-var policy = IcpBrasilXadesPolicyValidator.Validate(signedXml, result);
-```
-
-`IcpBrasilXadesPolicyValidator` checks the hash, signing period, accepted roots, the mandated
-properties and the signature algorithm and key size. `IcpBrasilXadesPolicies.RefreshAsync` downloads
-`LPA_XAdES.xml`, verifies its ITI XML signature and applies new policies and revocations. The ITI
-signs the list in a way .NET's `SignedXml` rejects (an enveloped-signature transform on KeyInfo),
-so the verification is done by a strict verifier that accepts only that shape and refuses any
-element smuggled into the signature.
+SimpleSign signs under the ICP-Brasil policies in PAdES and CAdES. For XAdES there is no `WithIcpBrasilPolicy`: a
+XAdES signature can name an ICP-Brasil XML policy with `WithSignaturePolicy` (the catalog holds them:
+`IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Xades).ToReference()`) and take the extended forms
+of SimpleSign.XAdES (`WithExtendedValidationData`), and its policy reference can be checked as shown under
+[Check a signature against its policy](#check-a-signature-against-its-policy) below; the attribute rules of the XML PAs are not enforced.
 
 #### Accepted roots
 
@@ -389,8 +358,7 @@ and unsigned attributes are present, and the signature algorithm and key size ar
 ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-time-stamp v2 imprints
 are verified by `CadesSignatureValidator`.
 
-For XAdES, use `IcpBrasilXadesPolicyValidator` (SimpleSign.Brazil.IcpBrasil.Xades, above). Without that
-package, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
+For XAdES, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
 checks the hash, signing period, timestamp and format.
 
 ### DocMDP (certification)

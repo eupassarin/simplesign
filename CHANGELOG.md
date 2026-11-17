@@ -67,6 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `src/Apps/SimpleSign.Playbook`: a leftover web bundle nothing used (the playbooks run in the TestBench's Playbook tab).
+- **`SimpleSign.Brazil.Fiscal`** (XML-DSig for NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf) and the CLI's
+  `simplesign fiscal sign|validate`. The last version with them is 0.12.0.
+- **`SimpleSign.Brazil.IcpBrasil.Xades`** (`XadesSignerBuilder.WithIcpBrasilPolicy`, `IcpBrasilXadesPolicyValidator`,
+  `IcpBrasilXadesPolicies.RefreshAsync`). SimpleSign signs under the ICP-Brasil policies in PAdES and CAdES; a XAdES
+  signature can still name an XML policy of the catalog with `WithSignaturePolicy`
+  (`IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Xades).ToReference()`), and
+  `IcpBrasilPolicyValidator.Validate(…, IcpBrasilPolicyFormat.Xades)` checks its hash, period and time-stamp; the
+  attribute rules of the XML PAs are no longer enforced. The TestBench's XAdES page lost the ICP-Brasil signature type.
 
 ## [0.12.0] - 2026-11-16
 

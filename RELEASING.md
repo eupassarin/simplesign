@@ -24,8 +24,6 @@ Update `<Version>` in all `.csproj` files:
 | `src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj` | Main package |
 | `src/Extensions/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj` | Brazil (shared) |
 | `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj` | ICP-Brasil |
-| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
-| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML |
 | `src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj` | IOFE accredited configuration |
@@ -51,8 +49,6 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Formats/SimpleSign.PAdES/SimpleSign.PAdES.csproj \
   src/Extensions/Brazil/SimpleSign.Brazil/SimpleSign.Brazil.csproj \
   src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj \
-  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
-  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
   src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj \

@@ -48,7 +48,7 @@ dotnet tool install -g SimpleSign.Cli
 
 The CLI targets **net8.0** and covers what the library does: `sign`, `sign-dir`, `validate`,
 `validate-dir`, `inspect`, `extract`, `augment`, `deferred prepare|complete`, `cades`, `xades`,
-`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `fiscal`, `profiles`, `explain` and
+`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `profiles`, `explain` and
 `html-to-pdf`.
 
 A whole trust framework comes from one flag: `--profile icp-brasil`, `iofe`, `gov-br`, `eidas` or
@@ -85,7 +85,6 @@ COMMANDS:
     xades
     policy
     audit
-    fiscal
 ```
 
 Signing a PDF at B-LT against a Sandbox TSA, then validating it:

@@ -42,8 +42,9 @@ function TopBar() {
   const current = schema.formats.find((f) => f.id === format)!
   const errors = evaluation?.issues.filter((i) => i.severity === "Error").length ?? 0
   const level = asText(options.level)
-  // With ICP-Brasil on, its policies (AD-RB…AD-RA) take the place of the baseline levels.
-  const icp = activeProfile(options)?.profile === "IcpBrasil"
+  // With ICP-Brasil on, its policies (AD-RB…AD-RA) take the place of the baseline levels, in the formats that have them.
+  const icpPolicies = schema.presets.some((p) => p.framework === "IcpBrasil" && p.formats.includes(format))
+  const icp = icpPolicies && activeProfile(options)?.profile === "IcpBrasil"
   const icpPolicy = asText(options.kind) === "IcpBrasil" ? asText(options.icpPolicy) : null
   const presets = schema.presets.filter((p) => p.formats.includes(format) && (icp ? p.framework === "IcpBrasil" : !p.framework))
   const pressed = (p: SchemaPreset) => (p.framework ? p.set.icpPolicy === icpPolicy : icpPolicy === null && p.set.level === level)
@@ -69,7 +70,7 @@ function TopBar() {
           ))}
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <ProfileMenu page="sign" options={options} update={(change) => updateAll((o) => change(o))} />
+          <ProfileMenu page="sign" options={options} update={(change) => updateAll((o) => change(o))} icpPolicies={icpPolicies} />
           <VaryControl />
           <HistoryDrawer />
           <Tooltip>
@@ -88,7 +89,7 @@ function TopBar() {
         {errors > 0 && <span className="text-destructive ml-auto flex items-center gap-1"><CircleAlert className="size-3.5" />{t("wb.errors", { n: errors })}</span>}
         {evaluating && <Loader2 className="text-muted-foreground size-3 animate-spin" />}
       </div>
-      <ProfileStrip page="sign" options={options} />
+      <ProfileStrip page="sign" options={options} icpPolicies={icpPolicies} />
     </div>
   )
 }

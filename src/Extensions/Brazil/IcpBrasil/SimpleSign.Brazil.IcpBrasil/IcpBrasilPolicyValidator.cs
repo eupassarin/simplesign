@@ -96,7 +96,7 @@ public static class IcpBrasilPolicyValidator
     /// XAdES SignaturePolicyIdentifier (<c>XadesValidationResult.SignaturePolicy</c>): the
     /// SigPolicyHash matches the PA, the policy could be used at the signing time and AD-RT and
     /// above carry a signature timestamp. The attribute and algorithm rules of the PA are not
-    /// checked here (SimpleSign.Brazil.IcpBrasil.Xades checks them for XAdES); the accepted roots are, when
+    /// checked here for XAdES; the accepted roots are, when
     /// <paramref name="signerRoot"/> is given.
     /// </summary>
     /// <param name="reference">The policy reference; null yields <see cref="IcpBrasilPolicyStatus.None"/>.</param>

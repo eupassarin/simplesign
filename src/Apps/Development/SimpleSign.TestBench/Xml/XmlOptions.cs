@@ -15,9 +15,6 @@ public enum XadesKind
 {
     Baseline,
     CustomPolicy,
-
-    /// <summary>An ICP-Brasil signature policy (DOC-ICP-15.03: AD-RB, AD-RT, AD-RV, AD-RC, AD-RA), which sets the level itself.</summary>
-    IcpBrasil,
 }
 
 /// <summary><c>XadesExtendedForm</c>: XAdES-C/X, X-L and A.</summary>
@@ -46,9 +43,6 @@ public sealed record XmlOptions
     public bool DetachedBinary { get; init; }
 
     public XadesKind Kind { get; init; } = XadesKind.Baseline;
-
-    /// <summary>The ICP-Brasil signature policy when <see cref="Kind"/> is <see cref="XadesKind.IcpBrasil"/>.</summary>
-    public SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy IcpPolicy { get; init; } = SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb;
 
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
 

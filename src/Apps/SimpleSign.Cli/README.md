@@ -16,7 +16,7 @@ multi-target net8.0 and net10.0.
 `sign` · `sign-dir` · `validate` · `validate-dir` · `inspect` · `extract` · `augment` ·
 `deferred prepare|complete` · `cades sign|validate` · `xades sign|validate` ·
 `timestamp create|verify` · `policy export|schema` · `audit verify` · `pkcs11 list|drivers` ·
-`psc certificates` · `csc list` · `fiscal sign|validate` · `profiles` · `explain` · `html-to-pdf`
+`psc certificates` · `csc list` · `profiles` · `explain` · `html-to-pdf`
 
 ```bash
 simplesign sign contract.pdf --cert me.pfx --output signed.pdf --ltv --tsa http://timestamp.digicert.com

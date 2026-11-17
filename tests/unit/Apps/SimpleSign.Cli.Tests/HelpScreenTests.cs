@@ -60,9 +60,6 @@ public sealed class HelpScreenTests
         "extension install",
         "extension list",
         "extension remove",
-        "fiscal",
-        "fiscal sign",
-        "fiscal validate",
     };
 
     [Theory]

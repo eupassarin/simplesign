@@ -61,9 +61,7 @@ src/
 │   ├── Brazil/
 │   │   ├── SimpleSign.Brazil/                  shared: CPF/CNPJ, Lei 14.063, AEA manifest, VALIDAR
 │   │   ├── IcpBrasil/
-│   │   │   ├── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
-│   │   │   ├── SimpleSign.Brazil.IcpBrasil.Xades/  ICP-Brasil XAdES policies
-│   │   │   └── SimpleSign.Brazil.Fiscal/           XML-DSig for NF-e, CT-e, eSocial…
+│   │   │   └── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
 │   │   └── GovBr/
 │   │       └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
 │   ├── Europe/Eidas/
@@ -207,7 +205,7 @@ SimpleSign.Brazil (shared Brazilian building blocks)
   └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo from them
 
 SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
-  └── depend on SimpleSign.Brazil only, never on each other (Fiscal and IcpBrasil.Xades build on IcpBrasil)
+  └── depend on SimpleSign.Brazil only, never on each other
 
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only

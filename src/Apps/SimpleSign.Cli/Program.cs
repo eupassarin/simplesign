@@ -155,14 +155,6 @@ internal static partial class Program
                     .WithDescription("Remove an installed extension");
             });
 
-            config.AddBranch("fiscal", fiscal =>
-            {
-                fiscal.AddCommand<FiscalSignCommand>("sign")
-                    .WithDescription("Sign fiscal XML (NF-e, CT-e, MDF-e, events, NFS-e, eSocial, EFD-Reinf)");
-                fiscal.AddCommand<FiscalValidateCommand>("validate")
-                    .WithDescription("Validate the XMLDSig signatures of fiscal XML");
-            });
-
             // What the installed extensions add: their own branches (the Peruvian 'iofe', for one).
             CliExtensions.AddCommands(config);
 
