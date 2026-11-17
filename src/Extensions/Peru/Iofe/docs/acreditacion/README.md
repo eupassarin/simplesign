@@ -22,7 +22,11 @@ El software de firma de usuario final (sección 4.1) no forma parte de este paqu
 | [Configuración de seguridad](configuracion-de-seguridad.md) | Los usuarios de la aplicación acreditada | Sección 5 |
 
 La correspondencia de cada ítem del Anexo B con lo que lo evidencia está en
-[`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../../playbooks/indecopi-checklist.md).
+[`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../../playbooks/indecopi-checklist.md). El
+[guion de la auditoría](../guion-de-auditoria.md) ([português](../roteiro-de-auditoria.md),
+[English](../audit-walkthrough.md)) indica cómo producir y presentar esas evidencias con la configuración acreditada.
+
+Estos manuales están también en inglés: [`en/`](en/README.md). El texto en español es el que se entrega al INDECOPI.
 
 La acreditación la otorga el INDECOPI sobre un producto y su operación. Este paquete aporta la parte de software; los
 manuales indican qué queda a cargo del operador (certificación del módulo criptográfico o acreditación del servicio de

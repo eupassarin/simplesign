@@ -61,6 +61,9 @@ internal sealed class FakeRemoteSigningService : IDisposable
     /// <summary>The name the service reports about itself in <c>info</c>.</summary>
     public string ReportedName { get; set; } = Name;
 
+    /// <summary>Whether a credential comes with its certificate alone, without its issuer's (as a module that holds no chain).</summary>
+    public bool WithoutIssuerCertificate { get; set; }
+
     /// <summary>How long a service token lasts.</summary>
     public int TokenLifetimeSeconds { get; set; } = 300;
 
@@ -83,10 +86,15 @@ internal sealed class FakeRemoteSigningService : IDisposable
     public static IofeRemoteServiceDeclaration Declaration { get; } =
         new("Proveedor de Pruebas S.A.", Name, "ninguna (servicio en memoria para pruebas)", "n/a");
 
+    /// <summary>A credential of a certificate a test issued; the service keeps (and disposes) the key and the certificate.</summary>
+    public void AddCredential(string id, X509Certificate2 certificate, RSA key) =>
+        _credentials[id] = new(Own(certificate), Own(key), "explicit", true);
+
     /// <summary>Back to how it starts: its own name, no request seen, no token or authorization outstanding.</summary>
     public void Reset()
     {
         ReportedName = Name;
+        WithoutIssuerCertificate = false;
         TokenLifetimeSeconds = 300;
         Requests.Clear();
         HashesSigned = 0;
@@ -175,8 +183,9 @@ internal sealed class FakeRemoteSigningService : IDisposable
             ["cert"] = new JsonObject
             {
                 ["status"] = "valid",
-                ["certificates"] = new JsonArray(
-                    (JsonNode)Convert.ToBase64String(credential.Certificate.RawData), (JsonNode)Convert.ToBase64String(_issuer.RawData)),
+                ["certificates"] = WithoutIssuerCertificate
+                    ? new JsonArray((JsonNode)Convert.ToBase64String(credential.Certificate.RawData))
+                    : new JsonArray((JsonNode)Convert.ToBase64String(credential.Certificate.RawData), (JsonNode)Convert.ToBase64String(_issuer.RawData)),
             },
             ["auth"] = new JsonObject { ["mode"] = credential.AuthMode },
             ["SCAL"] = "1",

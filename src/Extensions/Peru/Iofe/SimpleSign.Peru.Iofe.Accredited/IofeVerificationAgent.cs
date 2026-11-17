@@ -225,10 +225,8 @@ public sealed class IofeVerificationAgent : IAsyncDisposable
 
             string signer = signature.SignerCertificate?.Subject ?? "firmante desconocido";
             string indication = signature.Indication == SignatureIndication.Invalid ? "NO VÁLIDA" : "INDETERMINADA";
-            string detail = signature.Errors.Count > 0
-                ? string.Join("; ", signature.Errors)
-                : signature.SubIndication?.ToString() ?? "sin detalle";
-            reasons.Add(string.Create(CultureInfo.InvariantCulture, $"Firma {i + 1} ({signer}): {indication} — {detail}"));
+            reasons.Add(string.Create(
+                CultureInfo.InvariantCulture, $"Firma {i + 1} ({signer}): {indication} — {IofeReasons.Describe(signature.SubIndication)}"));
         }
 
         return reasons;

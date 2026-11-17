@@ -75,6 +75,12 @@ simplesign pkcs11 list --lib /ruta/al/controlador.so
 La certificación FIPS 140-2 o Common Criteria del módulo **no puede comprobarse por software**: es una declaración del
 operador (`Certification`, `CertificateNumber`) que el auditor contrasta con el certificado del fabricante.
 
+**La cadena del certificado.** El agente la arma, en este orden, con los certificados que hay en el módulo, los que
+el operador indica (`ChainCertificates`, `--chain archivo`), los de la lista de confianza y, si aún falta un emisor,
+el que se descarga de la dirección que el propio certificado indica (AIA). Ningún certificado indicado o descargado
+amplía la confianza: la cadena debe terminar en una raíz de la lista de confianza. Si falta un emisor, la firma se
+rechaza con `UntrustedRoot` y el mensaje dice cuál.
+
 ### 3.2 Servicio de firma remota
 
 El servicio debe hablar el protocolo *Cloud Signature Consortium API v2* (el de ETSI TS 119 432). El agente firma de
@@ -176,7 +182,8 @@ Antes de cada firma, y para cada firma de un documento recibido, se verifica:
 | El certificado tiene activo el bit nonRepudiation | `KeyUsageNotPermitted` |
 | RSA de 2048 bits o más, o ECDSA de 256 o más; SHA-2 o SHA-3; sin SHA-1 ni MD5 en la cadena | `KeyTooWeak`, `AlgorithmNotPermitted` |
 
-No existe parámetro, archivo ni variable de entorno que desactive estas verificaciones.
+No existe parámetro, archivo ni variable de entorno que desactive estas verificaciones. La línea de comandos rechaza
+una opción que no tiene.
 
 ### Contingencia
 
@@ -206,7 +213,9 @@ administración del sistema no dan una vía alternativa: la única forma de firm
 | Verificaciones (`JsonLinesVerificationAuditSink`) | Cada documento verificado: fecha, formato, SHA-256, emisor, referencia, aceptado o rechazado, indicación de cada firma, motivos, si el comunicado se entregó, política, contingencia |
 
 Un agente no se crea sin su registro de auditoría (`AuditMissing`), y una operación no se devuelve sin haber escrito
-su registro.
+su registro. También queda registrado el agente de firma que no llega a abrirse (`AgentNotOpened`, con el motivo): la
+lista de confianza no pudo leerse, el módulo rechazó el PIN, el servicio remoto rechazó al agente o la configuración
+está incompleta.
 
 Cada línea lleva el resumen de la anterior, de modo que una línea modificada, eliminada o insertada rompe la cadena:
 
@@ -226,7 +235,7 @@ la firma:
 | Verificación | Motivo de rechazo |
 |---|---|
 | El sello contiene el identificador del certificado de la autoridad consultada | `TimestampUntrusted` |
-| La firma del sello es válida | error de firma del sello |
+| La firma del sello es válida y el sello corresponde a lo enviado | `TimestampInvalid` |
 | El certificado de la autoridad encadena a una raíz de confianza | `TimestampUntrusted` |
 | El certificado de la autoridad no está revocado | `TimestampCertificateRevoked`, `TimestampRevocationStatusUnknown` |
 | El certificado de la autoridad no ha expirado | `TimestampCertificateNotValid` |
@@ -242,5 +251,5 @@ al módulo criptográfico.
 ## 10. Comunicado al emisor (sección 4.3)
 
 Cuando un documento recibido se rechaza, el agente genera el comunicado y lo entrega al medio configurado
-(`Notifier`). Si la entrega falla, la verificación falla (`NoticeNotDelivered`) y el registro lo indica: el documento
+(`Notifier`), con los motivos en español. Si la entrega falla, la verificación falla (`NoticeNotDelivered`) y el registro lo indica: el documento
 no queda rechazado en silencio.

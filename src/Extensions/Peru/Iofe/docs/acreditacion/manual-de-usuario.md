@@ -37,6 +37,7 @@ simplesign iofe sign factura.pdf --output factura-firmada.pdf \
 | `--csc-url`, `--csc-credential`, `--pin` | El servicio de firma remota (Cloud Signature Consortium API v2), la credencial y su PIN, en lugar del módulo |
 | `--csc-token`, o `--csc-client-id` y `--csc-client-secret` | Cómo se autentica el agente ante el servicio (`env:NOMBRE` lee el secreto de una variable de entorno) |
 | `--service-…` | El servicio declarado: prestador, nombre con que se identifica, acreditación y su referencia |
+| `--chain archivo` | Certificado de una EC emisora (PEM o DER), si el módulo o el servicio solo guarda el de firma; repetible. Sin él, el emisor que falte se descarga de la dirección que el certificado indica (AIA) |
 | `--transaction tipo/id` | La transacción para la que se firma |
 | `--allow tipo` | Tipos de transacción permitidos a este agente |
 | `--audit-log` | Registro de auditoría de firmas |
@@ -48,7 +49,7 @@ Resultado: `✓ Signed`, con el firmante, el nivel (B-B sin sello de tiempo, B-L
 el módulo y la protección de la clave (o el servicio de firma remota y su credencial). Código de salida 0.
 
 No hay opción para firmar con un archivo PKCS#12 (PFX): está fuera del alcance de la acreditación (manual de
-administración, sección 3.3).
+administración, sección 3.3). Una opción que el comando no tiene es un error; no se ignora.
 
 Si la operación se rechaza, el mensaje indica el motivo y el código de salida es distinto de 0:
 
@@ -64,8 +65,9 @@ Si la operación se rechaza, el mensaje indica el motivo y el código de salida 
 | `Error (RevocationStatusUnknown)` | No se pudo consultar OCSP ni la CRL: revise la salida de red |
 | `Error (CertificateExpired)` | El certificado expiró |
 | `Error (KeyUsageNotPermitted)` | El certificado no tiene el bit nonRepudiation |
-| `Error (UntrustedRoot)` | La EC raíz no figura en la TSL |
+| `Error (UntrustedRoot)` | La EC raíz no figura en la TSL, o falta el certificado de una EC emisora: el mensaje dice cuál. Cárguelo en el módulo o indíquelo con `--chain` |
 | `Error (TimestampUntrusted)` | El sello no proviene de la autoridad configurada, o esta no es de confianza |
+| `Error (TimestampInvalid)` | El sello recibido no es válido: su firma no verifica o no corresponde a lo enviado |
 | `Error (TimestampCertificateRevoked)` | El certificado de la autoridad de sellado de tiempo está revocado |
 
 ## Verificar un documento recibido

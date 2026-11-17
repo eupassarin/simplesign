@@ -3,7 +3,7 @@
 Funcionamiento y configuración adecuada de la librería `SimpleSign.Peru.Iofe.Accredited` (Req. 20: "manual de
 programador"). Espacio de nombres: `SimpleSign.Peru.Iofe.Accredited`. Marcos: .NET 8 y .NET 10; compatible con
 Native AOT. Toda la criptografía usa `System.Security.Cryptography`; la operación con la clave privada ocurre en el
-módulo PKCS#11.
+módulo PKCS#11 o en el servicio de firma remota.
 
 ```bash
 dotnet add package SimpleSign.Peru.Iofe.Accredited
@@ -55,7 +55,9 @@ IofeSignedDocument xml = await agent.SignXmlAsync(xmlBytes, new IofeTransaction(
   firmó bajo contingencia y dónde está la clave que firmó (`KeySource`: módulo o servicio remoto).
 - Nivel de la firma: B-B sin autoridad de sellado de tiempo (fecha y hora de la firma y cadena de certificados,
   protegidas por la firma); B-LT con ella (además, sello de tiempo y datos de revocación de toda la cadena).
-- La cadena del certificado se completa hasta la raíz con los certificados del módulo y los de la confianza.
+- La cadena del certificado se completa hasta la raíz con los certificados del módulo, los de `ChainCertificates`
+  (certificados de las EC emisoras, para un módulo o servicio que solo guarda el de firma), los de la confianza y, si
+  falta un emisor, el que se descarga de la dirección que el certificado indica (AIA). La raíz debe ser de confianza.
 
 ### Con la clave en un servicio de firma remota
 
@@ -99,11 +101,17 @@ await using var agent = await IofeSigningAgent.OpenAsync(new IofeSigningAgentOpt
 | Excepción | Cuándo |
 |---|---|
 | `IofeAccreditationException` (`Refusal`) | Rechazo propio de la configuración acreditada: `KeyNotInModule`, `ModuleMismatch`, `RemoteServiceMismatch`, `RemoteAuthorizationNotUnattended`, `TransactionNotAllowed`, `AuditMissing`, `OptionsIncomplete`, `ContingencyExpired`, `NoticeNotDelivered` |
-| `SigningException` (`Reason`) | Una verificación de la política rechazó el certificado, la clave, el algoritmo o el sello de tiempo: `CertificateRevoked`, `RevocationStatusUnknown`, `CertificateExpired`, `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`… |
+| `SigningException` (`Reason`) | Una verificación de la política rechazó el certificado, la clave, el algoritmo o el sello de tiempo: `CertificateRevoked`, `RevocationStatusUnknown`, `CertificateExpired`, `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampInvalid`, `TimestampCertificateRevoked`… |
 | `Pkcs11Exception` | El módulo no pudo abrirse o se negó a firmar (controlador, PIN, selección de clave) |
 | `CloudSigningException` | El servicio de firma remota rechazó al agente o la credencial (token, secreto del cliente, clave deshabilitada). Un PIN rechazado al firmar llega dentro de una `SigningException` |
 
-Todo rechazo queda en el registro de auditoría antes de que la excepción llegue a quien llama.
+Todo rechazo queda en el registro de auditoría antes de que la excepción llegue a quien llama: el de una firma
+solicitada, el de una clave, un módulo o un servicio que no son los debidos, y el del agente que no llega a abrirse
+(`AgentNotOpened`: la lista de confianza no pudo leerse, el módulo rechazó el PIN, el servicio rechazó al agente, las
+opciones están incompletas). La excepción es la misma en cada caso.
+
+El agente de verificación se crea antes de recibir documento alguno: si no puede leer la lista de confianza,
+`CreateAsync` lanza la excepción y no hay registro, porque no hay documento que registrar.
 
 ## Verificación por agente automatizado (sección 4.3)
 
@@ -193,7 +201,11 @@ política de salida (`OutboundPolicy`): proxy, hosts permitidos y `AllowLdap = t
 
 ## Pruebas
 
-Para probar sin un HSM: SoftHSM2 como módulo PKCS#11 y el SimpleSign Sandbox como PKI de pruebas (CRL, OCSP, TSA y
-TSL, con fallas activables). Las pruebas del paquete están en
-`tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited.Tests` y se ejecutan con
-`scripts/tests/pkcs11.sh`.
+Para probar sin un HSM: SoftHSM2 como módulo PKCS#11 y el SimpleSign Sandbox como PKI de pruebas (CRL, OCSP, TSA,
+TSL y un servicio de firma remota, con fallas activables). Las pruebas del paquete están en
+`tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited.Tests`: las de la clave en un servicio remoto se
+ejecutan en cualquier máquina; las de token, con `scripts/tests/pkcs11.sh`. Cada prueba que demuestra un ítem del
+Anexo B lleva el rasgo `AnnexB` (`dotnet test --filter "AnnexB=F-8"`).
+
+El guion `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py` ejecuta `simplesign iofe` en cada ítem del Anexo B
+contra el Sandbox y conserva las evidencias: ver el [guion de la auditoría](../guion-de-auditoria.md).

@@ -78,9 +78,9 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
         ArgumentNullException.ThrowIfNull(certificateId);
         var certificate = _pki.Certificates.FirstOrDefault(c => c.Id == certificateId)
             ?? throw new KeyNotFoundException($"No certificate '{certificateId}'.");
-        if (certificate.Usage != CertificateUsage.Signing || certificate.IssuerId != SandboxPki.IntermediateId)
+        if (certificate.Usage != CertificateUsage.Signing)
         {
-            throw new ArgumentException($"Certificate '{certificateId}' is not a signing certificate of the intermediate CA.", nameof(certificateId));
+            throw new ArgumentException($"Certificate '{certificateId}' is not a signing certificate.", nameof(certificateId));
         }
 
         string id = credentialId is { Length: > 0 } ? credentialId : certificateId;
@@ -219,6 +219,16 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
             ? CscHttp.Json(HttpStatusCode.OK, Info(credential))
             : Error(HttpStatusCode.BadRequest, "invalid_request", "Invalid credentialID");
 
+    private IEnumerable<X509Certificate2> Chain(string certificateId)
+    {
+        var certificate = _pki.Certificate(certificateId);
+        yield return certificate.Certificate;
+        for (string? issuer = certificate.IssuerId; issuer is not null; issuer = _pki.Authority(issuer).IssuerId)
+        {
+            yield return _pki.Authority(issuer).Certificate;
+        }
+    }
+
     private JsonObject Info(SandboxCscCredential credential)
     {
         var certificate = _pki.Certificate(credential.CertificateId).Certificate;
@@ -235,10 +245,9 @@ internal sealed class SandboxCsc : HttpMessageHandler, IAuthorizationCodeHandler
             ["cert"] = new JsonObject
             {
                 ["status"] = "valid",
-                ["certificates"] = new JsonArray(
-                    (JsonNode)Convert.ToBase64String(certificate.RawData),
-                    (JsonNode)Convert.ToBase64String(_pki.Intermediate.RawData),
-                    (JsonNode)Convert.ToBase64String(_pki.Root.RawData)),
+                // The certificate and its issuers up to the root: a credential may be of any signing certificate,
+                // also one under the revoked, the expired or the SHA-1 CA.
+                ["certificates"] = new JsonArray([.. Chain(credential.CertificateId).Select(c => (JsonNode)Convert.ToBase64String(c.RawData))]),
             },
             ["auth"] = new JsonObject { ["mode"] = credential.AuthMode },
             ["SCAL"] = credential.Scal,

@@ -1,0 +1,868 @@
+{
+  "description": "The scenarios of auditoria.py, by item of annex B. Written by auditoria.py --write-catalog; AnnexBCoverageTests checks it against indecopi-checklist.md.",
+  "scenarios": [
+    {
+      "id": "tsl-vigente",
+      "items": [
+        "F-1",
+        "F-3"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Con la TSL firmada y vigente, y la raíz listada, se firma",
+        "en": "With the list signed and current, and the root listed, it signs",
+        "pt": "Com a TSL assinada e vigente, e a raiz listada, assina"
+      }
+    },
+    {
+      "id": "tsl-otro-firmante",
+      "items": [
+        "F-1",
+        "F-15"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "TSL firmada por un certificado que no es el de la AAC: no se firma",
+        "en": "List signed by a certificate other than the AAC's: nothing is signed",
+        "pt": "TSL assinada por certificado que não é o da AAC: não assina"
+      }
+    },
+    {
+      "id": "tsl-alterada",
+      "items": [
+        "F-1"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "TSL alterada después de firmada: no se firma",
+        "en": "List changed after it was signed: nothing is signed",
+        "pt": "TSL alterada depois de assinada: não assina"
+      }
+    },
+    {
+      "id": "tsl-expirada",
+      "items": [
+        "F-2"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "TSL expirada: no se firma",
+        "en": "Expired list: nothing is signed",
+        "pt": "TSL expirada: não assina"
+      }
+    },
+    {
+      "id": "raiz-no-listada",
+      "items": [
+        "F-3"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "La EC raíz del firmante no está en la lista de confianza: no se firma",
+        "en": "The signer's root CA is not among the trusted roots: nothing is signed",
+        "pt": "A AC raiz do signatário não está entre as raízes de confiança: não assina"
+      }
+    },
+    {
+      "id": "crl-http",
+      "items": [
+        "F-5",
+        "F-8"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Consulta de CRL por HTTP (sin OCSP disponible): se firma",
+        "en": "CRL fetched over HTTP (no OCSP available): it signs",
+        "pt": "Consulta de CRL por HTTP (sem OCSP disponível): assina"
+      }
+    },
+    {
+      "id": "crl-https",
+      "items": [
+        "F-5"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado cuya CRL se publica solo por HTTPS: se firma",
+        "en": "Certificate whose CRL is published over HTTPS only: it signs",
+        "pt": "Certificado cuja CRL só é publicada por HTTPS: assina"
+      }
+    },
+    {
+      "id": "crl-ldap",
+      "items": [
+        "F-5"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado cuya CRL se publica solo por LDAP: se firma",
+        "en": "Certificate whose CRL is published over LDAP only: it signs",
+        "pt": "Certificado cuja CRL só é publicada por LDAP: assina"
+      }
+    },
+    {
+      "id": "crl-clave-ajena",
+      "items": [
+        "F-6"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "CRL firmada con una clave que no es la de la EC: no se firma",
+        "en": "CRL signed with a key that is not the CA's: nothing is signed",
+        "pt": "CRL assinada com chave que não é a da AC: não assina"
+      }
+    },
+    {
+      "id": "crl-expirada",
+      "items": [
+        "F-7"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "CRL vencida: no se firma",
+        "en": "Expired CRL: nothing is signed",
+        "pt": "CRL vencida: não assina"
+      }
+    },
+    {
+      "id": "crl-sin-proxima-actualizacion",
+      "items": [
+        "F-7"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "CRL sin fecha de próxima actualización: no se firma",
+        "en": "CRL without a next update: nothing is signed",
+        "pt": "CRL sem data de próxima atualização: não assina"
+      }
+    },
+    {
+      "id": "revocado",
+      "items": [
+        "F-8"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado revocado (CRL por HTTP y OCSP): no firma",
+        "en": "Revoked certificate (CRL over HTTP and OCSP): it does not sign",
+        "pt": "Certificado revogado (CRL por HTTP e OCSP): não assina"
+      }
+    },
+    {
+      "id": "revocado-crl-https",
+      "items": [
+        "F-5",
+        "F-8"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado revocado, CRL solo por HTTPS: no firma",
+        "en": "Revoked certificate, CRL over HTTPS only: it does not sign",
+        "pt": "Certificado revogado, CRL só por HTTPS: não assina"
+      }
+    },
+    {
+      "id": "revocado-crl-ldap",
+      "items": [
+        "F-5",
+        "F-8"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado revocado, CRL solo por LDAP: no firma",
+        "en": "Revoked certificate, CRL over LDAP only: it does not sign",
+        "pt": "Certificado revogado, CRL só por LDAP: não assina"
+      }
+    },
+    {
+      "id": "revocacion-no-disponible",
+      "items": [
+        "F-8",
+        "F-14"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Ni la CRL ni OCSP responden: no se firma",
+        "en": "Neither the CRL nor OCSP answers: nothing is signed",
+        "pt": "Nem a CRL nem o OCSP respondem: não assina"
+      }
+    },
+    {
+      "id": "cadena-revocada",
+      "items": [
+        "F-9"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "La EC emisora está revocada: no se firma",
+        "en": "The issuing CA is revoked: nothing is signed",
+        "pt": "A AC emissora está revogada: não assina"
+      }
+    },
+    {
+      "id": "ocsp-vigente",
+      "items": [
+        "F-10"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado con OCSP solamente, estado bueno: se firma",
+        "en": "Certificate with OCSP only, status good: it signs",
+        "pt": "Certificado só com OCSP, estado bom: assina"
+      }
+    },
+    {
+      "id": "ocsp-revocado",
+      "items": [
+        "F-10"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado con OCSP solamente, revocado: no firma",
+        "en": "Certificate with OCSP only, revoked: it does not sign",
+        "pt": "Certificado só com OCSP, revogado: não assina"
+      }
+    },
+    {
+      "id": "ocsp-no-autorizado",
+      "items": [
+        "F-10"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Respuesta OCSP firmada por quien la EC no autorizó: no se firma",
+        "en": "OCSP response signed by a responder the CA never authorized: nothing is signed",
+        "pt": "Resposta OCSP assinada por quem a AC não autorizou: não assina"
+      }
+    },
+    {
+      "id": "expirado",
+      "items": [
+        "F-11"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado expirado: no firma",
+        "en": "Expired certificate: it does not sign",
+        "pt": "Certificado expirado: não assina"
+      }
+    },
+    {
+      "id": "aun-no-valido",
+      "items": [
+        "F-11"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado cuya vigencia aún no comienza: no firma",
+        "en": "Certificate not yet valid: it does not sign",
+        "pt": "Certificado cuja vigência ainda não começou: não assina"
+      }
+    },
+    {
+      "id": "ec-expirada",
+      "items": [
+        "F-11"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "La EC emisora expiró: no se firma",
+        "en": "The issuing CA expired: nothing is signed",
+        "pt": "A AC emissora expirou: não assina"
+      }
+    },
+    {
+      "id": "sin-no-repudio",
+      "items": [
+        "F-12"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado sin el bit nonRepudiation: no firma",
+        "en": "Certificate without the nonRepudiation bit: it does not sign",
+        "pt": "Certificado sem o bit nonRepudiation: não assina"
+      }
+    },
+    {
+      "id": "sin-uso-de-firma",
+      "items": [
+        "F-12"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado sin uso de clave para firmar (keyEncipherment solamente): no firma",
+        "en": "Certificate without a signing key usage (keyEncipherment only): it does not sign",
+        "pt": "Certificado sem uso de chave para assinar (só keyEncipherment): não assina"
+      }
+    },
+    {
+      "id": "sin-opcion-de-politica",
+      "items": [
+        "F-14"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "No hay opción para cambiar la política ni saltar una verificación: una opción así es un error",
+        "en": "There is no option to change the policy or skip a check: such an option is an error",
+        "pt": "Não há opção para trocar a política nem pular uma verificação: opção assim é erro"
+      }
+    },
+    {
+      "id": "contingencia",
+      "items": [
+        "F-14"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Sin CRL ni OCSP: solo bajo una contingencia declarada se firma, y queda en el registro",
+        "en": "No CRL nor OCSP: it signs only under a declared contingency, which goes to the record",
+        "pt": "Sem CRL nem OCSP: só assina sob contingência declarada, que fica no registro"
+      }
+    },
+    {
+      "id": "contingencia-revocado",
+      "items": [
+        "F-14"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Bajo contingencia, un certificado revocado sigue sin firmar",
+        "en": "Under a contingency a revoked certificate still does not sign",
+        "pt": "Sob contingência, certificado revogado continua sem assinar"
+      }
+    },
+    {
+      "id": "contingencia-vencida",
+      "items": [
+        "F-14"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Contingencia fuera de su vigencia: se rechaza",
+        "en": "Contingency outside its validity: refused",
+        "pt": "Contingência fora da vigência: recusada"
+      }
+    },
+    {
+      "id": "auditoria",
+      "items": [
+        "F-15"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Cada firma hecha o rechazada queda registrada; la cadena de registros evidencia una alteración",
+        "en": "Every signature made or refused is recorded; the chain of records shows a change",
+        "pt": "Cada assinatura feita ou recusada fica registrada; a cadeia de registros evidencia alteração"
+      }
+    },
+    {
+      "id": "sin-registro-de-auditoria",
+      "items": [
+        "F-15"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Sin registro de auditoría no se firma",
+        "en": "Without an audit log nothing is signed",
+        "pt": "Sem registro de auditoria não assina"
+      }
+    },
+    {
+      "id": "transaccion-no-definida",
+      "items": [
+        "F-16"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Transacción de un tipo que el agente no tiene definido: se rechaza y se registra",
+        "en": "A transaction of a kind the agent was not set up for: refused and recorded",
+        "pt": "Transação de tipo que o agente não tem definido: recusada e registrada"
+      }
+    },
+    {
+      "id": "clave-en-el-modulo",
+      "items": [
+        "F-17",
+        "F-18"
+      ],
+      "keys": "pkcs11",
+      "title": {
+        "es": "La clave firma dentro del módulo PKCS#11, que la declara sensible y no extraíble",
+        "en": "The key signs inside the PKCS#11 module, which reports it sensitive and not extractable",
+        "pt": "A chave assina dentro do módulo PKCS#11, que a declara sensível e não extraível"
+      }
+    },
+    {
+      "id": "clave-extraible",
+      "items": [
+        "F-18"
+      ],
+      "keys": "pkcs11",
+      "title": {
+        "es": "Clave que el módulo declara extraíble: se rechaza",
+        "en": "A key the module reports as extractable: refused",
+        "pt": "Chave que o módulo declara extraível: recusada"
+      }
+    },
+    {
+      "id": "modulo-no-declarado",
+      "items": [
+        "F-19"
+      ],
+      "keys": "pkcs11",
+      "title": {
+        "es": "El token no es el módulo declarado por el operador: se rechaza",
+        "en": "The token is not the module the operator declared: refused",
+        "pt": "O token não é o módulo declarado pelo operador: recusado"
+      }
+    },
+    {
+      "id": "clave-en-el-servicio-remoto",
+      "items": [
+        "F-17",
+        "F-18"
+      ],
+      "keys": "remote",
+      "title": {
+        "es": "La clave firma en el servicio de firma remota: la aplicación solo envía el resumen",
+        "en": "The key signs in the remote signing service: the application sends the hash only",
+        "pt": "A chave assina no serviço de assinatura remota: a aplicação só envia o resumo"
+      }
+    },
+    {
+      "id": "servicio-no-declarado",
+      "items": [
+        "F-19"
+      ],
+      "keys": "remote",
+      "title": {
+        "es": "El servicio de firma remota no es el declarado: se rechaza antes de enviarle secreto alguno",
+        "en": "The remote signing service is not the declared one: refused before any secret is sent to it",
+        "pt": "O serviço de assinatura remota não é o declarado: recusado antes de lhe enviar qualquer segredo"
+      }
+    },
+    {
+      "id": "credencial-con-persona",
+      "items": [
+        "F-16"
+      ],
+      "keys": "remote",
+      "title": {
+        "es": "Credencial remota que debe autorizar una persona: un agente desatendido la rechaza",
+        "en": "A remote credential a person has to authorize: an unattended agent refuses it",
+        "pt": "Credencial remota que uma pessoa precisa autorizar: o agente desatendido recusa"
+      }
+    },
+    {
+      "id": "pin-incorrecto",
+      "items": [
+        "F-15",
+        "F-17"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "PIN incorrecto: no se firma, y el intento queda registrado",
+        "en": "Wrong PIN: nothing is signed, and the attempt is recorded",
+        "pt": "PIN incorreto: não assina, e a tentativa fica registrada"
+      }
+    },
+    {
+      "id": "pfx-no-aceptado",
+      "items": [
+        "F-17",
+        "F-18"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Un archivo PKCS#12 (PFX) no es una fuente de clave: no hay opción para usarlo",
+        "en": "A PKCS#12 (PFX) file is not a key source: there is no option to use one",
+        "pt": "Um arquivo PKCS#12 (PFX) não é fonte de chave: não há opção para usá-lo"
+      }
+    },
+    {
+      "id": "clave-debil",
+      "items": [
+        "F-28"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Clave RSA de 1024 bits: no firma",
+        "en": "RSA 1024-bit key: it does not sign",
+        "pt": "Chave RSA de 1024 bits: não assina"
+      }
+    },
+    {
+      "id": "sha1-en-la-cadena",
+      "items": [
+        "F-28"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Cadena con un certificado firmado con SHA-1: no se firma",
+        "en": "A chain with a certificate signed with SHA-1: nothing is signed",
+        "pt": "Cadeia com certificado assinado com SHA-1: não assina"
+      }
+    },
+    {
+      "id": "algoritmos-vigentes",
+      "items": [
+        "F-28"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "RSA 3072 y 4096, ECDSA P-256 y P-384: se firma",
+        "en": "RSA 3072 and 4096, ECDSA P-256 and P-384: it signs",
+        "pt": "RSA 3072 e 4096, ECDSA P-256 e P-384: assina"
+      }
+    },
+    {
+      "id": "visor",
+      "items": [
+        "F-30"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "El visor muestra integridad, fecha y hora, clave pública y datos del certificado",
+        "en": "The viewer shows integrity, signing time, public key and certificate data",
+        "pt": "O visor mostra integridade, data e hora, chave pública e dados do certificado"
+      }
+    },
+    {
+      "id": "datos-de-validacion",
+      "items": [
+        "F-31",
+        "S-1",
+        "S-2",
+        "S-3",
+        "S-4"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Con la autoridad de sellado de tiempo: sello verificado, cadena y datos de revocación incluidos (B-LT)",
+        "en": "With the time-stamp authority: token checked, chain and revocation data embedded (B-LT)",
+        "pt": "Com a autoridade de carimbo de tempo: carimbo verificado, cadeia e dados de revogação incluídos (B-LT)"
+      }
+    },
+    {
+      "id": "formatos",
+      "items": [
+        "F-31"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Firma de XML (XAdES) y de cualquier archivo (CMS, CAdES), que el agente de verificación acepta",
+        "en": "Signature of XML (XAdES) and of any file (CMS, CAdES), which the verification agent accepts",
+        "pt": "Assinatura de XML (XAdES) e de qualquer arquivo (CMS, CAdES), que o agente de verificação aceita"
+      }
+    },
+    {
+      "id": "tsa-otra-autoridad",
+      "items": [
+        "S-1"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "El sello proviene de otra autoridad que la configurada: se rechaza",
+        "en": "The token comes from another authority than the one configured: refused",
+        "pt": "O carimbo vem de outra autoridade que a configurada: recusado"
+      }
+    },
+    {
+      "id": "tsa-sello-alterado",
+      "items": [
+        "S-2"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Sello de tiempo con la firma alterada: se rechaza",
+        "en": "A time-stamp whose signature was changed: refused",
+        "pt": "Carimbo de tempo com a assinatura alterada: recusado"
+      }
+    },
+    {
+      "id": "tsa-revocada",
+      "items": [
+        "S-3"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado de la autoridad de sellado de tiempo revocado: se rechaza",
+        "en": "The time-stamp authority's certificate is revoked: refused",
+        "pt": "Certificado da autoridade de carimbo de tempo revogado: recusado"
+      }
+    },
+    {
+      "id": "tsa-expirada",
+      "items": [
+        "S-4"
+      ],
+      "keys": "signing",
+      "title": {
+        "es": "Certificado de la autoridad de sellado de tiempo expirado: se rechaza",
+        "en": "The time-stamp authority's certificate expired: refused",
+        "pt": "Certificado da autoridade de carimbo de tempo expirado: recusado"
+      }
+    },
+    {
+      "id": "v-valido",
+      "items": [
+        "V-1",
+        "V-3",
+        "V-5",
+        "V-10",
+        "V-11",
+        "V-12",
+        "V-15"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Documento con firma válida de un certificado de la lista: se acepta y se registra",
+        "en": "A document validly signed with a certificate of the list: accepted and recorded",
+        "pt": "Documento com assinatura válida de certificado da lista: aceito e registrado"
+      }
+    },
+    {
+      "id": "v-tsl-otro-firmante",
+      "items": [
+        "V-1"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "TSL firmada por otro certificado: la verificación no se realiza",
+        "en": "List signed by another certificate: the verification does not go on",
+        "pt": "TSL assinada por outro certificado: a verificação não se realiza"
+      }
+    },
+    {
+      "id": "v-tsl-expirada",
+      "items": [
+        "V-2"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "TSL expirada: el documento no se acepta",
+        "en": "Expired list: the document is not accepted",
+        "pt": "TSL expirada: o documento não é aceito"
+      }
+    },
+    {
+      "id": "v-raiz-no-listada",
+      "items": [
+        "V-3"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante cuya EC raíz no está entre las de confianza: se rechaza",
+        "en": "A signer whose root CA is not trusted: rejected",
+        "pt": "Signatário cuja AC raiz não está entre as de confiança: rejeitado"
+      }
+    },
+    {
+      "id": "v-revocado",
+      "items": [
+        "V-5",
+        "V-8",
+        "V-9",
+        "V-10"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Documento firmado con un certificado que luego fue revocado: se rechaza, con comunicado al emisor",
+        "en": "A document signed with a certificate revoked afterwards: rejected, with a notice to its sender",
+        "pt": "Documento assinado com certificado depois revogado: rejeitado, com comunicado ao remetente"
+      }
+    },
+    {
+      "id": "v-revocado-crl-https",
+      "items": [
+        "V-5"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante revocado cuya CRL se publica solo por HTTPS: se rechaza",
+        "en": "A revoked signer whose CRL is published over HTTPS only: rejected",
+        "pt": "Signatário revogado cuja CRL só é publicada por HTTPS: rejeitado"
+      }
+    },
+    {
+      "id": "v-revocado-crl-ldap",
+      "items": [
+        "V-5"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante revocado cuya CRL se publica solo por LDAP: se rechaza",
+        "en": "A revoked signer whose CRL is published over LDAP only: rejected",
+        "pt": "Signatário revogado cuja CRL só é publicada por LDAP: rejeitado"
+      }
+    },
+    {
+      "id": "v-crl-clave-ajena",
+      "items": [
+        "V-6"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "CRL firmada con una clave que no es la de la EC: el documento no se acepta",
+        "en": "CRL signed with a key that is not the CA's: the document is not accepted",
+        "pt": "CRL assinada com chave que não é a da AC: o documento não é aceito"
+      }
+    },
+    {
+      "id": "v-crl-expirada",
+      "items": [
+        "V-7"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "CRL vencida: el documento no se acepta",
+        "en": "Expired CRL: the document is not accepted",
+        "pt": "CRL vencida: o documento não é aceito"
+      }
+    },
+    {
+      "id": "v-cadena-revocada",
+      "items": [
+        "V-9"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "La EC emisora del firmante está revocada: se rechaza",
+        "en": "The signer's issuing CA is revoked: rejected",
+        "pt": "A AC emissora do signatário está revogada: rejeitado"
+      }
+    },
+    {
+      "id": "v-ocsp-revocado",
+      "items": [
+        "V-10"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante con OCSP solamente, revocado: se rechaza",
+        "en": "A signer with OCSP only, revoked: rejected",
+        "pt": "Signatário só com OCSP, revogado: rejeitado"
+      }
+    },
+    {
+      "id": "v-expirado",
+      "items": [
+        "V-11"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Documento firmado con un certificado que ya expiró: se rechaza",
+        "en": "A document signed with a certificate that has expired: rejected",
+        "pt": "Documento assinado com certificado que já expirou: rejeitado"
+      }
+    },
+    {
+      "id": "v-sin-no-repudio",
+      "items": [
+        "V-12"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante sin el bit nonRepudiation: se rechaza",
+        "en": "A signer without the nonRepudiation bit: rejected",
+        "pt": "Signatário sem o bit nonRepudiation: rejeitado"
+      }
+    },
+    {
+      "id": "v-sin-opcion-de-politica",
+      "items": [
+        "V-14"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "No hay opción para cambiar la política de verificación: una opción así es un error",
+        "en": "There is no option to change the verification policy: such an option is an error",
+        "pt": "Não há opção para trocar a política de verificação: opção assim é erro"
+      }
+    },
+    {
+      "id": "v-contingencia",
+      "items": [
+        "V-14"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Sin CRL ni OCSP: se rechaza; bajo una contingencia declarada se acepta y queda en el registro",
+        "en": "No CRL nor OCSP: rejected; under a declared contingency it is accepted and recorded",
+        "pt": "Sem CRL nem OCSP: rejeitado; sob contingência declarada é aceito e fica no registro"
+      }
+    },
+    {
+      "id": "v-contingencia-revocado",
+      "items": [
+        "V-14"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Bajo contingencia, un firmante revocado sigue rechazado",
+        "en": "Under a contingency a revoked signer is still rejected",
+        "pt": "Sob contingência, signatário revogado continua rejeitado"
+      }
+    },
+    {
+      "id": "v-auditoria",
+      "items": [
+        "V-15"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Cada verificación, aceptada o rechazada, queda registrada; la cadena evidencia una alteración",
+        "en": "Every verification, accepted or rejected, is recorded; the chain shows a change",
+        "pt": "Cada verificação, aceita ou rejeitada, fica registrada; a cadeia evidencia alteração"
+      }
+    },
+    {
+      "id": "v-clave-debil",
+      "items": [
+        "V-28"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Firmante con clave RSA de 1024 bits: se rechaza",
+        "en": "A signer with an RSA 1024-bit key: rejected",
+        "pt": "Signatário com chave RSA de 1024 bits: rejeitado"
+      }
+    },
+    {
+      "id": "v-documento-alterado",
+      "items": [
+        "V-30"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Documento alterado después de la firma: se rechaza, con comunicado al emisor",
+        "en": "A document changed after it was signed: rejected, with a notice to its sender",
+        "pt": "Documento alterado depois da assinatura: rejeitado, com comunicado ao remetente"
+      }
+    },
+    {
+      "id": "v-sin-firmas",
+      "items": [
+        "V-30"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "Documento sin firmas: se rechaza, con comunicado al emisor",
+        "en": "A document without signatures: rejected, with a notice to its sender",
+        "pt": "Documento sem assinaturas: rejeitado, com comunicado ao remetente"
+      }
+    },
+    {
+      "id": "v-visor",
+      "items": [
+        "V-30"
+      ],
+      "keys": "none",
+      "title": {
+        "es": "El visor muestra los datos de la firma de un documento recibido",
+        "en": "The viewer shows the data of the signature of a received document",
+        "pt": "O visor mostra os dados da assinatura de um documento recebido"
+      }
+    }
+  ]
+}

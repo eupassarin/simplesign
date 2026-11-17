@@ -146,6 +146,9 @@ New-Item -ItemType Directory -Path $work | Out-Null
 $flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
 if ($IsWindows) { $flags = $flags -bor [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet }
 $imported = @()
+# The signer whose key is also imported a second time, as extractable, under the label "extractable".
+$extractableOf = 'rsa-2048'
+$extractableLabel = 'extractable'
 try {
     $pki = Invoke-RestMethod -Uri "$sandboxUrl/api/pki" -TimeoutSec 30
     $index = 0
@@ -171,6 +174,15 @@ try {
                 Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
                     '--write-object', $object[1], '--type', $object[0], '--id', $keyId, '--label', $entry.id) | Out-Null
             }
+            if ($entry.id -eq $extractableOf) {
+                # The same key once more, imported as extractable: what a signer that requires the key to stay in
+                # the module (the IOFE signing agent) must refuse.
+                Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin, '--extractable',
+                    '--write-object', $keyFile, '--type', 'privkey', '--id', 'e0', '--label', $extractableLabel) | Out-Null
+                Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
+                    '--write-object', $certFile, '--type', 'cert', '--id', 'e0', '--label', $extractableLabel) | Out-Null
+                $imported += '  {0,-22} {1}' -f $extractableLabel, "the key of $extractableOf again, extractable (a key to refuse)"
+            }
         }
         finally {
             Remove-Item -LiteralPath $keyFile -Force -ErrorAction SilentlyContinue
@@ -179,12 +191,24 @@ try {
         }
         $imported += '  {0,-22} {1}' -f $entry.id, $entry.subject
     }
+
+    # The certificates of the issuing CAs, without keys, as an HSM holds the chain of its signing certificates: a
+    # signer that takes the chain from the module (the IOFE signing agent) finds the issuer of each certificate there.
+    $cas = 0
+    foreach ($authority in $pki.authorities) {
+        if (-not $authority.issuerId) { continue }
+        $cas++
+        $caFile = Join-Path $work "$($authority.id).ca.der"
+        Invoke-WebRequest -Uri "$sandboxUrl/aia/$($authority.id).cer" -TimeoutSec 30 -OutFile $caFile
+        Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
+            '--write-object', $caFile, '--type', 'cert', '--id', ('c{0:x}' -f $cas), '--label', $authority.id) | Out-Null
+    }
 }
 finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Set-Content -LiteralPath $marker -Encoding ascii -Value $root -NoNewline
-Write-Host "-> $($imported.Count) key pair(s) on `"$tokenLabel`" (PIN $pin, SO PIN $soPin), module ${module}:"
+Write-Host "-> $($imported.Count) key pair(s) and $cas CA certificate(s) on `"$tokenLabel`" (PIN $pin, SO PIN $soPin), module ${module}:"
 $imported | ForEach-Object { Write-Host $_ }
 Write-Host "`$env:SOFTHSM2_CONF = `"$conf`""

@@ -44,6 +44,8 @@ public sealed class IofeVerificationAgentTests : IDisposable
             .SignAsync();
 
     [Fact]
+    [Trait("AnnexB", "V-5")]
+    [Trait("AnnexB", "V-15")]
     public async Task VerifyAsync_ValidPdf_IsAcceptedAndRecorded()
     {
         await using var agent = await AgentAsync();
@@ -87,6 +89,9 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-5")]
+    [Trait("AnnexB", "V-8")]
+    [Trait("AnnexB", "V-15")]
     public async Task VerifyAsync_RevokedSigner_IsRejectedWithANoticeToTheSender()
     {
         await using var agent = await AgentAsync();
@@ -111,6 +116,7 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-30")]
     public async Task VerifyAsync_DocumentChangedAfterSigning_IsRejected()
     {
         await using var agent = await AgentAsync();
@@ -151,6 +157,7 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-12")]
     public async Task VerifyAsync_SignerWithoutNonRepudiation_IsRejected()
     {
         await using var agent = await AgentAsync();
@@ -182,6 +189,7 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-14")]
     public async Task VerifyAsync_RevocationUnavailable_IsRejectedUnlessAContingencyIsInForce()
     {
         byte[] signed = await SignedPdfAsync();
@@ -201,6 +209,7 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-14")]
     public async Task VerifyAsync_RevokedSignerUnderAContingency_IsStillRejected()
     {
         var now = DateTimeOffset.UtcNow;
@@ -234,6 +243,8 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-1")]
+    [Trait("AnnexB", "V-3")]
     public async Task VerifyAsync_TrustedList_AcceptsAListedRootAndRejectsAnUnlistedOne()
     {
         using var list = new IofeListBuilder();
@@ -264,6 +275,7 @@ public sealed class IofeVerificationAgentTests : IDisposable
     }
 
     [Fact]
+    [Trait("AnnexB", "V-30")]
     public async Task Viewer_SignedPdf_ShowsIntegrityTimePublicKeyAndCertificateInSpanish()
     {
         await using var agent = await AgentAsync();

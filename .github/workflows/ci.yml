@@ -453,8 +453,13 @@ jobs:
             --token-label 'SimpleSign Sandbox' --login --pin 1234 --list-objects
           $keys = @($objects | Select-String 'Private Key Object').Count
           $certificates = @($objects | Select-String 'Certificate Object').Count
-          "$keys private key(s), $certificates certificate(s)"
-          if ($keys -lt 1 -or $keys -ne $certificates) { throw 'The token does not hold one key per certificate.' }
+          # A certificate per key, and the certificates of the issuing CAs (no key): a signer that takes the chain
+          # from the module finds each issuer there.
+          $cas = @((Invoke-RestMethod http://localhost:5300/api/pki -TimeoutSec 30).authorities | Where-Object issuerId).Count
+          "$keys private key(s), $certificates certificate(s), $cas of them of issuing CAs"
+          if ($keys -lt 1 -or $cas -lt 1 -or $certificates -ne $keys + $cas) {
+            throw 'The token does not hold one certificate per key plus those of the issuing CAs.'
+          }
           # A second run finds the token up to date.
           $again = pwsh -NoProfile -File tools/stack/softhsm-provision.ps1
           if (-not ($again -match 'nothing to do')) { throw "The second run rebuilt the token: $again" }

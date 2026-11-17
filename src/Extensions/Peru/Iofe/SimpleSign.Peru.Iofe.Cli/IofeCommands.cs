@@ -91,6 +91,26 @@ internal abstract class IofeTrustSettings : CommandSettings
         AnsiConsole.MarkupLine($"[red]Refused ({ex.Refusal}):[/] {ex.Message.EscapeMarkup()}");
         return 1;
     }
+
+    /// <summary>
+    /// Whether the line has an option the command does not have, said on the console. Spectre.Console.Cli drops such
+    /// an option in silence; here that would be an option that looks obeyed and is not (<c>--cert key.pfx</c>, a
+    /// policy, a switch to skip a check), in commands whose point is that there is no way around them.
+    /// </summary>
+    internal static bool HasUnknownOption(CommandContext context, string command)
+    {
+        if (context.Remaining.Parsed.Select(o => o.Key).FirstOrDefault() is not { } option)
+        {
+            return false;
+        }
+
+        // The option as it was typed, with or without its dashes (Spectre.Console.Cli keeps them).
+        string bare = option.TrimStart('-');
+        string name = (bare.Length == 1 ? "-" : "--") + bare;
+        AnsiConsole.MarkupLine(
+            $"[red]Error:[/] {$"Unknown option {name}: 'simplesign iofe {command}' has no such option (see 'simplesign iofe {command} --help').".EscapeMarkup()}");
+        return true;
+    }
 }
 
 /// <summary>Signs as the automated agent of INDECOPI's guide, section 4.2 (<see cref="IofeSigningAgent"/>).</summary>
@@ -205,6 +225,11 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         [Description("The number of the resolution or of the certificate of that accreditation")]
         public string? ServiceReference { get; init; }
 
+        /// <summary>Certificates of the authorities that issued the signing certificate.</summary>
+        [CommandOption("--chain <FILE>")]
+        [Description("A certificate of an authority that issued the signing certificate (PEM or DER), when the module or the service holds the signing certificate alone; repeat for more. Without it a missing issuer is fetched from the address the certificate names (AIA)")]
+        public string[] Chain { get; init; } = [];
+
         /// <summary>The transaction signed for.</summary>
         [CommandOption("--transaction <TYPE/ID>")]
         [Description("The transaction the signature is for, as type/id (e.g. factura/F001-123)")]
@@ -309,6 +334,11 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                 return ValidationResult.Error("--tsa and --tsa-cert go together.");
             }
 
+            if (Chain.FirstOrDefault(file => !File.Exists(file)) is { } missingChain)
+            {
+                return ValidationResult.Error($"File not found: {missingChain}");
+            }
+
             if (Format is not (null or "pdf" or "xml" or "cms"))
             {
                 return ValidationResult.Error("--format is pdf, xml or cms.");
@@ -321,6 +351,11 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        if (IofeTrustSettings.HasUnknownOption(context, "sign"))
+        {
+            return 1;
+        }
+
         string format = settings.Format ?? Path.GetExtension(settings.Input).ToUpperInvariant() switch
         {
             ".PDF" => "pdf",
@@ -331,6 +366,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         byte[] input = await File.ReadAllBytesAsync(settings.Input, cancellationToken);
         using var audit = new JsonLinesAuditSink(settings.AuditLog!);
         using X509Certificate2? tsaCertificate = settings.TsaCertificate is null ? null : IofeTrustSettings.LoadCertificate(settings.TsaCertificate);
+        List<X509Certificate2> chain = [.. settings.Chain.Select(IofeTrustSettings.LoadCertificate)];
         try
         {
             await using var agent = await IofeSigningAgent.OpenAsync(
@@ -359,6 +395,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                     },
                     RemoteServiceDeclaration = settings.CscUrl is null ? null : new IofeRemoteServiceDeclaration(
                         settings.ServiceProvider!, settings.ServiceName!, settings.ServiceAccreditation!, settings.ServiceReference!),
+                    ChainCertificates = chain,
                     Audit = audit,
                     Transactions = settings.Allowed,
                     Trust = await settings.TrustAsync(cancellationToken),
@@ -402,6 +439,10 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         catch (IofeAccreditationException ex)
         {
             return IofeTrustSettings.Refused(ex);
+        }
+        finally
+        {
+            chain.ForEach(certificate => certificate.Dispose());
         }
     }
 }
@@ -491,6 +532,11 @@ internal sealed class IofeVerifyCommand : AsyncCommand<IofeVerifyCommand.Setting
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        if (IofeTrustSettings.HasUnknownOption(context, "verify"))
+        {
+            return 1;
+        }
+
         byte[] input = await File.ReadAllBytesAsync(settings.Input, cancellationToken);
         byte[]? detached = settings.Detached is null ? null : await File.ReadAllBytesAsync(settings.Detached, cancellationToken);
         using var audit = new JsonLinesVerificationAuditSink(settings.AuditLog!);
@@ -590,6 +636,11 @@ internal sealed class IofeViewCommand : AsyncCommand<IofeViewCommand.Settings>
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        if (IofeTrustSettings.HasUnknownOption(context, "view"))
+        {
+            return 1;
+        }
+
         byte[] input = await File.ReadAllBytesAsync(settings.Input, cancellationToken);
         byte[]? detached = settings.Detached is null ? null : await File.ReadAllBytesAsync(settings.Detached, cancellationToken);
         await using var viewer = await IofeViewer.CreateAsync(await settings.TrustAsync(cancellationToken), IofeCliExtension.Context.HttpClientProvider, cancellationToken);

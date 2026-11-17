@@ -170,15 +170,65 @@ public sealed class IofeCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Sign_ChainFileThatDoesNotExist_Fails()
+    {
+        var args = RemoteSignArguments();
+        args.AddRange(["--chain", File("no-existe.cer")]);
+
+        var (exit, output) = await IofeCli.RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain("File not found");
+    }
+
+    [Fact]
     public async Task Help_Sign_ShowsBothWaysOfGivingTheKey()
     {
         var (exit, output) = await IofeCli.RunAsync("iofe", "sign", "--help");
 
         exit.ShouldBe(0, output);
-        foreach (string option in new[] { "--pkcs11-lib", "--module-certificate", "--csc-url", "--csc-credential", "--csc-client-secret", "--service-name", "--service-reference" })
+        foreach (string option in new[] { "--pkcs11-lib", "--module-certificate", "--csc-url", "--csc-credential", "--csc-client-secret", "--service-name", "--service-reference", "--chain" })
         {
             output.ShouldContain(option);
         }
+    }
+
+    [Theory]
+    [InlineData("--cert", "clave.pfx", "Unknown option --cert")]
+    [InlineData("--signing-policy", "minimal", "Unknown option --signing-policy")]
+    [InlineData("--no-revocation-check", null, "Unknown option --no-revocation-check")]
+    public async Task Sign_OptionTheCommandDoesNotHave_IsAnErrorNotIgnored(string option, string? value, string expected)
+    {
+        // A PFX, a policy or a switch that skips a check are not options of the accredited commands; a command line
+        // that drops them in silence would look as if it had obeyed.
+        var args = RemoteSignArguments();
+        args.AddRange(value is null ? [option] : [option, value]);
+
+        var (exit, output) = await IofeCli.RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain(expected);
+        System.IO.File.Exists(File("firmado.pdf")).ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("verify", "--policy", "default")]
+    [InlineData("view", "--skip-revocation", null)]
+    public async Task VerifyAndView_OptionTheCommandDoesNotHave_IsAnError(string command, string option, string? value)
+    {
+        string input = File("recibido.pdf");
+        await System.IO.File.WriteAllBytesAsync(input, TestPdfFactory.CreateMinimalPdf());
+        List<string> args = command == "verify"
+            ? ["iofe", "verify", input, "--sender", "20123456789", "--audit-log", File("verificacion.jsonl"), "--notice", File("comunicado.txt"), "--trust-root", RootFile()]
+            : ["iofe", "view", input, "--output", File("visor.html"), "--trust-root", RootFile()];
+        args.AddRange(value is null ? [option] : [option, value]);
+
+        var (exit, output) = await IofeCli.RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain($"Unknown option {option}");
+        System.IO.File.Exists(File("verificacion.jsonl")).ShouldBeFalse();
+        System.IO.File.Exists(File("visor.html")).ShouldBeFalse();
     }
 
     /// <summary>A complete <c>iofe sign</c> line with the key in a remote service (which nothing listens at: only the line is checked).</summary>

@@ -691,7 +691,7 @@ public sealed partial class PadesSignerBuilder
                 {
                     throw new SigningException(
                         $"Signature timestamp request failed: {ex.Message}",
-                        SigningErrorReason.NetworkFailure,
+                        TimestampException.ReasonOf(ex),
                         ex);
                 }
 
@@ -1191,7 +1191,7 @@ public sealed partial class PadesSignerBuilder
             {
                 throw new SigningException(
                     $"Archive timestamp request failed: {ex.Message}",
-                    SigningErrorReason.NetworkFailure,
+                    TimestampException.ReasonOf(ex),
                     ex);
             }
 

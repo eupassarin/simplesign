@@ -44,6 +44,20 @@ internal static class IofeChains
         return chain;
     }
 
+    /// <summary>
+    /// The certificate whose issuer could not be found: the last of <paramref name="chain"/> (or
+    /// <paramref name="certificate"/> itself), unless it is self-issued or one of the trust anchors — then the chain
+    /// is complete and this is null.
+    /// </summary>
+    internal static X509Certificate2? WithoutIssuer(
+        X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain, IReadOnlyList<ITrustAnchorProvider> trust)
+    {
+        var last = chain.Count > 0 ? chain[^1] : certificate;
+        return IsSelfIssued(last) || trust.SelectMany(p => p.GetTrustAnchors()).Any(a => a.RawData.AsSpan().SequenceEqual(last.RawData))
+            ? null
+            : last;
+    }
+
     private static bool IsSelfIssued(X509Certificate2 certificate) =>
         certificate.SubjectName.RawData.AsSpan().SequenceEqual(certificate.IssuerName.RawData);
 
