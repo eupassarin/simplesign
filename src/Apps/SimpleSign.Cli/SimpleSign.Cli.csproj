@@ -24,16 +24,22 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>SimpleSign.TestBench.Tests</_Parameter1>
     </AssemblyAttribute>
+    <!-- The tests of an extension drive the real command line with the extension registered. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>SimpleSign.Peru.Iofe.Cli.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>SimpleSign.Brazil.Cli.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>SimpleSign.Europe.Eidas.Cli.Tests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Europe\Eidas\SimpleSign.Europe.Eidas\SimpleSign.Europe.Eidas.csproj" />
-    <ProjectReference Include="..\..\TrustFrameworks\Brazil\IcpBrasil\SimpleSign.Brazil.Fiscal\SimpleSign.Brazil.Fiscal.csproj" />
     <ProjectReference Include="..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Europe.Eidas.Cli</AssemblyName>
+    <RootNamespace>SimpleSign.Europe.Eidas.Cli</RootNamespace>
+    <PackageId>SimpleSign.Europe.Eidas.Cli</PackageId>
+    <Description>eIDAS (EU) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Europe.Eidas.Cli': --profile eidas (the EU LOTL and its trusted lists, the qualification of each signature) and the eidas policy presets.</Description>
+    <PackageTags>eidas;eu;lotl;qes;simplesign;cli;extension</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CliExtensionName>eidas</CliExtensionName>
+    <CliExtensionType>SimpleSign.Europe.Eidas.Cli.EidasCliExtension</CliExtensionType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Europe.Eidas\SimpleSign.Europe.Eidas.csproj" />
+    <ProjectReference Include="..\..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Europe.Eidas.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="..\..\..\CliExtension.targets" />
+</Project>

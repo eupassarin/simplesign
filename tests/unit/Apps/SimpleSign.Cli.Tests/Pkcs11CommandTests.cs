@@ -1,12 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.CAdES;
-using SimpleSign.PAdES.DependencyInjection;
-using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
-using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -25,14 +18,7 @@ public sealed class Pkcs11CommandTests
     private static async Task<int> RunAsync(params string[] args)
     {
         using var capture = new ConsoleCapture();
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var app = new CommandApp(new SimpleSignServiceRegistry(services));
-        Program.ConfigureApp(app);
+        var app = Program.CreateApp();
         return await Program.RunWithAsync(app, args);
     }
 }

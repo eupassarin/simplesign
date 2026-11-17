@@ -52,6 +52,9 @@ internal static class CkConstants
     internal const ulong CkfUserPinLocked = 0x40000;
     internal const ulong CkfUserPinToBeChanged = 0x80000;
 
+    // Slot flags (CK_SLOT_INFO.flags)
+    internal const ulong CkfHwSlot = 0x4;
+
     // User types
     internal const ulong CkuUser = 1;
 
@@ -66,7 +69,12 @@ internal static class CkConstants
     internal const ulong CkaCertificateType = 0x080;
     internal const ulong CkaKeyType = 0x100;
     internal const ulong CkaId = 0x102;
+    internal const ulong CkaSensitive = 0x103;
     internal const ulong CkaSign = 0x108;
+    internal const ulong CkaExtractable = 0x162;
+    internal const ulong CkaLocal = 0x163;
+    internal const ulong CkaNeverExtractable = 0x164;
+    internal const ulong CkaAlwaysSensitive = 0x165;
     internal const ulong CkkRsa = 0;
     internal const ulong CkkEc = 3;
 

@@ -1,14 +1,8 @@
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.CAdES;
-using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
-using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -35,19 +29,7 @@ public sealed class XadesCommandPipelineTests : IDisposable
         }
     }
 
-    private static CommandApp CreateConfiguredApp()
-    {
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var registry = new SimpleSignServiceRegistry(services);
-        var app = new CommandApp(registry);
-        Program.ConfigureApp(app);
-        return app;
-    }
+    private static CommandApp CreateConfiguredApp() => Program.CreateApp();
 
     [Fact]
     public async Task Sign_WithSelfSignedCert_CreatesOutputFile()

@@ -180,14 +180,13 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `externalObjectId` | upload |  | Additional data object (external): A file signed together with the document and kept outside the signature: its ds:Reference points to the file name and digests the file as it is. |
 | `counterSign` | toggle |  | XAdES countersignature: Countersign a signature the document already has: the new signature signs its SignatureValue and is stored in its CounterSignature unsigned property. |
 | `counterSignatureId` | text |  | Signature to countersign: The Id of the ds:Signature to countersign. Empty: the only signature of the document. |
-| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil` | Signature type: Baseline levels, or a signature policy. |
+| `kind` | choice | `Baseline`, `CustomPolicy` | Signature type: Baseline levels, or a signature policy. |
 | `level` | choice | `BB`, `BT`, `BLT`, `BLTA` | Baseline level: Each level adds what a validator needs later. |
 | `policyOid` | text |  | Policy OID: The object identifier of the signature policy. |
 | `policyUri` | text |  | Policy URI: Where the policy document can be downloaded (SPuri qualifier). Optional. |
 | `policyDocumentId` | upload |  | Policy document (policy store): The signature policy file. Its SHA-256 goes into the policy identifier and the file is embedded in the signature, so the policy can be read offline. |
 | `policySpecification` | text |  | Policy document specification: The OID or URI of the specification that defines the syntax of the policy document (SPDocSpecification). Used with a policy document. |
 | `extendedForm` | choice | `None`, `CompleteReferences`, `ExtendedLong`, `Archive` | Extended form: The older XAdES forms with references to the validation data, still required by some policies. |
-| `icpPolicy` | choice | `AdRb`, `AdRt`, `AdRv`, `AdRc`, `AdRa` | ICP-Brasil policy: The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen. |
 | `revocationPreference` | choice | `OcspFirst`, `CrlFirst` | Prefer OCSP or CRL: Which revocation source is tried first when collecting the validation data; the other one is the fallback. |
 | `timestamp` | tsa |  | Time-stamping authority (TSA): Who signs the trusted time of the signature. |
 | `dataObjectsTimestamp` | toggle |  | Data objects timestamp: A timestamp over the signed data, asked from the signature TSA before signing (AllDataObjectsTimeStamp). |

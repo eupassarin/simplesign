@@ -1,12 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.CAdES;
-using SimpleSign.PAdES.DependencyInjection;
-using SimpleSign.XAdES;
 using Spectre.Console;
-using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -56,9 +49,10 @@ public sealed class HelpScreenTests
         "policy schema",
         "audit",
         "audit verify",
-        "fiscal",
-        "fiscal sign",
-        "fiscal validate",
+        "extension",
+        "extension install",
+        "extension list",
+        "extension remove",
     };
 
     [Theory]
@@ -125,14 +119,7 @@ public sealed class HelpScreenTests
         {
             // The app must be configured while the captured console is in place: the help provider
             // writes to the console the CommandApp was built with.
-            var services = new ServiceCollection();
-            services.AddSimpleSign();
-            services.AddSimpleSignIcpBrasil();
-            services.AddSimpleSignGovBr();
-            services.AddSimpleSignCades();
-            services.AddSimpleSignXades();
-            var app = new CommandApp(new SimpleSignServiceRegistry(services));
-            Program.ConfigureApp(app);
+            var app = Program.CreateApp();
 
             int exit = await Program.RunWithAsync(app, args);
             return (exit, Stdout.ToString() + AnsiText);

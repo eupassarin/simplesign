@@ -301,7 +301,7 @@ Any framework can qualify by implementing `ISignatureQualifier` and passing it i
 `SignatureQualifiers`, or by carrying it on a `TrustProfile`. With no qualifier configured,
 `Qualification` is `null` and nothing else changes.
 
-See [eIDAS](eidas.md) for what each level means and how the EU list of trusted lists is read.
+See [eIDAS](../../src/Extensions/Europe/Eidas/docs/eidas.md) for what each level means and how the EU list of trusted lists is read.
 
 ## XAdES Validation
 

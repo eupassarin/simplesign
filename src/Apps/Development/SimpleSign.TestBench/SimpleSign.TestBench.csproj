@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    SimpleSign TestBench: a local web app (ASP.NET Core + React/shadcn in web/) that exercises
+    every PDF signing option of the library, with an offline sandbox (PKI, TSA, CRL, fake CSC).
+    Not packaged; listens on 127.0.0.1 only.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SimpleSign.TestBench</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- App code (not a library): no ConfigureAwait, UI text, internal types, logging templates not needed. -->
+    <NoWarn>$(NoWarn);CS1591;CA2007;CA1303;CA1848;CA1873;CA1031;CA2000;CA5394;CA1707</NoWarn>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <WebDir>$(MSBuildProjectDirectory)/web</WebDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+    <ProjectReference Include="..\..\..\Formats\SimpleSign.CAdES\SimpleSign.CAdES.csproj" />
+    <ProjectReference Include="..\..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+    <ProjectReference Include="..\..\..\Extras\SimpleSign.HtmlToPdf\SimpleSign.HtmlToPdf.csproj" />
+    <ProjectReference Include="..\..\..\Signers\SimpleSign.Signers.Pkcs11\SimpleSign.Signers.Pkcs11.csproj" />
+    <ProjectReference Include="..\..\..\Signers\SimpleSign.Signers.Cloud\SimpleSign.Signers.Cloud.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Peru\Iofe\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Europe\Eidas\SimpleSign.Europe.Eidas\SimpleSign.Europe.Eidas.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
+    <!-- The CLI a run with engine "cli" starts (cli/simplesign.dll next to the TestBench): built first, not referenced. -->
+    <ProjectReference Include="..\..\SimpleSign.Cli\SimpleSign.Cli.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <!--
+      The extensions of that CLI (cli/extensions/<name>): a trust framework is an extension, so the runs with a profile,
+      a policy preset, a list profile or a command of one (brasil sign) need it next to the CLI.
+    -->
+    <CliExtensionProject Include="..\..\..\Extensions\Peru\Iofe\SimpleSign.Peru.Iofe.Cli\SimpleSign.Peru.Iofe.Cli.csproj" ExtensionName="iofe" />
+    <CliExtensionProject Include="..\..\..\Extensions\Brazil\SimpleSign.Brazil.Cli\SimpleSign.Brazil.Cli.csproj" ExtensionName="brasil" />
+    <CliExtensionProject Include="..\..\..\Extensions\Europe\Eidas\SimpleSign.Europe.Eidas.Cli\SimpleSign.Europe.Eidas.Cli.csproj" ExtensionName="eidas" />
+    <ProjectReference Include="@(CliExtensionProject)" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <!-- Copies the CLI's build output to cli/, and each extension's to cli/extensions/<name>/ (also into the output of projects that reference the TestBench, like its tests). -->
+  <Target Name="CollectCli" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="..\..\SimpleSign.Cli\SimpleSign.Cli.csproj" Targets="GetTargetPath" Properties="TargetFramework=net8.0;Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" PropertyName="CliTargetPath" />
+    </MSBuild>
+    <PropertyGroup>
+      <CliOutputDir>$([System.IO.Path]::GetDirectoryName('$(CliTargetPath)'))</CliOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_CliFile Include="$(CliOutputDir)/**/*" />
+      <Content Include="@(_CliFile)" Link="cli/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+    <!-- GetTargetPath gives each extension's assembly, with the metadata of the project asked: its ExtensionName. -->
+    <MSBuild Projects="@(CliExtensionProject)" Targets="GetTargetPath" Properties="TargetFramework=net8.0;Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_CliExtensionAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <!-- Only the assemblies and the manifest: the CLI loads from this folder what it does not have itself. -->
+      <_CliExtensionFolder Include="@(_CliExtensionAssembly->'%(RootDir)%(Directory)')" ExtensionName="%(_CliExtensionAssembly.ExtensionName)" />
+    </ItemGroup>
+    <CreateItem Include="%(_CliExtensionFolder.Identity)*.dll;%(_CliExtensionFolder.Identity)extension.json" AdditionalMetadata="ExtensionName=%(_CliExtensionFolder.ExtensionName)">
+      <Output TaskParameter="Include" ItemName="_CliExtensionFile" />
+    </CreateItem>
+    <ItemGroup>
+      <Content Include="@(_CliExtensionFile)" Link="cli/extensions/%(_CliExtensionFile.ExtensionName)/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.TestBench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The playbooks in docs/, offered as samples on the Playbook tab. -->
+    <EmbeddedResource Include="..\..\..\..\docs\playbooks\*.json" LogicalName="SimpleSign.TestBench.Playbooks.Samples.%(Filename)%(Extension)" />
+    <!-- And the playbooks each trust framework keeps with its own files (Extensions/Peru/Iofe, Extensions/Brazil, Extensions/Europe/Eidas). -->
+    <EmbeddedResource Include="..\..\..\Extensions\**\playbooks\*.json" LogicalName="SimpleSign.TestBench.Playbooks.Samples.%(Filename)%(Extension)" />
+    <!-- The roots of the public TSAs (PublicTsaRoots); tools/dss mounts the same folder. -->
+    <EmbeddedResource Include="TsaRoots/*.crt" LogicalName="TsaRoots/%(Filename)%(Extension)" />
+    <Content Remove="web/**" />
+    <None Remove="web/**" />
+    <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" Condition="Exists('web/dist')" />
+  </ItemGroup>
+
+  <!-- Builds the UI when its sources are newer than web/dist (Node.js required). Skip with -p:SkipWeb=true. -->
+  <Target Name="BuildWeb" BeforeTargets="AssignTargetPaths" Condition="'$(SkipWeb)' != 'true' And Exists('$(WebDir)/package.json')"
+          Inputs="@(WebSources);$(WebDir)/package.json;$(WebDir)/index.html" Outputs="$(WebDir)/dist/index.html">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(WebDir)" Condition="!Exists('$(WebDir)/node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebDir)" />
+    <!-- The build empties web/dist and writes files with new hashes: drop the files listed when the project was
+         evaluated (they no longer exist, so the copy to wwwroot would fail) and list what is there now. -->
+    <ItemGroup>
+      <_StaleWebDist Include="@(Content)" Condition="$([System.String]::Copy('%(Identity)').Replace('\','/').StartsWith('web/dist/'))" />
+      <Content Remove="@(_StaleWebDist)" />
+      <Content Include="web/dist/**" CopyToOutputDirectory="PreserveNewest" LinkBase="wwwroot" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <WebSources Include="web/src/**/*" />
+  </ItemGroup>
+</Project>

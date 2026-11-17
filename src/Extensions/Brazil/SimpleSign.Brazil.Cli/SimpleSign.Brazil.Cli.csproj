@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Brazil.Cli</AssemblyName>
+    <RootNamespace>SimpleSign.Brazil.Cli</RootNamespace>
+    <PackageId>SimpleSign.Brazil.Cli</PackageId>
+    <Description>Brazil (ICP-Brasil, Gov.br, Lei 14.063) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Brazil.Cli': --profile icp-brasil and gov-br, the icp-brasil and govbr policy presets, 'simplesign brasil sign' (ICP-Brasil PAdES policies AD-RB to AD-RA, advanced electronic signatures, VALIDAR health documents), 'brasil timestamp verify' (ICP-Brasil ACT), and the Brazilian chain validation and Lei 14.063 level in 'validate' and 'inspect'.</Description>
+    <PackageTags>icp-brasil;gov-br;brazil;lei-14063;simplesign;cli;extension</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CliExtensionName>brasil</CliExtensionName>
+    <CliExtensionType>SimpleSign.Brazil.Cli.BrasilCliExtension</CliExtensionType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Brazil\SimpleSign.Brazil.csproj" />
+    <ProjectReference Include="..\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
+    <ProjectReference Include="..\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
+    <ProjectReference Include="..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Brazil.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="..\..\CliExtension.targets" />
+</Project>

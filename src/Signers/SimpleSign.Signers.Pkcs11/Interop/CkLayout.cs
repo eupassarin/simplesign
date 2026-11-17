@@ -61,6 +61,12 @@ internal sealed class CkLayout
     /// <summary>A buffer comfortably larger than CK_TOKEN_INFO on every platform.</summary>
     internal static int TokenInfoBufferSize => 512;
 
+    /// <summary>Offset of <c>flags</c> in CK_SLOT_INFO (after the slot description and the manufacturer).</summary>
+    internal static int SlotInfoFlagsOffset => 96;
+
+    /// <summary>A buffer comfortably larger than CK_SLOT_INFO on every platform.</summary>
+    internal static int SlotInfoBufferSize => 256;
+
     /// <summary>Offset of the first function pointer in CK_FUNCTION_LIST (after CK_VERSION).</summary>
     internal int FirstFunctionOffset => Align(2, PointerSize);
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using SimpleSign.Core.Inspection;
 
@@ -68,8 +69,6 @@ internal sealed class ValidateSignatureDto
     public bool Chain { get; init; }
     public bool? Revoked { get; init; }
     public DateTimeOffset? SigningTime { get; init; }
-    public string? Lei14063 { get; init; }
-    public ValidateBrasilDto? Brasil { get; init; }
     public string? SubIndication { get; init; }
     public PublicKeyDto? PublicKey { get; init; }
     public List<ConstraintDto> Constraints { get; init; } = [];
@@ -83,6 +82,10 @@ internal sealed class ValidateSignatureDto
     public bool ChainTrustWarning { get; init; }
     public string? ChainRegion { get; init; }
     public Dictionary<string, string>? ChainMetadata { get; init; }
+
+    /// <summary>What the extensions in use add about the signature (the Brazilian one: <c>lei14063</c>, <c>brasil</c>), as properties of this object.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; } // set, not init: the source generator binds init properties in a constructor, which extension data cannot be
 }
 
 internal sealed class ConstraintDto
@@ -99,18 +102,6 @@ internal sealed class PublicKeyDto
     public int SizeBits { get; init; }
     public string SpkiSha256 { get; init; } = string.Empty;
     public string Pem { get; init; } = string.Empty;
-}
-
-internal sealed class ValidateBrasilDto
-{
-    public string? Hierarchy { get; init; }
-    public string? CertificateType { get; init; }
-    public string? SignerId { get; init; }
-    public string? SignerIdType { get; init; }
-    public string? SignaturePolicy { get; init; }
-    public string? SignaturePolicyStatus { get; init; }
-    public string? RevocationStatus { get; init; }
-    public Dictionary<string, string> Registrations { get; init; } = [];
 }
 
 // ─── Inspect DTOs ────────────────────────────────────────────────────
@@ -152,13 +143,16 @@ internal sealed class InspectSignatureDto
     public bool HasSigningCertificateV2 { get; init; }
     public string? CommitmentType { get; init; }
     public string? SignaturePolicy { get; init; }
-    public ManifestDto? Manifest { get; init; }
     public int CmsDataSize { get; init; }
     public string Level { get; init; } = string.Empty;
     public ByteRangeDto ByteRange { get; init; } = new();
     public CertificateDto? Signer { get; init; }
     public TimestampDto? Timestamp { get; init; }
     public List<EmbeddedCertDto> EmbeddedCertificates { get; init; } = [];
+
+    /// <summary>What the extensions in use add about the signature (the Brazilian one: <c>manifest</c>), as properties of this object.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; } // set, not init: the source generator binds init properties in a constructor, which extension data cannot be
 }
 
 internal sealed class AlgorithmDto
@@ -234,19 +228,6 @@ internal sealed class EmbeddedCertDto
     public string Issuer { get; init; } = string.Empty;
     public string Serial { get; init; } = string.Empty;
     public bool Expired { get; init; }
-}
-
-internal sealed class ManifestDto
-{
-    public string? SignerName { get; init; }
-    public string? Cpf { get; init; }
-    public string? Email { get; init; }
-    public string? Ip { get; init; }
-    public string? AuthMethod { get; init; }
-    public DateTimeOffset? Timestamp { get; init; }
-    public string? Institution { get; init; }
-    public string? Cnpj { get; init; }
-    public string? Commitment { get; init; }
 }
 
 // ─── CAdES Validate DTO ───────────────────────────────────────────────

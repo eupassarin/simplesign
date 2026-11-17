@@ -45,6 +45,23 @@ public sealed class Pkcs11SignerSoftHsmTests(SoftHsmFixture hsm)
     }
 
     [SkippableFact]
+    public void Open_KeyOnSoftwareToken_ReportsItsProtectionAndToken()
+    {
+        Skip.If(hsm.SkipReason is not null, hsm.SkipReason);
+        using var token = Pkcs11Signer.Open(hsm.Options(SoftHsmFixture.RsaKeyLabel));
+
+        token.KeyProtection.Sensitive.ShouldBe(true);
+        token.KeyProtection.Extractable.ShouldBe(false);
+        token.KeyProtection.IsConfinedToToken.ShouldBeTrue();
+        token.KeyProtection.GeneratedOnToken.ShouldBe(false, "the fixture imports its keys");
+        token.KeyProtection.NeverExtractable.ShouldBe(false, "an imported key was outside the token once");
+        token.KeyProtection.HardwareSlot.ShouldBe(false, "SoftHSM2 is a software token");
+        token.TokenManufacturer.ShouldNotBeNullOrWhiteSpace();
+        token.TokenModel.ShouldNotBeNullOrWhiteSpace();
+        token.TokenSerialNumber.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [SkippableFact]
     public async Task SignAsync_RsaPkcs1_ProducesValidPades()
     {
         Skip.If(hsm.SkipReason is not null, hsm.SkipReason);

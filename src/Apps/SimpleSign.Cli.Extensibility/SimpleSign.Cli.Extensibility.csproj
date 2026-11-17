@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Cli.Extensibility</AssemblyName>
+    <RootNamespace>SimpleSign.Cli.Extensibility</RootNamespace>
+    <PackageId>SimpleSign.Cli.Extensibility</PackageId>
+    <Description>The contract of the extensions of the SimpleSign CLI: what a package adds to 'simplesign' after it is installed with 'simplesign extension install' — commands, trust profiles, policy presets and trusted-list profiles.</Description>
+    <PackageTags>simplesign;cli;extension;plugin;digital-signature</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
+    <ProjectReference Include="..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+    <!-- The signer a pass-through 'sign' command configures (CliSignRequest). -->
+    <ProjectReference Include="..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same version as the CLI: an extension's commands are Spectre.Console.Cli commands. -->
+    <PackageReference Include="Spectre.Console.Cli" Version="0.57.2" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

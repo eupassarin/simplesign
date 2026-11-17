@@ -25,19 +25,23 @@ dotnet test tests/integration/SimpleSign.Interop.Tests --framework net10.0
 # Run specific test project
 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
 dotnet test tests/unit/Core/SimpleSign.Core.Tests
-dotnet test tests/unit/TrustFrameworks/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Tests
+dotnet test tests/unit/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Tests
 dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
-dotnet test tests/unit/TrustFrameworks/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
+dotnet test tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
+
+# PKCS#11 on a SoftHSM2 token, in Docker (Signers.Pkcs11.Tests and Peru.Iofe.Accredited.Tests; skipped without SOFTHSM2_MODULE)
+scripts/tests/pkcs11.sh
 
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
 
-# CLI tests
+# CLI tests (the CLI and its extension mechanism; each extension's are next to its framework's:
+# tests/unit/Extensions/{Brazil/SimpleSign.Brazil.Cli.Tests, Europe/Eidas/SimpleSign.Europe.Eidas.Cli.Tests, Peru/Iofe/SimpleSign.Peru.Iofe.Cli.Tests})
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests
 
 # TestBench tests need a running Sandbox (skipped without one; CI starts it)
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
-dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --ephemeral
+dotnet test tests/unit/Apps/Development/SimpleSign.TestBench.Tests
 
 # AOT smoke test
 dotnet publish tests/smoke/SimpleSign.AotSmokeTest -r linux-x64
@@ -54,30 +58,45 @@ src/
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 │   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList)
 │   └── SimpleSign/             Meta-package
-├── TrustFrameworks/
-│   ├── Brazil/
+├── Extensions/                 trust frameworks and what goes with each (code, CLI extension, docs, playbooks, tools; ADR 0030)
+│   ├── CliExtension.targets                  what makes a project a CLI extension (manifest, packaging), imported by the three *.Cli projects
+│   ├── Brazil/                               everything of ICP-Brasil, Gov.br and Lei 14.063 lives here
 │   │   ├── SimpleSign.Brazil/                  shared: CPF/CNPJ, Lei 14.063, AEA manifest, VALIDAR
 │   │   ├── IcpBrasil/
-│   │   │   ├── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
-│   │   │   ├── SimpleSign.Brazil.IcpBrasil.Xades/  ICP-Brasil XAdES policies
-│   │   │   └── SimpleSign.Brazil.Fiscal/           XML-DSig for NF-e, CT-e, eSocial…
-│   │   └── GovBr/
-│   │       └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
-│   ├── Europe/Eidas/
-│   │   └── SimpleSign.Europe.Eidas/     eIDAS (EU): anchors from the EU LOTL (pivots followed), qualification (QESig, AdESig-QC…), policies
-│   └── Peru/Iofe/
-│       └── SimpleSign.Peru.Iofe/        IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
+│   │   │   └── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
+│   │   ├── GovBr/
+│   │   │   └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
+│   │   ├── SimpleSign.Brazil.Cli/              the CLI extension (one for both): --profile icp-brasil|gov-br, their policies, `simplesign brasil sign`
+│   │   │                                       (sign + --icp-policy, --aea, --health-document), `brasil timestamp verify`, Lei 14.063 in validate/inspect
+│   │   ├── docs/                               icp-brasil.md, icp-brasil-validar-check.md
+│   │   ├── playbooks/                          icp-brasil-pades.json, govbr-pades.json
+│   │   └── tools/update-icp-intermediates.sh   refreshes the bundled intermediates
+│   ├── Europe/Eidas/                         everything of eIDAS lives here
+│   │   ├── SimpleSign.Europe.Eidas/            eIDAS (EU): anchors from the EU LOTL (pivots followed), qualification (QESig, AdESig-QC…), policies
+│   │   ├── SimpleSign.Europe.Eidas.Cli/        the CLI extension: --profile eidas, eidas policies
+│   │   ├── docs/eidas.md
+│   │   ├── playbooks/                          eidas-checklist.md, eidas-baseline.json
+│   │   └── tools/eidas.py                      writes that playbook
+│   └── Peru/Iofe/                            everything of Peru/IOFE/INDECOPI lives here
+│       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
+│       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (key in a PKCS#11 module or a declared remote service; no PFX), verification agent, audit
+│       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe, `simplesign iofe …`
+│       ├── docs/                             iofe.md; acreditacion/ = the manuals in Spanish
+│       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
+│       └── tools/indecopi.py                 writes that playbook
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
 ├── Extras/
 │   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 └── Apps/
-    ├── SimpleSign.Cli/         CLI tool
-    ├── SimpleSign.Agent/       Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
-    ├── SimpleSign.TestBench/   Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox);
-    │                           its Playbook tab runs playbooks (docs/playbooks): preview, run and keep each step's result, export the evidence
-    └── SimpleSign.Sandbox/     Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on; API only (its UI is the TestBench's Sandbox control)
+    ├── SimpleSign.Cli/                CLI tool; references no trust framework (its own profile is `sandbox`): each comes as an extension
+    ├── SimpleSign.Cli.Extensibility/  the contract of a CLI extension (ICliExtension), installed with `simplesign extension install`
+    ├── SimpleSign.Agent/              Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
+    └── Development/                   tools for developing and testing, not for end users
+        ├── SimpleSign.TestBench/      Local web app (ASP.NET Core + React/shadcn in web/) to try every signing option (real network + a connected Sandbox);
+        │                              its Playbook tab runs playbooks (docs/playbooks, Extensions/*/playbooks): preview, run and keep each step's result, export the evidence
+        └── SimpleSign.Sandbox/        Test PKI on real endpoints (CRL over HTTP/HTTPS/LDAP, OCSP, TSA, CSC) and failures to switch on; API only (its UI is the TestBench's Sandbox control)
 ```
 
 Internal infrastructure (logs, DER helpers, revocation plumbing) lives in each project's `Internal/` folder (ADR 0018).
@@ -152,6 +171,9 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 - `IChainValidationProvider` — custom chain logic
 - `IChainRevocationChecker` / `IRevocationCache` — revocation of a whole chain, CRL cache
 - `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE, eIDAS)
+- `ICliExtension` (`SimpleSign.Cli.Extensibility`) — what a package adds to the CLI once installed: commands, `--profile`, policy presets, `--tsl-profile`;
+  and, with defaults, a command that runs the standard `sign` with options of its own (`PassThroughCommands`, `CliExtensionContext.SignAsync(CliSignRequest)`),
+  services, chain validation and notes about a signature in `validate`/`inspect` (`ConfigureServices`, `CreateChainValidationProviders`, `Annotate`) (ADR 0030)
 - `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
 - `ISignatureAuditSink` — a record of every signature made or refused (`AuditChain`, `JsonLinesAuditSink`)
 - `IPolicyProvider` / `ISignaturePolicyDocumentProvider` — the validation policy, and policy documents
@@ -166,7 +188,8 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 
 - Unit tests use xUnit
 - `tests/unit/` mirrors `src/`: `src/Formats/SimpleSign.CAdES` is tested by
-  `tests/unit/Formats/SimpleSign.CAdES.Tests` (the CLI too: `tests/unit/Apps/SimpleSign.Cli.Tests`).
+  `tests/unit/Formats/SimpleSign.CAdES.Tests` (the CLI too: `tests/unit/Apps/SimpleSign.Cli.Tests`; the TestBench and
+  the Sandbox under `tests/unit/Apps/Development`).
   Every test project is in `SimpleSign.sln`.
 - Every test class has `[Trait("Category", …)]`: `Unit` by default, `Contract` in Contracts.Tests,
   `Integration` (network), `Stress` (excluded from the regular CI run), `VeraPdf` (needs veraPDF; its own CI job), `Interop` (needs qpdf/pyHanko/OpenSSL/xmlsec1; its own CI job)
@@ -195,10 +218,19 @@ SimpleSign.Brazil (shared Brazilian building blocks)
   └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo from them
 
 SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
-  └── depend on SimpleSign.Brazil only, never on each other (Fiscal and IcpBrasil.Xades build on IcpBrasil)
+  └── depend on SimpleSign.Brazil only, never on each other
 
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
+
+SimpleSign.Peru.Iofe.Accredited (INDECOPI's guide §4.2–4.4: no policy, key or switch taken from the caller)
+  └── depends on SimpleSign.Peru.Iofe + PAdES + CAdES + XAdES + Signers.Pkcs11 + Signers.Cloud — public API only
+
+SimpleSign.Cli.Extensibility (the contract of CLI extensions)
+  └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli
+
+SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli (CLI extensions, not libraries: each package carries cli-extension/)
+  └── depend on their framework's packages + SimpleSign.Cli.Extensibility; SimpleSign.Cli references none of them, nor any framework
 
 SimpleSign.CAdES / SimpleSign.XAdES
   └── each depends on SimpleSign.Core only

@@ -283,15 +283,16 @@ contract-signed.pdf  1/1 valid
 ## Trust Profiles
 
 A **trust profile** sets, under one name, the policy and the trust of a trust framework. Each comes from its package
-(`IofeProfile`, `EidasProfile`, `IcpBrasilProfile`, `GovBrProfile`; the library takes them with `WithProfile` and
-`ValidationOptions.Profile`); `simplesign profiles` lists them:
+(`EidasProfile`, `IcpBrasilProfile`, `GovBrProfile`, `IofeProfile`; the library takes them with `WithProfile` and
+`ValidationOptions.Profile`); `simplesign profiles` lists the ones this CLI has. `sandbox` is the CLI's own; the
+profile of a trust framework comes with its [extension](#extensions):
 
 | Profile | Signing policy | Validation policy | Trust |
 |---|---|---|---|
-| `iofe` | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
-| `eidas` | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](eidas.md) |
-| `icp-brasil` | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
-| `gov-br` | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
+| `iofe` (`SimpleSign.Peru.Iofe.Cli`) | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
+| `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](../../src/Extensions/Europe/Eidas/docs/eidas.md) |
+| `icp-brasil` (`SimpleSign.Brazil.Cli`) | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
+| `gov-br` (`SimpleSign.Brazil.Cli`) | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
 | `sandbox` | `default` | `default` | A running SimpleSign Sandbox's LOTL (`--sandbox URL`) |
 
 ```bash
@@ -319,18 +320,18 @@ writes it out):
 | `default` | Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA ≥ 2048 bits, SHA-2/SHA-3 |
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
-| `iofe` | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
-| `eidas` | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
+| `iofe` (`SimpleSign.Peru.Iofe.Cli`) | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+| `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
 
 What the policy checks against comes from these options:
 
 | Option | Means |
 |---|---|
-| `--trust <file>` (repeatable), `--trust-dir <dir>`, `--tsl <url\|file> --tsl-signer <file>` [`--tsl-profile iofe`] | The trust anchors the signer and each TSA must chain to (`ProspectiveCertificateChain`); `--tsl-profile iofe` reads the list as `IofeExtension` does (INDECOPI's `unspecified` TSAs too, never a code-signing certificate) |
+| `--trust <file>` (repeatable), `--trust-dir <dir>`, `--tsl <url\|file> --tsl-signer <file>` [`--tsl-profile NAME`] | The trust anchors the signer and each TSA must chain to (`ProspectiveCertificateChain`); `--tsl-profile iofe` reads the list as `IofeExtension` does (INDECOPI's `unspecified` TSAs too, never a code-signing certificate) |
 | `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
 | `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
 
-`validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `iofe`, `icp-brasil`, `govbr` or `eidas`.
+`validate --policy` takes a file, `default` or `strict` (time-stamps out of order and an unavailable signature policy fail), or the policy of an installed extension (`icp-brasil`, `govbr`, `eidas`, `iofe`).
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
 `RevocationStatusUnknown`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`…) and what to do about it. `simplesign explain <TERM>` explains the
@@ -376,13 +377,12 @@ simplesign augment signed.xml --level BLTA --tsa http://timestamp.digicert.com -
 |---|---|---|
 | `timestamp create` | A standalone RFC 3161 time-stamp (`.tst`) over a file or a hash | |
 | `timestamp verify` | Checks a `.tst` against a file or a hash, and whether the token's `tsa` name matches its certificate | |
-| `policy export` | Writes the default signing or validation policy as JSON, to edit (`--preset NAME` for `strict`, `minimal`, `iofe`…) | [Policies](../policies/compatibility.md) |
+| `policy export` | Writes the default signing or validation policy as JSON, to edit (`--preset NAME` for `strict`, `minimal`, or an extension's: `eidas`, `icp-brasil`…) | [Policies](../policies/compatibility.md) |
 | `policy schema` | Writes the JSON Schema of the policy files, for an editor's completion and validation | `docs/schemas/` |
 | `audit verify` | Checks the hash chain of an audit trail written by `--audit-log` | |
 | `pkcs11 list`, `pkcs11 drivers` | The tokens and certificates of a PKCS#11 driver, or of every installed driver | [PKCS#11](pkcs11.md) |
 | `psc certificates` | Logs in to an ICP-Brasil cloud provider (PSC) and lists its certificates | [Cloud signing](cloud-signing.md) |
 | `csc list` | The credentials of a Cloud Signature Consortium (CSC v2) service | [Cloud signing](cloud-signing.md) |
-| `fiscal sign`, `fiscal validate` | XMLDSig of NF-e, CT-e, MDF-e, events, NFS-e, eSocial and EFD-Reinf | [Fiscal XML](fiscal-xml.md) |
 | `inspect`, `extract`, `explain` | Signature metadata without validating, the CMS out of a PDF, and what an ETSI term means | |
 | `html-to-pdf` | Renders an HTML file to PDF (no signing) | [HTML to PDF](html-to-pdf.md) |
 
@@ -393,6 +393,88 @@ simplesign timestamp verify contract.pdf --token contract.tst
 simplesign policy export validation --preset strict --output validation-policy.json
 simplesign policy schema validation --output validation.schema.json
 ```
+
+## Extensions
+
+The CLI knows the formats, the general policies and a running Sandbox. The trust frameworks are **extensions**,
+packages installed into the CLI that add commands, `--profile` names, policy presets, `--tsl-profile` names and what
+`validate` knows about their signatures:
+
+```bash
+simplesign extension install SimpleSign.Brazil.Cli         # ICP-Brasil, Gov.br, Lei 14.063
+simplesign extension install SimpleSign.Europe.Eidas.Cli   # EU (eIDAS)
+simplesign extension install SimpleSign.Peru.Iofe.Cli      # Peru (IOFE)
+simplesign extension list
+simplesign extension remove iofe
+```
+
+`extension install` takes the package from nuget.org, from `--source <folder|https url>` or from a `.nupkg` file, and
+puts the extension in `~/.simplesign/extensions` (`SIMPLESIGN_EXTENSIONS_DIR`). An extension is code that runs each
+time `simplesign` starts: install only packages you trust. [CLI extensions](cli-extensions.md) has the details and how
+to write one.
+
+A name that needs an extension that is not installed says which one: `--profile icp-brasil` answers with
+`simplesign extension install SimpleSign.Brazil.Cli`, and so does `sign --icp-policy …`, an option that is not
+`sign`'s (`sign` refuses an option it does not have; it does not drop it).
+
+### Brazil (ICP-Brasil, Gov.br)
+
+With `SimpleSign.Brazil.Cli` installed: `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, and
+
+- `simplesign brasil sign` (also `icp-brasil sign`): `simplesign sign`, every option of it, plus `--icp-policy
+  ad-rb|ad-rt|ad-rc|ad-ra` (the policy sets the level and the PBAD.PAdES sub-filter), `--aea --cpf …` (advanced
+  electronic signature of Lei 14.063, with the signer's manifest) and `--health-document … --registration …` (VALIDAR);
+- `simplesign brasil timestamp verify`: a `.tst` whose authority must be an ICP-Brasil ACT;
+- in `validate`, `validate-dir` and `inspect`: the ICP-Brasil and Gov.br chain validation and roots for every
+  signature, the Lei 14.063 level, the certificate's data and the manifest of an advanced signature, in the text and in
+  `--json` (`lei14063`, `brasil`, `manifest`).
+
+```bash
+simplesign brasil sign contrato.pdf --cert assinante.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+simplesign brasil sign recibo.pdf --cert assinante.pfx --aea --cpf 12345678909 --signer-name "Maria Silva"
+simplesign validate contrato_signed.pdf --profile icp-brasil --trust-profile gov-br
+```
+
+More in the [ICP-Brasil article](../../src/Extensions/Brazil/docs/icp-brasil.md).
+
+### eIDAS (EU)
+
+With `SimpleSign.Europe.Eidas.Cli` installed: `--profile eidas` (the EU LOTL and its lists; `validate` shows each
+signature's qualification) and the `eidas` policies. More in the [eIDAS article](../../src/Extensions/Europe/Eidas/docs/eidas.md).
+
+### IOFE (Peru)
+
+With `SimpleSign.Peru.Iofe.Cli` installed: `--profile iofe`, the `iofe` and `iofe-agent` policies, `--tsl-profile iofe`,
+and `simplesign iofe`, the configuration of INDECOPI's accreditation guide (sections 4.2 to 4.4,
+`SimpleSign.Peru.Iofe.Accredited`), where the options the guide leaves no choice about are not options.
+
+```bash
+simplesign iofe sign factura.pdf -o factura-firmada.pdf \
+  --pkcs11-lib /usr/lib/libCryptoki2_64.so --pkcs11-key sello-2026 --pin env:HSM_PIN \
+  --module-manufacturer "Thales" --module-model "Luna K7" --module-certification "FIPS 140-2 Level 3" --module-certificate 4090 \
+  --transaction factura/F001-123 --allow factura --audit-log auditoria.jsonl \
+  --tsa https://tsa.example/tsa --tsa-cert tsa.pem
+simplesign iofe verify recibido.pdf --sender 20123456789 --audit-log verificacion.jsonl --notice comunicado.txt
+simplesign iofe view factura-firmada.pdf -o visor.html
+```
+
+The key of `iofe sign` is in a PKCS#11 module, as above, or in a remote signing service (CSC v2), which is declared
+the same way and must be the declared one; a PFX file is not accepted (`simplesign sign --cert file.pfx --profile iofe`
+signs with one, outside the accreditation):
+
+```bash
+simplesign iofe sign factura.pdf -o factura-firmada.pdf \
+  --csc-url https://provider.example/csc/v2/ --csc-credential sello-2026 --pin env:CSC_PIN \
+  --csc-client-id agente --csc-client-secret env:CSC_SECRET \
+  --service-provider "Proveedor S.A." --service-name "Firma Remota" \
+  --service-accreditation "PSVA de firma remota acreditado" --service-reference "Res. 000-2025/DGI-INDECOPI" \
+  --transaction factura/F001-123 --allow factura --audit-log auditoria.jsonl
+```
+
+`iofe verify` returns 0 when every signature is valid and 1 when the document is rejected, with the notice to the
+sender written to `--notice`. `--trust-root`, or `--tsl` with `--tsl-signer`, replace INDECOPI's trusted list;
+`--contingency` with `--contingency-until` declares a contingency. The manuals are in
+[`src/Extensions/Peru/Iofe/docs/acreditacion/`](../../src/Extensions/Peru/Iofe/docs/acreditacion/manual-de-usuario.md).
 
 ## Network
 
@@ -423,7 +505,7 @@ simplesign sign contract.pdf --cert revoked-ocsp.pfx --password sandbox --signin
 | `--trust-dir <dir>` | Folder of trust anchor certificates (`.cer`, `.crt`, `.der`, `.pem`) |
 | `--trust-dir-signer <cert>` | The folder must carry `manifest.json` (SHA-256 of every file) signed with this certificate |
 | `--tsl <url\|file>` + `--tsl-signer <cert>` | Trusted list (ETSI TS 119 612 / TS 102 231): its active CA and TSA services become trust anchors. An expired list (here or under `--lotl`) is kept: the policy's `TLNotExpired` judges it (WARN by default, FAIL in `iofe`), as EU DSS does |
-| `--tsl-profile iofe` | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never; without `--tsl-signer`, INDECOPI's bundled signer is used |
+| `--tsl-profile iofe` (extension) | Read `--tsl` as INDECOPI's list (`IofeExtension.DefaultListOptions`): its `unspecified` TSAs become anchors too, code-signing certificates never; without `--tsl-signer`, INDECOPI's bundled signer is used |
 | `--profile NAME`, `--trust-profile NAME`, `--sandbox URL` | A trust profile (see [Trust Profiles](#trust-profiles)) |
 | `--lotl <url>` + `--lotl-signer <cert>` | List of trusted lists (e.g. the EU LOTL): the national lists it points to are checked with the certificates it gives and their CA and TSA services become trust anchors; `--lotl-territory PT` (repeatable) loads only some |
 | `--lang es` | Write the verification report in Spanish |

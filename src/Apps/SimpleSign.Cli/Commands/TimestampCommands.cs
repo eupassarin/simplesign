@@ -1,8 +1,8 @@
+using SimpleSign.Cli.Extensions;
 using System.ComponentModel;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
-using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
@@ -91,7 +91,7 @@ internal sealed class TimestampCreateCommand : AsyncCommand<TimestampCreateComma
     {
         /// <summary>The TSA URL.</summary>
         [CommandOption("--tsa <URL>")]
-        [Description("TSA URL (http(s):// or tcp://host:port), e.g. an ICP-Brasil ACT")]
+        [Description("TSA URL (http(s):// or tcp://host:port)")]
         public string Tsa { get; init; } = null!;
 
         /// <summary>Output file.</summary>
@@ -179,11 +179,6 @@ internal sealed class TimestampVerifyCommand : AsyncCommand<TimestampVerifyComma
         [Description("Root certificate(s), PEM or DER, the TSA must chain to")]
         public string? TrustPath { get; init; }
 
-        /// <summary>Require an ICP-Brasil ACT.</summary>
-        [CommandOption("--icp")]
-        [Description("Require an ICP-Brasil ACT (bundled AC Raiz)")]
-        public bool Icp { get; init; }
-
         /// <summary>Output as JSON.</summary>
         [CommandOption("--json")]
         [Description("Output as JSON")]
@@ -207,6 +202,12 @@ internal sealed class TimestampVerifyCommand : AsyncCommand<TimestampVerifyComma
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
+        // An option verify does not have is not dropped: --icp, for one, asks for a check this command does not make.
+        if (KnownExtensions.UnknownOptionError(context, "timestamp verify") is { } unknown)
+        {
+            throw new InvalidOperationException(unknown);
+        }
+
         byte[] token = await File.ReadAllBytesAsync(settings.TokenPath, cancellationToken);
         byte[] hash = settings.FilePath is { } file
             ? await TimestampCreateCommand.HashFileAsync(file, settings.Algorithm, cancellationToken)
@@ -215,9 +216,7 @@ internal sealed class TimestampVerifyCommand : AsyncCommand<TimestampVerifyComma
             ? null
             : [.. _certChainService.LoadCertsFromBytes(await File.ReadAllBytesAsync(settings.TrustPath, cancellationToken))];
 
-        var result = settings.Icp
-            ? IcpBrasilTimestamp.VerifyHash(token, hash, settings.Algorithm)
-            : TimestampToken.VerifyHash(token, hash, settings.Algorithm, roots);
+        var result = TimestampToken.VerifyHash(token, hash, settings.Algorithm, roots);
 
         if (settings.Json)
         {
@@ -239,7 +238,7 @@ internal sealed class TimestampVerifyCommand : AsyncCommand<TimestampVerifyComma
 
             AnsiConsole.MarkupLine($"  Covers the data: {Yes(result.IsImprintValid)}");
             AnsiConsole.MarkupLine($"  TSA signature:   {Yes(result.IsIntegrityValid)}");
-            AnsiConsole.MarkupLine($"  TSA trusted:     {(result.IsTsaTrusted is { } t ? Yes(t) : "not checked (use --trust or --icp)")}");
+            AnsiConsole.MarkupLine($"  TSA trusted:     {(result.IsTsaTrusted is { } t ? Yes(t) : "not checked (use --trust)")}");
             bool? nameMatches = SimpleSign.Core.Validation.TimestampTsaChecks.TsaNameMatches(token);
             AnsiConsole.MarkupLine($"  TSA name:        {(nameMatches is { } m ? Yes(m) : "not in the token")}");
             foreach (string error in result.Errors)

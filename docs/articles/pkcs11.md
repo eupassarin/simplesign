@@ -63,6 +63,14 @@ foreach (var t in Pkcs11Signer.ListTokens(libraryPath))
 }
 ```
 
+## How the token protects the key
+
+`token.KeyProtection` says what the driver reports about the signing key: `Sensitive`, `Extractable`,
+`AlwaysSensitive`, `NeverExtractable`, `GeneratedOnToken` and whether the slot is hardware (`HardwareSlot`); each is
+null when the driver does not report it. `KeyProtection.IsConfinedToToken` is true when the key is sensitive and not
+extractable: check it to refuse a key that can leave its token. These are the driver's statements, not a certification
+of the token. `TokenManufacturer`, `TokenModel` and `TokenSerialNumber` identify the token in use.
+
 ## PIN
 
 Set `Pin` to the user PIN. It is copied to a native buffer that is zeroed right after login and is

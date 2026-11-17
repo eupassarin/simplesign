@@ -61,7 +61,8 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
         bool loggedIn,
         X509Certificate2 certificate,
         IReadOnlyList<X509Certificate2> chain,
-        string tokenLabel,
+        CkTokenInfo token,
+        Pkcs11KeyProtection keyProtection,
         ILogger logger)
     {
         _module = module;
@@ -72,7 +73,11 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
         _logger = logger;
         Certificate = certificate;
         Chain = chain;
-        TokenLabel = tokenLabel;
+        TokenLabel = token.Label;
+        TokenManufacturer = token.Manufacturer;
+        TokenModel = token.Model;
+        TokenSerialNumber = token.SerialNumber;
+        KeyProtection = keyProtection;
     }
 
     /// <summary>The signer's certificate, read from the token.</summary>
@@ -83,6 +88,22 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
 
     /// <summary>The label of the token in use.</summary>
     public string TokenLabel { get; }
+
+    /// <summary>The manufacturer of the token in use, as its driver reports it.</summary>
+    public string TokenManufacturer { get; }
+
+    /// <summary>The model of the token in use, as its driver reports it.</summary>
+    public string TokenModel { get; }
+
+    /// <summary>The serial number of the token in use.</summary>
+    public string TokenSerialNumber { get; }
+
+    /// <summary>
+    /// How the token protects the signing key (sensitive, extractable, generated on the token, hardware slot), read
+    /// when the session was opened. Use <see cref="Pkcs11KeyProtection.IsConfinedToToken"/> to refuse a key that can
+    /// leave its token.
+    /// </summary>
+    public Pkcs11KeyProtection KeyProtection { get; }
 
     /// <summary>
     /// Loads the PKCS#11 driver, opens a session on the selected token, logs in and selects the
@@ -130,11 +151,12 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
                 unused.Certificate.Dispose();
             }
 
+            var protection = ReadKeyProtection(module, session.Value, key.Handle, slot);
             var logger = options.Logger ?? NullLogger.Instance;
             logger.TokenOpened(info.Label, certificate.Certificate.Subject, chain.Count, loggedIn);
             return new Pkcs11Signer(
                 module, session.Value, key, loggedIn, certificate.Certificate,
-                chain.Select(c => c.Certificate).ToList().AsReadOnly(), info.Label, logger);
+                chain.Select(c => c.Certificate).ToList().AsReadOnly(), info, protection, logger);
         }
         catch
         {
@@ -393,6 +415,15 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
 
         return keys;
     }
+
+    private static Pkcs11KeyProtection ReadKeyProtection(Pkcs11Module module, ulong session, ulong key, ulong slot) =>
+        new(
+            Sensitive: module.GetBooleanAttribute(session, key, CkConstants.CkaSensitive),
+            Extractable: module.GetBooleanAttribute(session, key, CkConstants.CkaExtractable),
+            AlwaysSensitive: module.GetBooleanAttribute(session, key, CkConstants.CkaAlwaysSensitive),
+            NeverExtractable: module.GetBooleanAttribute(session, key, CkConstants.CkaNeverExtractable),
+            GeneratedOnToken: module.GetBooleanAttribute(session, key, CkConstants.CkaLocal),
+            HardwareSlot: module.GetSlotFlags(slot) is { } flags ? (flags & CkConstants.CkfHwSlot) != 0 : null);
 
     private static (TokenKey Key, TokenCertificate Certificate) SelectKey(
         List<TokenKey> keys,

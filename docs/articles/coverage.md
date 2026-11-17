@@ -1,6 +1,6 @@
 # Standard coverage
 
-<!-- Generated from src/Apps/SimpleSign.TestBench/Schema/OptionSchema.cs. Do not edit by hand:
+<!-- Generated from src/Apps/Development/SimpleSign.TestBench/Schema/OptionSchema.cs. Do not edit by hand:
      run the TestBench tests with SIMPLESIGN_UPDATE_DOCS=1 to write it again. -->
 
 What SimpleSign implements of each signature standard, option by option: the clause that
@@ -14,7 +14,7 @@ from the published standards; check them against the version you follow before q
 |---|---|---|---|
 | PAdES | 136 | 135 | 1 |
 | CAdES | 86 | 85 | 1 |
-| XAdES | 95 | 91 | 4 |
+| XAdES | 88 | 84 | 4 |
 
 ## PAdES
 
@@ -272,7 +272,6 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Signature type | ETSI EN 319 132-1 · §6 XAdES baseline signatures |  | yes |
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
-| Signature level | Signature type: ICP-Brasil signature policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy)` | yes |
 | Signature level | Baseline level | ETSI EN 319 132-1 · §6.2 Signature levels<br>ETSI EN 319 132-1 · §6.3 Requirements | `WithLevel(AdesBaselineProfile)` | yes |
 | Signature level | Baseline level: B-B (basic) | ETSI EN 319 132-1 · §6.3 XAdES-B-B | `AdesBaselineProfile.Basic()` | yes |
 | Signature level | Baseline level: B-T (timestamp) | ETSI EN 319 132-1 · §5.3 SignatureTimeStamp (XAdES-B-T)<br>RFC 3161 · Time-Stamp Protocol | `AdesBaselineProfile.Timestamped(tsa)` | yes |
@@ -286,12 +285,6 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Extended form: C / X — complete references | ETSI TS 101 903 · §7.4 CompleteCertificateRefs and CompleteRevocationRefs | `XadesExtendedForm.CompleteReferences` | yes |
 | Signature level | Extended form: X-L — references and values | ETSI TS 101 903 · §7.6 CertificateValues and RevocationValues | `XadesExtendedForm.ExtendedLong` | yes |
 | Signature level | Extended form: A — archive | ETSI TS 101 903 · §7.7 ArchiveTimeStamp | `XadesExtendedForm.Archive` | yes |
-| Signature level | ICP-Brasil policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions)` | yes |
-| Signature level | ICP-Brasil policy: AD-RB | DOC-ICP-15.03 · AD-RB | `IcpBrasilPolicy.AdRb` | yes |
-| Signature level | ICP-Brasil policy: AD-RT | DOC-ICP-15.03 · AD-RT | `IcpBrasilPolicy.AdRt` | yes |
-| Signature level | ICP-Brasil policy: AD-RV | DOC-ICP-15.03 · AD-RV | `IcpBrasilPolicy.AdRv` | yes |
-| Signature level | ICP-Brasil policy: AD-RC | DOC-ICP-15.03 · AD-RC | `IcpBrasilPolicy.AdRc` | yes |
-| Signature level | ICP-Brasil policy: AD-RA | DOC-ICP-15.03 · AD-RA | `IcpBrasilPolicy.AdRa` | yes |
 | Signature level | Prefer OCSP or CRL | RFC 6960 · OCSP<br>RFC 5280 · §5 CRL<br>ETSI EN 319 102-1 · §5.2.5 Revocation freshness | `new LongTermValidationOptions { RevocationPreference }` | yes |
 | Signature level | Prefer OCSP or CRL: OCSP first |  | `RevocationPreference.OcspFirst` | yes |
 | Signature level | Prefer OCSP or CRL: CRL first |  | `RevocationPreference.CrlFirst` | yes |
@@ -362,13 +355,13 @@ Each clause and the options that implement it.
 
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
-| AD-RA | ICP-Brasil policy: AD-RA | PAdES, CAdES, XAdES | yes |
-| AD-RB | ICP-Brasil policy: AD-RB | PAdES, CAdES, XAdES | yes |
-| AD-RC | ICP-Brasil policy: AD-RC | PAdES, CAdES, XAdES | yes |
-| AD-RT | ICP-Brasil policy: AD-RT | PAdES, CAdES, XAdES | yes |
-| AD-RV | ICP-Brasil policy: AD-RV | CAdES, XAdES | yes |
-| Signature policies of ICP-Brasil | ICP-Brasil policy | PAdES, CAdES, XAdES | yes |
-| Signature policies of ICP-Brasil | Signature type: ICP-Brasil signature policy | PAdES, CAdES, XAdES | yes |
+| AD-RA | ICP-Brasil policy: AD-RA | PAdES, CAdES | yes |
+| AD-RB | ICP-Brasil policy: AD-RB | PAdES, CAdES | yes |
+| AD-RC | ICP-Brasil policy: AD-RC | PAdES, CAdES | yes |
+| AD-RT | ICP-Brasil policy: AD-RT | PAdES, CAdES | yes |
+| AD-RV | ICP-Brasil policy: AD-RV | CAdES | yes |
+| Signature policies of ICP-Brasil | ICP-Brasil policy | PAdES, CAdES | yes |
+| Signature policies of ICP-Brasil | Signature type: ICP-Brasil signature policy | PAdES, CAdES | yes |
 
 ### ETSI EN 319 102-1
 

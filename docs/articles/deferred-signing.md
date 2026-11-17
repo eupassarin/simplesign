@@ -284,7 +284,6 @@ effect; what they sign is fixed in phase one:
 | --- | --- |
 | `SimpleSign.Brazil` | `WithAdvancedSignature` (PAdES) |
 | `SimpleSign.Brazil.IcpBrasil` | `WithIcpBrasilPolicy`, `ResolveIcpBrasilPolicy`, `WithHealthDocument` (PAdES); `WithIcpBrasilPolicy` (CAdES) |
-| `SimpleSign.Brazil.IcpBrasil.Xades` | `WithIcpBrasilPolicy` (XAdES) |
 
 ```csharp
 var prepared = await CadesDeferredSigner.Document(data)

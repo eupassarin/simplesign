@@ -1,6 +1,6 @@
 using SimpleSign.Cli.Rendering;
-using SimpleSign.Brazil;
-using SimpleSign.Brazil.Signing;
+using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
@@ -14,11 +14,19 @@ namespace SimpleSign.Cli.Json;
 /// </summary>
 internal static class JsonMapper
 {
+    /// <summary>The names the JSON of a validated signature already has: an extension's annotation does not replace them.</summary>
+    private static readonly HashSet<string> s_validateNames =
+        new(CliJsonContext.Default.ValidateSignatureDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The names the JSON of an inspected signature already has.</summary>
+    private static readonly HashSet<string> s_inspectNames =
+        new(CliJsonContext.Default.InspectSignatureDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
     public static ValidateOutput MapValidation(
         string fileName,
         IReadOnlyList<SignatureValidationResult> results,
         Dictionary<string, PAdESConformanceLevel>? conformanceLevels = null,
-        IReadOnlyDictionary<string, byte[]?>? manifests = null)
+        Func<SignatureValidationResult, CliSignatureFacts>? facts = null)
     {
         return new ValidateOutput
         {
@@ -51,8 +59,7 @@ internal static class JsonMapper
                     Chain = r.IsCertificateChainValid,
                     Revoked = r.RevocationSource is RevocationSource.None or RevocationSource.Indeterminate ? null : !r.IsNotRevoked,
                     SigningTime = r.SigningTime,
-                    Lei14063 = MapLei14063(r, manifests?.GetValueOrDefault(r.FieldName)),
-                    Brasil = MapBrasil(r),
+                    Extensions = ExtensionAnnotations.Json(facts?.Invoke(r) ?? new CliSignatureFacts { Validation = r }, s_validateNames),
                     Errors = [.. r.Errors],
                     Warnings = [.. r.Warnings],
                     SubFilter = r.SubFilter,
@@ -146,40 +153,6 @@ internal static class JsonMapper
         };
     }
 
-    /// <summary>
-    /// The Lei 14.063 level, which is a Brazilian concept: only for a signature validated under the
-    /// Brazilian framework, or one carrying an advanced-signature (AEA) manifest, which is Brazilian
-    /// too. Without this guard <see cref="Lei14063.Classify"/> falls through to <c>Simples</c> for
-    /// any valid signature, so a Peruvian (IOFE) one would report a Brazilian level.
-    /// </summary>
-    private static string? MapLei14063(SignatureValidationResult r, byte[]? manifestJson) =>
-        r.ChainValidationRegion == "BR" || manifestJson is { Length: > 0 }
-            ? Lei14063.Classify(r, manifestJson)?.ToString()
-            : null;
-
-    private static ValidateBrasilDto? MapBrasil(SignatureValidationResult r)
-    {
-        if (r.ChainValidationRegion != "BR")
-        {
-            return null;
-        }
-
-        var metadata = r.ChainValidationMetadata ?? new Dictionary<string, string>();
-        return new ValidateBrasilDto
-        {
-            Hierarchy = metadata.GetValueOrDefault("BR.Hierarchy"),
-            CertificateType = r.PolicyLevel,
-            SignerId = r.SignerId,
-            SignerIdType = r.SignerIdType,
-            SignaturePolicy = metadata.GetValueOrDefault("BR.SignaturePolicy"),
-            SignaturePolicyStatus = metadata.GetValueOrDefault("BR.SignaturePolicyStatus"),
-            RevocationStatus = metadata.GetValueOrDefault("BR.RevocationStatus"),
-            Registrations = metadata
-                .Where(m => m.Key.StartsWith("BR.Registration.", StringComparison.Ordinal))
-                .ToDictionary(m => m.Key["BR.Registration.".Length..], m => m.Value),
-        };
-    }
-
     public static InspectOutput MapInspection(string fileName, PdfInspectionResult result)
     {
         var doc = result.Document;
@@ -226,7 +199,7 @@ internal static class JsonMapper
             HasSigningCertificateV2 = sig.HasSigningCertificateV2,
             CommitmentType = sig.CommitmentTypeOid,
             SignaturePolicy = sig.SignaturePolicyOid,
-            Manifest = MapManifest(sig.ManifestJson),
+            Extensions = ExtensionAnnotations.Json(new CliSignatureFacts { ManifestJson = sig.ManifestJson, CommitmentTypeOid = sig.CommitmentTypeOid }, s_inspectNames),
             CmsDataSize = sig.CmsRawData.Length,
             Level = level.ToString(),
             ByteRange = new ByteRangeDto
@@ -258,33 +231,6 @@ internal static class JsonMapper
                     Serial = c.SerialNumber,
                     Expired = c.IsExpired
                 })]
-        };
-    }
-
-    private static ManifestDto? MapManifest(byte[]? manifestJson)
-    {
-        if (manifestJson is not { Length: > 0 })
-        {
-            return null;
-        }
-
-        var manifest = SignatureManifest.FromJsonUtf8(manifestJson);
-        if (manifest is null)
-        {
-            return null;
-        }
-
-        return new ManifestDto
-        {
-            SignerName = manifest.Signer.Name,
-            Cpf = manifest.Signer.Cpf,
-            Email = manifest.Signer.Email,
-            Ip = manifest.Evidence.Ip,
-            AuthMethod = manifest.Evidence.AuthMethod,
-            Timestamp = manifest.Evidence.Timestamp,
-            Institution = manifest.Institution?.Name,
-            Cnpj = manifest.Institution?.Cnpj,
-            Commitment = manifest.Commitment,
         };
     }
 }

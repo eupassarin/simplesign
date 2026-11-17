@@ -53,7 +53,7 @@ public sealed class MainWindowTests
         var window = new MainWindow(controller);
         window.Show();
         Settle(() => window.Inventory is not null);
-        window.Inventory!.Certificates.Count.ShouldBe(3);
+        window.Inventory.ShouldNotBeNull("the inventory did not load in time").Certificates.Count.ShouldBe(3);
 
         foreach (string section in new[] { MainWindow.Overview, MainWindow.Sites, MainWindow.Activity, MainWindow.Test, MainWindow.Documentation })
         {
@@ -201,9 +201,15 @@ public sealed class MainWindowTests
         frame.Save(Path.Combine(s_shots, name + ".png"));
     }
 
+    /// <summary>
+    /// Runs the UI thread's jobs until <paramref name="done"/>. It returns as soon as that is so; the limit is only how
+    /// long a test waits before it fails, and it is generous because the inventory (the chains of the certificates)
+    /// has taken more than two seconds on a busy Windows CI runner.
+    /// </summary>
     private static void Settle(Func<bool> done)
     {
-        for (int i = 0; i < 200 && !done(); i++)
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!done() && waited.Elapsed < TimeSpan.FromSeconds(30))
         {
             Dispatcher.UIThread.RunJobs();
             Thread.Sleep(10);

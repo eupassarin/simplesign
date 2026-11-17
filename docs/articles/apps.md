@@ -21,8 +21,8 @@ Sandbox gives you a PKI whose every edge case you can produce on demand (a revok
 expired TSA, a CRL without `nextUpdate`, a trusted list signed by the wrong key). The TestBench's
 Playbook tab runs a list of steps written beforehand against it, through the library *and* through
 the CLI, and exports the evidence as an HTML page and a zip. That is how
-[INDECOPI's guide v4.0](iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
-[eIDAS checklist](../playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
+[INDECOPI's guide v4.0](../../src/Extensions/Peru/Iofe/docs/iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
+[eIDAS checklist](../../src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
 
 **For signing in a browser** — the Agent. A web page cannot reach a smartcard or the OS certificate
 store, so the Agent runs on the user's machine and the page calls it over loopback. The server keeps
@@ -48,11 +48,12 @@ dotnet tool install -g SimpleSign.Cli
 
 The CLI targets **net8.0** and covers what the library does: `sign`, `sign-dir`, `validate`,
 `validate-dir`, `inspect`, `extract`, `augment`, `deferred prepare|complete`, `cades`, `xades`,
-`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `fiscal`, `profiles`, `explain` and
+`timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `profiles`, `explain` and
 `html-to-pdf`.
 
-A whole trust framework comes from one flag: `--profile icp-brasil`, `iofe`, `gov-br`, `eidas` or
-`sandbox` sets the trust anchors *and* the policies together (`simplesign profiles` lists them).
+A whole trust framework comes from one flag: `--profile NAME` sets the trust anchors *and* the policies together
+(`simplesign profiles` lists them). `sandbox` is the CLI's own; `icp-brasil`, `gov-br`, `eidas` and `iofe` come with
+[extensions](cli-extensions.md), installed with `simplesign extension install PACKAGE`.
 
 ```console
 $ simplesign --help
@@ -85,7 +86,6 @@ COMMANDS:
     xades
     policy
     audit
-    fiscal
 ```
 
 Signing a PDF at B-LT against a Sandbox TSA, then validating it:
@@ -139,7 +139,7 @@ Everything the CLI takes is in [cli.md](cli.md).
 ## SimpleSign.TestBench
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.TestBench
+dotnet run --project src/Apps/Development/SimpleSign.TestBench
 # → http://127.0.0.1:5199, loopback only
 ```
 
@@ -184,7 +184,7 @@ to an auditor. See [playbook.md](playbook.md) and [AUTHORING.md](../playbooks/AU
 ## SimpleSign.Sandbox
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --ephemeral
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --ephemeral
 # → http://localhost:5300, HTTPS on 5301, LDAP on 5302
 ```
 

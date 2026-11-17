@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>SimpleSign.Peru.Iofe.Cli</AssemblyName>
+    <RootNamespace>SimpleSign.Peru.Iofe.Cli</RootNamespace>
+    <PackageId>SimpleSign.Peru.Iofe.Cli</PackageId>
+    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets, --tsl-profile iofe, and 'simplesign iofe sign|verify|view' — the configuration of INDECOPI's accreditation guide, sections 4.2 to 4.4.</Description>
+    <PackageTags>iofe;indecopi;peru;simplesign;cli;extension</PackageTags>
+    <Version>0.12.0</Version>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CliExtensionName>iofe</CliExtensionName>
+    <CliExtensionType>SimpleSign.Peru.Iofe.Cli.IofeCliExtension</CliExtensionType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
+    <ProjectReference Include="..\SimpleSign.Peru.Iofe.Accredited\SimpleSign.Peru.Iofe.Accredited.csproj" />
+    <ProjectReference Include="..\..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleSign.Peru.Iofe.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="..\..\..\CliExtension.targets" />
+</Project>

@@ -14,4 +14,4 @@ if [[ ! -f "$CONF" ]]; then
 fi
 
 export SOFTHSM2_CONF="$CONF"
-exec dotnet run --project "$REPO_ROOT/src/Apps/SimpleSign.TestBench" -- --sandbox "${SANDBOX_URL:-http://localhost:5300}" "$@"
+exec dotnet run --project "$REPO_ROOT/src/Apps/Development/SimpleSign.TestBench" -- --sandbox "${SANDBOX_URL:-http://localhost:5300}" "$@"

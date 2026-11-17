@@ -1,14 +1,7 @@
 using System.Security.Cryptography;
-using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.CAdES;
-using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
-using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
-using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -59,8 +52,8 @@ public sealed class TimestampCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Verify_IcpWithNonIcpTsa_ReturnsOne() =>
-        (await RunAsync("timestamp", "verify", _dataPath, "--token", _tokenPath, "--icp")).ShouldBe(1);
+    public async Task Verify_Icp_IsRefusedBecauseTheCheckIsTheBrazilianExtensions() =>
+        (await RunAsync("timestamp", "verify", _dataPath, "--token", _tokenPath, "--icp")).ShouldNotBe(0);
 
     [Fact]
     public async Task Verify_Json_ReturnsZero() =>
@@ -81,14 +74,7 @@ public sealed class TimestampCommandTests : IDisposable
     private static async Task<int> RunAsync(params string[] args)
     {
         using var capture = new ConsoleCapture();
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var app = new CommandApp(new SimpleSignServiceRegistry(services));
-        Program.ConfigureApp(app);
+        var app = Program.CreateApp();
         return await Program.RunWithAsync(app, args);
     }
 }

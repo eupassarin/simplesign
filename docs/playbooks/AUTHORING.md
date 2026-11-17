@@ -6,7 +6,7 @@ TestBench ([playbook.md](../articles/playbook.md)). An LLM does most of the work
 1. the guide (its requirement list and checklist — for INDECOPI, sections 4.2–4.4 and Annex B);
 2. the JSON Schema: [`docs/schemas/playbook.schema.json`](../schemas/playbook.schema.json);
 3. the catalogue of run options and Sandbox names: [`options.md`](options.md) (generated from the TestBench), and one
-   finished playbook as an example ([`indecopi-guia-v4.json`](indecopi-guia-v4.json) or
+   finished playbook as an example ([`indecopi-guia-v4.json`](../../src/Extensions/Peru/Iofe/playbooks/indecopi-guia-v4.json) or
    [`sandbox-basics.json`](sandbox-basics.json)).
 
 Then load the file in the TestBench (Playbook tab): it checks every reference against the connected Sandbox and lists

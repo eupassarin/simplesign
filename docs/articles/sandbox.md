@@ -19,11 +19,11 @@ responder that is down or not authorized, an expired certificate. Each case is a
 a failure the Sandbox has ready.
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox                 # http://localhost:5300 (API only)
-dotnet run --project src/Apps/SimpleSign.Sandbox -- --name lab2 --port 5310
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox                 # http://localhost:5300 (API only)
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox -- --name lab2 --port 5310
 ```
 
-It also runs in Docker (`src/Apps/SimpleSign.Sandbox/Dockerfile`). [`tools/stack`](../../tools/stack/README.md)
+It also runs in Docker (`src/Apps/Development/SimpleSign.Sandbox/Dockerfile`). [`tools/stack`](../../tools/stack/README.md)
 starts it with DSS and fills a local SoftHSM token with its certificates, ready for the TestBench:
 `tools/stack/up.sh`, then `tools/stack/testbench.sh` (on Windows: `pwsh -File tools/stack/up.ps1`, then
 `pwsh -File tools/stack/testbench.ps1`).
@@ -220,7 +220,7 @@ code signing. Reading `/tl/tl.xml` with those options shows both rules on the Sa
 - the code-signing certificate is never an anchor.
 
 The rest of the list (version, vocabulary, territory) is read the same way in both layouts, and the library's tests
-read INDECOPI's real list (`tests/unit/TrustFrameworks/Peru/Iofe`), so the Sandbox does not copy its layout.
+read INDECOPI's real list (`tests/unit/Extensions/Peru/Iofe`), so the Sandbox does not copy its layout.
 
 ```csharp
 var list = await TrustedList.DownloadAsync(new Uri("http://localhost:5300/tl/tl.xml"),

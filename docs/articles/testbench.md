@@ -11,8 +11,8 @@ validation, RFC 3161 timestamps). National trust frameworks (ICP-Brasil, Gov.br,
 visible signature stamp are library features that will get apps of their own.
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
-dotnet run --project src/Apps/SimpleSign.TestBench -- --port 5200 --no-browser
+dotnet run --project src/Apps/Development/SimpleSign.TestBench          # http://127.0.0.1:5199, opens the browser
+dotnet run --project src/Apps/Development/SimpleSign.TestBench -- --port 5200 --no-browser
 ```
 
 The UI is in **English (en-US) and Portuguese (pt-BR)**: it follows the browser's language, and
@@ -21,7 +21,7 @@ messages and the sample descriptions come from the server in the same language
 (`Accept-Language`). Library names, OIDs, standard terms and the generated code stay as they are.
 
 The first run builds the UI (Node.js 20+ needed; `npm ci && npm run build` in
-`src/Apps/SimpleSign.TestBench/web`). To work on the UI with hot reload, run the app and, in another
+`src/Apps/Development/SimpleSign.TestBench/web`). To work on the UI with hot reload, run the app and, in another
 terminal, `npm run dev` in `web/` (Vite on :5173, proxying `/api` to :5199). The app listens on
 127.0.0.1 only. Uploads, keys and token sessions stay in memory and are gone when it stops.
 
@@ -35,7 +35,7 @@ For test certificates and services, connect a [SimpleSign Sandbox](sandbox.md), 
 with a test PKI and real CRL (HTTP, HTTPS, LDAP), OCSP, TSA and CSC endpoints:
 
 ```bash
-dotnet run --project src/Apps/SimpleSign.Sandbox             # http://localhost:5300
+dotnet run --project src/Apps/Development/SimpleSign.Sandbox             # http://localhost:5300
 ```
 
 Then, in the TestBench, open the **Sandbox** panel (flask icon) and connect to its address, or start
@@ -201,7 +201,7 @@ embedded and the verdicts can be compared. The
 address can also point to a DSS you already run.
 
 The same service backs an automated check: `DssCrossValidationTests` (in
-`tests/unit/Apps/SimpleSign.TestBench.Tests`) signs with the optional CAdES attributes and XAdES
+`tests/unit/Apps/Development/SimpleSign.TestBench.Tests`) signs with the optional CAdES attributes and XAdES
 properties and asserts what DSS reads from each file: signatures and timestamps intact, every signed
 reference found, the structure valid, the baseline level the one asked for. It runs with the rest of
 the suite and is skipped when no DSS answers at `SIMPLESIGN_DSS_URL` (default `http://localhost:8080`).
@@ -283,7 +283,7 @@ The **Reference** panel lists what SimpleSign implements of each standard, from 
 **by format** (every option with its clause and its library call) or **by standard** (each
 clause and the options that implement it), with a filter for what is not implemented. The same
 content is in [Standard coverage](coverage.md), which is generated from the schema; a test fails
-when that page falls behind (`SIMPLESIGN_UPDATE_DOCS=1 dotnet test tests/unit/Apps/SimpleSign.TestBench.Tests`
+when that page falls behind (`SIMPLESIGN_UPDATE_DOCS=1 dotnet test tests/unit/Apps/Development/SimpleSign.TestBench.Tests`
 writes it again).
 
 ## Environment
