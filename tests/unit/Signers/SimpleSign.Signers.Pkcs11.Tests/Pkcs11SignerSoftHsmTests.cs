@@ -206,6 +206,24 @@ public sealed class Pkcs11SignerSoftHsmTests(SoftHsmFixture hsm)
     }
 
     [SkippableFact]
+    public void ListTokens_TokenPluggedInAfterAnEarlierCall_IsListed()
+    {
+        Skip.If(hsm.SkipReason is not null, hsm.SkipReason);
+        Pkcs11Signer.ListTokens(hsm.ModulePath).ShouldContain(t => t.Label == hsm.TokenLabel);
+
+        // The driver stays loaded between the two calls, but it was finalized: the second call
+        // initializes it again, which is when a driver looks for its tokens.
+        string plugged = SoftHsmFixture.AddToken();
+
+        var tokens = Pkcs11Signer.ListTokens(hsm.ModulePath);
+        tokens.ShouldContain(t => t.Label == plugged);
+        foreach (var certificate in tokens.SelectMany(t => t.Certificates))
+        {
+            certificate.Certificate.Dispose();
+        }
+    }
+
+    [SkippableFact]
     public async Task SignAsync_ConcurrentCalls_AllProduceValidSignatures()
     {
         Skip.If(hsm.SkipReason is not null, hsm.SkipReason);

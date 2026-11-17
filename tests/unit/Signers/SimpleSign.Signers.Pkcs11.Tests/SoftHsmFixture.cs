@@ -90,6 +90,14 @@ public sealed class SoftHsmFixture : IDisposable
         Pin = pin,
     };
 
+    /// <summary>Creates another, empty token, as when a second token is plugged in while the process runs.</summary>
+    public static string AddToken()
+    {
+        string label = $"ss-more-{Guid.NewGuid():N}"[..20];
+        Run("softhsm2-util", "--init-token", "--free", "--label", label, "--so-pin", "0000", "--pin", UserPin);
+        return label;
+    }
+
     public void Dispose()
     {
         CaCertificate?.Dispose();
