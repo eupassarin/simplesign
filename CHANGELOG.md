@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **PKCS#11: a process on macOS no longer crashes after the last signer of a driver is disposed.**
+  `SimpleSign.Signers.Pkcs11` now keeps a driver loaded until the process ends.
+  - *Before:* disposing the last `Pkcs11Signer` of a driver (or the end of `Pkcs11Signer.ListTokens`,
+    so also `Pkcs11Drivers.FindTokensAsync`/`FindLibraryAsync` and `simplesign pkcs11 list`) called
+    `C_Finalize` and unloaded the library. With SoftHSM2 and OpenSC on macOS the process later died
+    with SIGSEGV in `_pthread_exit`: a thread that had called the driver exited and ran the cleanup of
+    the state the driver's `libcrypto` kept for it, in memory that was no longer mapped. It depended
+    on timing — typically a service or a test run that opened and closed several signers.
+  - *After:* the library is never unloaded once it is known to be a PKCS#11 driver. Initialization
+    still follows the signers: `C_Finalize` when the last one is disposed, `C_Initialize` again on the
+    next use, so a token plugged in between two uses is still found. A driver whose `C_Initialize`
+    fails stays loaded and is tried again on the next call. See
+    [How long a driver stays loaded](docs/articles/pkcs11.md#how-long-a-driver-stays-loaded).
+
 ## [0.12.0] - 2026-11-16
 
 ### Added
