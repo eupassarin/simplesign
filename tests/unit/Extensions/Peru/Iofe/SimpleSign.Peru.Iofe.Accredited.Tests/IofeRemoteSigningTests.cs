@@ -59,6 +59,9 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-15")]
+    [Trait("AnnexB", "F-17")]
+    [Trait("AnnexB", "F-18")]
     public async Task SignPdfAsync_KeyInARemoteService_SignsThereAndRecordsTheProvider()
     {
         await using var agent = await IofeSigningAgent.OpenAsync(Options());
@@ -87,6 +90,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-31")]
     public async Task SignCmsAsyncAndSignXmlAsync_KeyInARemoteService_ProduceSignaturesTheVerifierAccepts()
     {
         await using var agent = await IofeSigningAgent.OpenAsync(Options());
@@ -105,6 +109,10 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-31")]
+    [Trait("AnnexB", "S-1")]
+    [Trait("AnnexB", "S-2")]
+    [Trait("AnnexB", "S-3")]
     public async Task SignPdfAsync_WithTheTimestampAuthority_ReachesLongTermAndIsAccepted()
     {
         var options = Options() with { Timestamp = new IofeTimestampAuthority(new Uri(IofeTestPki.TsaUrl), _pki.Tsa) };
@@ -118,6 +126,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-19")]
     public async Task OpenAsync_ServiceThatIsNotTheDeclaredOne_IsRefusedBeforeAnythingIsSentToIt()
     {
         _service.ReportedName = "Otro Servicio";
@@ -134,6 +143,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-16")]
     public async Task OpenAsync_CredentialAPersonAuthorizes_IsRefusedAndRecorded()
     {
         var ex = await Should.ThrowAsync<IofeAccreditationException>(
@@ -146,6 +156,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-17")]
     public async Task OpenAsync_NoKeySourceOrTwoOrNoDeclaration_IsRefused()
     {
         var none = Options() with { RemoteService = null, RemoteServiceDeclaration = null };
@@ -200,6 +211,9 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-5")]
+    [Trait("AnnexB", "F-8")]
+    [Trait("AnnexB", "F-15")]
     public async Task SignPdfAsync_RevokedCertificate_IsRefusedBeforeTheServiceIsAskedToSign()
     {
         await using var agent = await IofeSigningAgent.OpenAsync(Options());
@@ -215,6 +229,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-12")]
     public async Task SignPdfAsync_CertificateWithoutNonRepudiation_IsRefused()
     {
         await using var agent = await IofeSigningAgent.OpenAsync(Options(FakeRemoteSigningService.DigitalSignatureOnlyCredential));
@@ -226,6 +241,8 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-8")]
+    [Trait("AnnexB", "F-14")]
     public async Task SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce()
     {
         var now = DateTimeOffset.UtcNow;
@@ -246,6 +263,7 @@ public sealed class IofeRemoteSigningTests : IClassFixture<IofeRemoteServiceFixt
     }
 
     [Fact]
+    [Trait("AnnexB", "F-16")]
     public async Task SignPdfAsync_TransactionOutsideTheAgents_IsRefusedAndRecorded()
     {
         await using var agent = await IofeSigningAgent.OpenAsync(Options());

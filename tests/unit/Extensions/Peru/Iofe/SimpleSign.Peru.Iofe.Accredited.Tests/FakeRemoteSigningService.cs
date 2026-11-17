@@ -83,6 +83,10 @@ internal sealed class FakeRemoteSigningService : IDisposable
     public static IofeRemoteServiceDeclaration Declaration { get; } =
         new("Proveedor de Pruebas S.A.", Name, "ninguna (servicio en memoria para pruebas)", "n/a");
 
+    /// <summary>A credential of a certificate a test issued; the service keeps (and disposes) the key and the certificate.</summary>
+    public void AddCredential(string id, X509Certificate2 certificate, RSA key) =>
+        _credentials[id] = new(Own(certificate), Own(key), "explicit", true);
+
     /// <summary>Back to how it starts: its own name, no request seen, no token or authorization outstanding.</summary>
     public void Reset()
     {

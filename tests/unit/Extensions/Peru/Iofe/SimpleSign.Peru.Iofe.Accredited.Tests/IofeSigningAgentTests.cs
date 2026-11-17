@@ -53,6 +53,9 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-15")]
+    [Trait("AnnexB", "F-17")]
+    [Trait("AnnexB", "F-18")]
     public async Task SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);
@@ -116,6 +119,7 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-18")]
     public async Task OpenAsync_ExtractableKey_IsRefusedAndRecorded()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);
@@ -128,6 +132,7 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-19")]
     public async Task OpenAsync_TokenThatIsNotTheDeclaredModule_IsRefused()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);
@@ -180,6 +185,7 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-3")]
     public async Task SignPdfAsync_RootNotTrusted_IsRefused()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);
@@ -222,6 +228,7 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-14")]
     public async Task SignPdfAsync_RevokedCertificateUnderAContingency_IsStillRefused()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);
@@ -289,6 +296,7 @@ public sealed class IofeSigningAgentTests : IDisposable
     }
 
     [SkippableFact]
+    [Trait("AnnexB", "F-30")]
     public async Task Viewer_SignedPdf_ShowsTheSignerInSpanish()
     {
         Skip.If(_hsm.SkipReason is not null, _hsm.SkipReason);

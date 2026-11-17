@@ -384,10 +384,25 @@ public sealed class SandboxServicesTests(SandboxFixture fixture)
         }
     }
 
+    [Fact]
+    public async Task CscCredential_SignerUnderAnotherCa_ComesWithItsOwnChain()
+    {
+        // A credential may be of any signing certificate, also one under the revoked CA: a signer that takes the chain
+        // from the service must get that certificate's issuers, not the default CA.
+        using var content = new StringContent("""{"certificateId":"under-revoked-ca","credentialId":"under-revoked-ca-test"}""", Encoding.UTF8, "application/json");
+        (await Http.PostAsync("api/csc/credentials", content)).StatusCode.ShouldBe(HttpStatusCode.Created);
+        var client = new CscClient(new CscClientOptions { BaseUri = new Uri(fixture.Info.Csc.BaseUrl), AccessToken = fixture.Info.Csc.ServiceToken });
+
+        var credential = await client.GetCredentialAsync("under-revoked-ca-test");
+
+        credential.Certificate.Subject.ShouldContain("Under a revoked CA");
+        credential.Chain.ShouldContain(c => c.Subject == credential.Certificate.Issuer);
+        credential.Chain.ShouldNotContain(c => c.Subject.Contains("CA 1", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("""{"certificateId":"no-such-certificate"}""", HttpStatusCode.NotFound)]
     [InlineData("""{"certificateId":"tsa"}""", HttpStatusCode.BadRequest)]
-    [InlineData("""{"certificateId":"under-revoked-ca"}""", HttpStatusCode.BadRequest)]
     [InlineData("""{"certificateId":"rsa-2048","credentialId":"new-one","scal":"3"}""", HttpStatusCode.BadRequest)]
     [InlineData("""{"certificateId":"rsa-2048","credentialId":"bad id"}""", HttpStatusCode.BadRequest)]
     [InlineData("""{"certificateId":"rsa-2048","credentialId":"rsa-scal1"}""", HttpStatusCode.Conflict)]

@@ -23,6 +23,7 @@ internal sealed class IofeTestPki : IDisposable
     private readonly byte[] _goodLeafCrl;
     private readonly byte[] _revokedLeafCrl;
     private readonly byte[] _intermediateCrl;
+    private readonly byte[] _revokedIntermediateCrl;
 
     public IofeTestPki()
     {
@@ -30,6 +31,7 @@ internal sealed class IofeTestPki : IDisposable
         _goodLeafCrl = Pki.BuildLeafCrl();
         _revokedLeafCrl = Pki.BuildRevokedLeafCrl();
         _intermediateCrl = Pki.BuildIntermediateCrl();
+        _revokedIntermediateCrl = Pki.BuildRevokedIntermediateCrl();
         Tsa = Pki.IssueTimestampingCertificate();
         _impostorTsa = Pki.IssueTimestampingCertificate("CN=Otra TSA, O=SimpleSign Tests");
         _tsaRevokedCrl = Pki.BuildCrlRevoking(Tsa);
@@ -46,6 +48,12 @@ internal sealed class IofeTestPki : IDisposable
 
     /// <summary>Whether the CRL distribution points fail.</summary>
     public bool CrlsDown { get; set; }
+
+    /// <summary>What is served as the CRL of the signer's CA instead of the current one (expired, of another key…); null for the current one.</summary>
+    public byte[]? LeafCrlOverride { get; set; }
+
+    /// <summary>Whether the root's CRL lists the signer's CA as revoked.</summary>
+    public bool IntermediateRevoked { get; set; }
 
     /// <summary>The certificate of the time-stamp authority at <see cref="TsaUrl"/>.</summary>
     public X509Certificate2 Tsa { get; }
@@ -66,13 +74,18 @@ internal sealed class IofeTestPki : IDisposable
     {
         LeafRevoked = false;
         CrlsDown = false;
+        LeafCrlOverride = null;
+        IntermediateRevoked = false;
         TsaRevoked = false;
         TsaTampered = false;
         TsaImpostor = false;
     }
 
-    /// <summary>A signer under the intermediate CA with the given key usage and the CRL distribution point of the leaf.</summary>
-    public X509Certificate2 IssueSigner(string subject, RSA key, X509KeyUsageFlags keyUsage)
+    /// <summary>
+    /// A signer under the intermediate CA with the given key usage and the CRL distribution point of the leaf; valid
+    /// for a year from now unless <paramref name="notAfter"/> says otherwise (an expired certificate).
+    /// </summary>
+    public X509Certificate2 IssueSigner(string subject, RSA key, X509KeyUsageFlags keyUsage, DateTimeOffset? notAfter = null)
     {
         var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
@@ -83,7 +96,7 @@ internal sealed class IofeTestPki : IDisposable
         byte[] serial = RandomNumberGenerator.GetBytes(16);
         serial[0] &= 0x7F;
         var notBefore = Pki.IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
-        return request.Create(Pki.IntermediateCa, notBefore, notBefore.AddYears(1), serial);
+        return request.Create(Pki.IntermediateCa, notBefore, notAfter ?? notBefore.AddYears(1), serial);
     }
 
     public void Dispose()
@@ -123,8 +136,8 @@ internal sealed class IofeTestPki : IDisposable
 
         byte[]? crl = request.RequestUri?.ToString() switch
         {
-            LeafCrlUrl => LeafRevoked ? _revokedLeafCrl : TsaRevoked ? _tsaRevokedCrl : _goodLeafCrl,
-            IntermediateCrlUrl => _intermediateCrl,
+            LeafCrlUrl => LeafCrlOverride ?? (LeafRevoked ? _revokedLeafCrl : TsaRevoked ? _tsaRevokedCrl : _goodLeafCrl),
+            IntermediateCrlUrl => IntermediateRevoked ? _revokedIntermediateCrl : _intermediateCrl,
             _ => null,
         };
         return crl is null
