@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the key in a PKCS#11 module, in a remote signing service or both, and keeps the evidence with a report by item
     in Spanish, English and Portuguese (`--item F-8` runs one item step by step). The tests that show an item carry
     the trait `AnnexB`; `AnnexBCoverageTests` fails when an item software can show has no test or no scenario.
+  - What the rehearsal of that audit showed, fixed. The signing agent completes the chain of a certificate whose
+    issuers are not in the module: from `IofeSigningAgentOptions.ChainCertificates` (`simplesign iofe sign --chain
+    FILE`), then from the address the certificate names (AIA); the chain must still end in a trusted root, and a
+    refusal for a missing issuer says which. An agent that does not get to open (trusted list unreadable, PIN refused
+    by the module, remote service refusing it, incomplete options) is recorded in the audit trail as `AgentNotOpened`.
+    The reasons of a rejected document — the notice to the sender, `IofeVerification.Reasons`, the audit record — are
+    in Spanish, one sentence per sub-indication.
   - The audit walk-through, rehearsed: `src/Extensions/Peru/Iofe/docs/roteiro-de-auditoria.md` (Portuguese),
     `audit-walkthrough.md` (English) and `guion-de-auditoria.md` (Spanish). The manuals are also in English
     (`docs/acreditacion/en/`); the Spanish text is the one handed to INDECOPI.
@@ -76,6 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     properties in the JSON of `validate` and `inspect`.
 - **The CLI names the package to install** when a profile, a policy or an option belongs to an extension that is not
   there: `--profile icp-brasil` → `simplesign extension install SimpleSign.Brazil.Cli`.
+- **`SigningErrorReason.TimestampInvalid`**: a time-stamp obtained while signing that fails its own checks (the
+  authority's signature, the message imprint, the nonce, its structure). `TimestampException.ReasonOf` and two
+  constructors with a reason go with it.
 - **`Pkcs11Signer.KeyProtection`** (`Pkcs11KeyProtection`): whether the driver reports the signing key as sensitive,
   extractable, generated on the token, and whether the slot is hardware; `IsConfinedToToken` to refuse a key that can
   leave its token. Also `TokenManufacturer`, `TokenModel` and `TokenSerialNumber`.

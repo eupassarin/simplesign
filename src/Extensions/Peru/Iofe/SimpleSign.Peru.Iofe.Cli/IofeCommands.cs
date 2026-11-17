@@ -225,6 +225,11 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         [Description("The number of the resolution or of the certificate of that accreditation")]
         public string? ServiceReference { get; init; }
 
+        /// <summary>Certificates of the authorities that issued the signing certificate.</summary>
+        [CommandOption("--chain <FILE>")]
+        [Description("A certificate of an authority that issued the signing certificate (PEM or DER), when the module or the service holds the signing certificate alone; repeat for more. Without it a missing issuer is fetched from the address the certificate names (AIA)")]
+        public string[] Chain { get; init; } = [];
+
         /// <summary>The transaction signed for.</summary>
         [CommandOption("--transaction <TYPE/ID>")]
         [Description("The transaction the signature is for, as type/id (e.g. factura/F001-123)")]
@@ -329,6 +334,11 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                 return ValidationResult.Error("--tsa and --tsa-cert go together.");
             }
 
+            if (Chain.FirstOrDefault(file => !File.Exists(file)) is { } missingChain)
+            {
+                return ValidationResult.Error($"File not found: {missingChain}");
+            }
+
             if (Format is not (null or "pdf" or "xml" or "cms"))
             {
                 return ValidationResult.Error("--format is pdf, xml or cms.");
@@ -356,6 +366,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         byte[] input = await File.ReadAllBytesAsync(settings.Input, cancellationToken);
         using var audit = new JsonLinesAuditSink(settings.AuditLog!);
         using X509Certificate2? tsaCertificate = settings.TsaCertificate is null ? null : IofeTrustSettings.LoadCertificate(settings.TsaCertificate);
+        List<X509Certificate2> chain = [.. settings.Chain.Select(IofeTrustSettings.LoadCertificate)];
         try
         {
             await using var agent = await IofeSigningAgent.OpenAsync(
@@ -384,6 +395,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                     },
                     RemoteServiceDeclaration = settings.CscUrl is null ? null : new IofeRemoteServiceDeclaration(
                         settings.ServiceProvider!, settings.ServiceName!, settings.ServiceAccreditation!, settings.ServiceReference!),
+                    ChainCertificates = chain,
                     Audit = audit,
                     Transactions = settings.Allowed,
                     Trust = await settings.TrustAsync(cancellationToken),
@@ -427,6 +439,10 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
         catch (IofeAccreditationException ex)
         {
             return IofeTrustSettings.Refused(ex);
+        }
+        finally
+        {
+            chain.ForEach(certificate => certificate.Dispose());
         }
     }
 }

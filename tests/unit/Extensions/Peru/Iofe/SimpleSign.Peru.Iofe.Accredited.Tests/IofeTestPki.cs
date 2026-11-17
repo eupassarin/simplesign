@@ -16,6 +16,7 @@ internal sealed class IofeTestPki : IDisposable
     public const string LeafCrlUrl = "http://198.51.100.30/leaf.crl";
     public const string IntermediateCrlUrl = "http://198.51.100.30/intermediate.crl";
     public const string TsaUrl = "http://198.51.100.30/tsa";
+    public const string IssuerUrl = "http://198.51.100.30/intermediate.cer";
 
     private readonly HttpClient _client;
     private readonly X509Certificate2 _impostorTsa;
@@ -52,6 +53,9 @@ internal sealed class IofeTestPki : IDisposable
     /// <summary>What is served as the CRL of the signer's CA instead of the current one (expired, of another key…); null for the current one.</summary>
     public byte[]? LeafCrlOverride { get; set; }
 
+    /// <summary>How many times the certificate of the signer's CA was fetched from <see cref="IssuerUrl"/> (AIA).</summary>
+    public int IssuerDownloads { get; private set; }
+
     /// <summary>Whether the root's CRL lists the signer's CA as revoked.</summary>
     public bool IntermediateRevoked { get; set; }
 
@@ -76,6 +80,7 @@ internal sealed class IofeTestPki : IDisposable
         CrlsDown = false;
         LeafCrlOverride = null;
         IntermediateRevoked = false;
+        IssuerDownloads = 0;
         TsaRevoked = false;
         TsaTampered = false;
         TsaImpostor = false;
@@ -85,7 +90,7 @@ internal sealed class IofeTestPki : IDisposable
     /// A signer under the intermediate CA with the given key usage and the CRL distribution point of the leaf; valid
     /// for a year from now unless <paramref name="notAfter"/> says otherwise (an expired certificate).
     /// </summary>
-    public X509Certificate2 IssueSigner(string subject, RSA key, X509KeyUsageFlags keyUsage, DateTimeOffset? notAfter = null)
+    public X509Certificate2 IssueSigner(string subject, RSA key, X509KeyUsageFlags keyUsage, DateTimeOffset? notAfter = null, bool namesItsIssuer = false)
     {
         var request = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
@@ -93,6 +98,21 @@ internal sealed class IofeTestPki : IDisposable
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
         request.CertificateExtensions.Add(X509AuthorityKeyIdentifierExtension.CreateFromCertificate(Pki.IntermediateCa, true, false));
         request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([LeafCrlUrl]));
+        if (namesItsIssuer)
+        {
+            // Authority Information Access, caIssuers: where the issuer's certificate is published.
+            var access = new System.Formats.Asn1.AsnWriter(System.Formats.Asn1.AsnEncodingRules.DER);
+            using (access.PushSequence())
+            using (access.PushSequence())
+            {
+                access.WriteObjectIdentifier("1.3.6.1.5.5.7.48.2");
+                access.WriteCharacterString(
+                    System.Formats.Asn1.UniversalTagNumber.IA5String, IssuerUrl, new System.Formats.Asn1.Asn1Tag(System.Formats.Asn1.TagClass.ContextSpecific, 6));
+            }
+
+            request.CertificateExtensions.Add(new X509Extension("1.3.6.1.5.5.7.1.1", access.Encode(), critical: false));
+        }
+
         byte[] serial = RandomNumberGenerator.GetBytes(16);
         serial[0] &= 0x7F;
         var notBefore = Pki.IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
@@ -127,6 +147,12 @@ internal sealed class IofeTestPki : IDisposable
             var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(token) };
             response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
             return response;
+        }
+
+        if (request.RequestUri?.ToString() == IssuerUrl)
+        {
+            IssuerDownloads++;
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Pki.IntermediateCa.RawData) };
         }
 
         if (CrlsDown)

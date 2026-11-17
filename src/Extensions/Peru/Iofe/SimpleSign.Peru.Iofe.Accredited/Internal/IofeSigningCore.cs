@@ -5,6 +5,7 @@ using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
 using SimpleSign.Signers.Cloud.Csc;
 using SimpleSign.Signers.Pkcs11;
@@ -22,8 +23,12 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     private const string AuditFormat = "IOFE";
 
     private static readonly PolicyConstraint Warn = new(ConstraintLevel.Warn);
+    private static readonly CertificateChainService ChainService = new();
 
     private readonly IofeKey _key;
+    private readonly IReadOnlyList<X509Certificate2> _givenChain;
+    private readonly List<X509Certificate2> _fetchedChain = [];
+    private readonly SemaphoreSlim _chainGate = new(1, 1);
     private readonly TrustProfile _profile;
     private readonly IAsyncDisposable? _ownedTrust;
     private readonly ISignatureAuditSink _audit;
@@ -34,6 +39,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
 
     private IofeSigningCore(
         IofeKey key,
+        IReadOnlyList<X509Certificate2> givenChain,
         TrustProfile profile,
         IAsyncDisposable? ownedTrust,
         ISignatureAuditSink audit,
@@ -43,6 +49,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         TimeProvider clock)
     {
         _key = key;
+        _givenChain = givenChain;
         _profile = profile;
         _ownedTrust = ownedTrust;
         _audit = audit;
@@ -68,6 +75,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     internal static async Task<IofeSigningCore> OpenModuleAsync(
         Pkcs11SignerOptions module,
         IofeModuleDeclaration declaration,
+        IReadOnlyList<X509Certificate2> givenChain,
         IofeTrust trust,
         SigningPolicy signing,
         ValidationPolicy validation,
@@ -84,7 +92,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         {
             key = IofeKey.OpenModule(module, declaration);
             var token = key.Module!;
-            var core = new IofeSigningCore(key, profile, owned, audit, timestamp, contingency, http, clock);
+            var core = new IofeSigningCore(key, givenChain, profile, owned, audit, timestamp, contingency, http, clock);
 
             if (!token.KeyProtection.IsConfinedToToken)
             {
@@ -128,6 +136,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     internal static async Task<IofeSigningCore> OpenRemoteAsync(
         IofeRemoteService service,
         IofeRemoteServiceDeclaration declaration,
+        IReadOnlyList<X509Certificate2> givenChain,
         IofeTrust trust,
         SigningPolicy signing,
         ValidationPolicy validation,
@@ -162,7 +171,7 @@ internal sealed class IofeSigningCore : IAsyncDisposable
             }
 
             key = await IofeKey.OpenRemoteAsync(client, reported, service, declaration, clock, cancellationToken).ConfigureAwait(false);
-            var core = new IofeSigningCore(key, profile, owned, audit, timestamp, contingency, http, clock);
+            var core = new IofeSigningCore(key, givenChain, profile, owned, audit, timestamp, contingency, http, clock);
 
             if (!string.Equals(key.RemoteService!.AuthMode, "explicit", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(key.RemoteService.AuthMode, "implicit", StringComparison.OrdinalIgnoreCase))
@@ -188,6 +197,24 @@ internal sealed class IofeSigningCore : IAsyncDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// Records that an agent did not open and why, with no certificate: the failure came before the key was reached
+    /// (or was the options'). The message is the exception's, which carries no PIN, token or secret.
+    /// </summary>
+    internal static ValueTask RecordNotOpenedAsync(ISignatureAuditSink audit, TimeProvider clock, Exception failure, CancellationToken cancellationToken) =>
+        audit.RecordAsync(
+            new SignatureAuditEvent
+            {
+                Time = clock.GetUtcNow(),
+                Format = AuditFormat,
+                RequestedLevel = AdesBaselineLevel.Basic,
+                Signed = false,
+                Message = $"AgentNotOpened: {failure.GetType().Name}: {failure.Message}",
+                PolicyName = IofePolicies.AgentSigning.Name,
+                PolicyDigest = IofePolicies.AgentSigning.Digest,
+            },
+            cancellationToken);
 
     /// <summary>Records a refusal of this package (not of the signing policy) and throws it.</summary>
     internal Task RefuseAsync(IofeRefusal refusal, string message, string? operationId, CancellationToken cancellationToken) =>
@@ -227,10 +254,10 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     }
 
     internal Task<IofeSignedDocument> SignPdfAsync(byte[] pdf, string operationId, CancellationToken cancellationToken) =>
-        SignAsync(IofeDocumentFormat.Pdf, operationId, async (policy, token) =>
+        SignAsync(IofeDocumentFormat.Pdf, operationId, async (policy, chain, token) =>
         {
             var builder = PadesSigner.Document(pdf)
-                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, chain)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
                 .WithLevel(Level)
@@ -242,10 +269,10 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         }, cancellationToken);
 
     internal Task<IofeSignedDocument> SignCmsAsync(byte[] data, bool detached, string operationId, CancellationToken cancellationToken) =>
-        SignAsync(IofeDocumentFormat.Cms, operationId, async (policy, token) =>
+        SignAsync(IofeDocumentFormat.Cms, operationId, async (policy, chain, token) =>
         {
             var builder = CadesSigner.Document(data)
-                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, chain)
                 .WithContentType(detached ? CadesContentType.Detached : CadesContentType.Enveloped)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
@@ -258,10 +285,10 @@ internal sealed class IofeSigningCore : IAsyncDisposable
         }, cancellationToken);
 
     internal Task<IofeSignedDocument> SignXmlAsync(byte[] xml, string operationId, CancellationToken cancellationToken) =>
-        SignAsync(IofeDocumentFormat.Xml, operationId, async (policy, token) =>
+        SignAsync(IofeDocumentFormat.Xml, operationId, async (policy, chain, token) =>
         {
             var builder = XadesSigner.Document(xml)
-                .WithExternalSigner(_key.Certificate, _key.Signer, Chain)
+                .WithExternalSigner(_key.Certificate, _key.Signer, chain)
                 .WithProfile(_profile)
                 .WithSigningPolicy(policy)
                 .WithLevel(Level)
@@ -275,6 +302,12 @@ internal sealed class IofeSigningCore : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _key.Dispose();
+        _chainGate.Dispose();
+        foreach (var fetched in _fetchedChain)
+        {
+            fetched.Dispose();
+        }
+
         if (_ownedTrust is not null)
         {
             await _ownedTrust.DisposeAsync().ConfigureAwait(false);
@@ -290,17 +323,65 @@ internal sealed class IofeSigningCore : IAsyncDisposable
             ? AdesBaselineProfile.Basic()
             : AdesBaselineProfile.LongTerm(_timestamp, new LongTermValidationOptions(_http));
 
-    /// <summary>The issuers of the signing certificate up to its root, read again at each signature: the trusted list may have changed.</summary>
-    private IReadOnlyList<X509Certificate2> Chain => IofeChains.Complete(_key.Certificate, _key.Chain, _profile.TrustAnchorProviders);
+    /// <summary>
+    /// The issuers of the signing certificate up to its root, read again at each signature (the trusted list may have
+    /// changed): from the module or the service, from what the operator gave (<c>ChainCertificates</c>), from the
+    /// trust and, when an issuer is still missing, from the address the certificate names (AIA). A certificate is only
+    /// a link: the chain must still end in a trusted root, which the signing policy checks.
+    /// </summary>
+    private async Task<IReadOnlyList<X509Certificate2>> ChainAsync(CancellationToken cancellationToken)
+    {
+        await _chainGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var chain = IofeChains.Complete(_key.Certificate, Known, _profile.TrustAnchorProviders);
+            if (IofeChains.WithoutIssuer(_key.Certificate, chain, _profile.TrustAnchorProviders) is null)
+            {
+                return chain;
+            }
+
+            var provider = _http ?? DefaultHttpClientProvider.Instance;
+            var fetched = await ChainService.DownloadAiaCertsAsync(
+                provider.GetClient(), _key.Certificate, [.. Known], [], provider.OutboundPolicy, cancellationToken).ConfigureAwait(false);
+            _fetchedChain.AddRange(fetched);
+            return IofeChains.Complete(_key.Certificate, Known, _profile.TrustAnchorProviders);
+        }
+        finally
+        {
+            _chainGate.Release();
+        }
+    }
+
+    private IReadOnlyList<X509Certificate2> Known => [.. _key.Chain, .. _givenChain, .. _fetchedChain];
+
+    /// <summary>What to add to a refusal for an untrusted root when it is a link of the chain that is missing; null otherwise.</summary>
+    private string? MissingIssuerHint(IReadOnlyList<X509Certificate2> chain) =>
+        IofeChains.WithoutIssuer(_key.Certificate, chain, _profile.TrustAnchorProviders) is { } orphan
+            ? $" No se encontró el certificado de '{orphan.Issuer}', emisor de '{orphan.Subject}': si es una EC intermedia, cárguela en el "
+                + "módulo o indíquela (ChainCertificates, --chain); si es la EC raíz, no figura entre las de confianza."
+            : null;
 
     private async Task<IofeSignedDocument> SignAsync(
         IofeDocumentFormat format,
         string operationId,
-        Func<SigningPolicy, CancellationToken, Task<(byte[] Artifact, AdesBaselineLevel Achieved, bool Timestamped)>> sign,
+        Func<SigningPolicy, IReadOnlyList<X509Certificate2>, CancellationToken, Task<(byte[] Artifact, AdesBaselineLevel Achieved, bool Timestamped)>> sign,
         CancellationToken cancellationToken)
     {
         var (policy, underContingency) = await EffectivePolicyAsync(operationId, cancellationToken).ConfigureAwait(false);
-        var (artifact, achieved, timestamped) = await sign(policy, cancellationToken).ConfigureAwait(false);
+        var chain = await ChainAsync(cancellationToken).ConfigureAwait(false);
+        byte[] artifact;
+        AdesBaselineLevel achieved;
+        bool timestamped;
+        try
+        {
+            (artifact, achieved, timestamped) = await sign(policy, chain, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SigningException ex) when (ex.Reason == SigningErrorReason.UntrustedRoot && MissingIssuerHint(chain) is { } hint)
+        {
+            // The same refusal, saying which link is missing: the certificate alone reads as "untrusted root".
+            throw new SigningException(ex.Message + hint, SigningErrorReason.UntrustedRoot, ex);
+        }
+
         return new IofeSignedDocument(
             artifact,
             format,

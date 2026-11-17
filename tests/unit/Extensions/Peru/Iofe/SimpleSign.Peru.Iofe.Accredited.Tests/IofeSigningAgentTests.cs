@@ -278,8 +278,9 @@ public sealed class IofeSigningAgentTests : IDisposable
         await using var agent = await IofeSigningAgent.OpenAsync(Options() with { Timestamp = Authority });
         Pki.TsaTampered = true;
 
-        await Should.ThrowAsync<SigningException>(() => agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice));
+        var ex = await Should.ThrowAsync<SigningException>(() => agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice));
 
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampInvalid);
         _audit.Events.ShouldHaveSingleItem().Signed.ShouldBeFalse();
     }
 

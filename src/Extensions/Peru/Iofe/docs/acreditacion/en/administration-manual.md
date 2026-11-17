@@ -78,9 +78,11 @@ simplesign pkcs11 list --lib /path/to/driver.so
 The module's FIPS 140-2 or Common Criteria certification **cannot be checked by software**: it is a declaration of
 the operator (`Certification`, `CertificateNumber`) which the auditor compares with the manufacturer's certificate.
 
-**Load the certificates of the issuing CAs into the module** next to the signing certificate. The agent builds the
-chain from the certificates in the module and those of the trusted list; when an intermediate CA's is missing, the
-signature is refused with `UntrustedRoot`.
+**The certificate's chain.** The agent builds it, in this order, from the certificates in the module, those the
+operator gives (`ChainCertificates`, `--chain file`), those of the trusted list and, when an issuer is still missing,
+the one downloaded from the address the certificate itself names (AIA). No certificate given or downloaded widens the
+trust: the chain must end in a root of the trusted list. When an issuer is missing, the signature is refused with
+`UntrustedRoot` and the message says which.
 
 ### 3.2 Remote signing service
 
@@ -216,7 +218,9 @@ system give no other way: the only way to sign is `Sign…Async(document, transa
 | Verifications (`JsonLinesVerificationAuditSink`) | Each document verified: time, format, SHA-256, sender, reference, accepted or rejected, the indication of each signature, reasons, whether the notice was delivered, policy, contingency |
 
 An agent is not created without its audit sink (`AuditMissing`), and an operation is not returned before its record
-is written.
+is written. A signing agent that does not get to open is recorded too (`AgentNotOpened`, with the reason): the
+trusted list could not be read, the module refused the PIN, the remote service refused the agent or the
+configuration is incomplete.
 
 Each line carries the digest of the one before, so a line changed, removed or inserted breaks the chain:
 
@@ -236,7 +240,7 @@ returned, the following is checked:
 | Check | Reason of refusal |
 |---|---|
 | The token carries the identifier of the certificate of the authority asked | `TimestampUntrusted` |
-| The token's signature is valid | time-stamp signature error |
+| The token's signature is valid and the token is over what was sent | `TimestampInvalid` |
 | The authority's certificate chains to a trusted root | `TimestampUntrusted` |
 | The authority's certificate is not revoked | `TimestampCertificateRevoked`, `TimestampRevocationStatusUnknown` |
 | The authority's certificate has not expired | `TimestampCertificateNotValid` |
@@ -251,6 +255,6 @@ network and of access to the cryptographic module.
 
 ## 10. Notice to the sender (section 4.3)
 
-When a received document is rejected, the agent writes the notice and hands it to the configured means (`Notifier`).
+When a received document is rejected, the agent writes the notice and hands it to the configured means (`Notifier`), with the reasons in Spanish.
 If the delivery fails, the verification fails (`NoticeNotDelivered`) and the record says so: a document is never
 rejected in silence.

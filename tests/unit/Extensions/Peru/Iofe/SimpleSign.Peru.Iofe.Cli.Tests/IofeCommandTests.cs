@@ -170,12 +170,24 @@ public sealed class IofeCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task Sign_ChainFileThatDoesNotExist_Fails()
+    {
+        var args = RemoteSignArguments();
+        args.AddRange(["--chain", File("no-existe.cer")]);
+
+        var (exit, output) = await IofeCli.RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain("File not found");
+    }
+
+    [Fact]
     public async Task Help_Sign_ShowsBothWaysOfGivingTheKey()
     {
         var (exit, output) = await IofeCli.RunAsync("iofe", "sign", "--help");
 
         exit.ShouldBe(0, output);
-        foreach (string option in new[] { "--pkcs11-lib", "--module-certificate", "--csc-url", "--csc-credential", "--csc-client-secret", "--service-name", "--service-reference" })
+        foreach (string option in new[] { "--pkcs11-lib", "--module-certificate", "--csc-url", "--csc-credential", "--csc-client-secret", "--service-name", "--service-reference", "--chain" })
         {
             output.ShouldContain(option);
         }

@@ -35,6 +35,14 @@ public sealed record IofeSigningAgentOptions
     /// </summary>
     public IofeRemoteServiceDeclaration? RemoteServiceDeclaration { get; init; }
 
+    /// <summary>
+    /// Certificates of the authorities that issued the signing certificate, for a module or a service that holds the
+    /// signing certificate alone. They only link the certificate to its root, which must still be a trusted one; an
+    /// issuer found neither here, nor in the module, nor in the trust is fetched from the address the certificate
+    /// names (AIA). Default: none.
+    /// </summary>
+    public IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> ChainCertificates { get; init; } = [];
+
     /// <summary>Where each signature made or refused is recorded (guide Req. 14), e.g. a <see cref="JsonLinesAuditSink"/>.</summary>
     public required ISignatureAuditSink Audit { get; init; }
 
@@ -143,61 +151,77 @@ public sealed class IofeSigningAgent : IAsyncDisposable
                 "Un agente automatizado no firma sin registro de auditoría (Audit).", IofeRefusal.AuditMissing);
         }
 
-        bool module = options.Module is not null || options.ModuleDeclaration is not null;
-        bool remote = options.RemoteService is not null || options.RemoteServiceDeclaration is not null;
-        if (module == remote)
+        IofeSigningCore core;
+        HashSet<string> transactions;
+        try
         {
-            throw new IofeAccreditationException(
-                "Se requiere una fuente de la clave, y solo una: el módulo criptográfico (Module) o el servicio de firma remota (RemoteService).",
-                IofeRefusal.OptionsIncomplete);
+            bool module = options.Module is not null || options.ModuleDeclaration is not null;
+            bool remote = options.RemoteService is not null || options.RemoteServiceDeclaration is not null;
+            if (module == remote)
+            {
+                throw new IofeAccreditationException(
+                    "Se requiere una fuente de la clave, y solo una: el módulo criptográfico (Module) o el servicio de firma remota (RemoteService).",
+                    IofeRefusal.OptionsIncomplete);
+            }
+
+            if (module && (options.Module is null || options.ModuleDeclaration is null))
+            {
+                throw new IofeAccreditationException(
+                    "Se requieren el módulo criptográfico (Module) y su declaración (ModuleDeclaration).", IofeRefusal.OptionsIncomplete);
+            }
+
+            if (remote && (options.RemoteService is null || options.RemoteServiceDeclaration is null))
+            {
+                throw new IofeAccreditationException(
+                    "Se requieren el servicio de firma remota (RemoteService) y su declaración (RemoteServiceDeclaration).",
+                    IofeRefusal.OptionsIncomplete);
+            }
+
+            transactions = new HashSet<string>(
+                (options.Transactions ?? []).Where(t => !string.IsNullOrWhiteSpace(t)), StringComparer.Ordinal);
+            if (transactions.Count == 0)
+            {
+                throw new IofeAccreditationException(
+                    "Se requiere al menos un tipo de transacción (Transactions).", IofeRefusal.OptionsIncomplete);
+            }
+
+            core = remote
+                ? await IofeSigningCore.OpenRemoteAsync(
+                    options.RemoteService!,
+                    options.RemoteServiceDeclaration!,
+                    options.ChainCertificates ?? [],
+                    options.Trust,
+                    IofePolicies.AgentSigning,
+                    IofePolicies.AgentValidation,
+                    options.Audit,
+                    options.Timestamp?.ToOptions(),
+                    options.Contingency,
+                    options.HttpClientProvider,
+                    options.TimeProvider,
+                    cancellationToken).ConfigureAwait(false)
+                : await IofeSigningCore.OpenModuleAsync(
+                    options.Module!,
+                    options.ModuleDeclaration!,
+                    options.ChainCertificates ?? [],
+                    options.Trust,
+                    IofePolicies.AgentSigning,
+                    IofePolicies.AgentValidation,
+                    options.Audit,
+                    options.Timestamp?.ToOptions(),
+                    options.Contingency,
+                    options.HttpClientProvider,
+                    options.TimeProvider,
+                    cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not IofeAccreditationException { Refusal: not IofeRefusal.OptionsIncomplete })
+        {
+            // The agent did not open: the trusted list could not be read, the module refused the PIN, the service
+            // refused the agent, the options are incomplete. That is recorded too; a refusal of the key, the module or
+            // the service already is, by what refused it.
+            await IofeSigningCore.RecordNotOpenedAsync(options.Audit, options.TimeProvider, ex, cancellationToken).ConfigureAwait(false);
+            throw;
         }
 
-        if (module && (options.Module is null || options.ModuleDeclaration is null))
-        {
-            throw new IofeAccreditationException(
-                "Se requieren el módulo criptográfico (Module) y su declaración (ModuleDeclaration).", IofeRefusal.OptionsIncomplete);
-        }
-
-        if (remote && (options.RemoteService is null || options.RemoteServiceDeclaration is null))
-        {
-            throw new IofeAccreditationException(
-                "Se requieren el servicio de firma remota (RemoteService) y su declaración (RemoteServiceDeclaration).",
-                IofeRefusal.OptionsIncomplete);
-        }
-
-        var transactions = new HashSet<string>(
-            (options.Transactions ?? []).Where(t => !string.IsNullOrWhiteSpace(t)), StringComparer.Ordinal);
-        if (transactions.Count == 0)
-        {
-            throw new IofeAccreditationException(
-                "Se requiere al menos un tipo de transacción (Transactions).", IofeRefusal.OptionsIncomplete);
-        }
-
-        var core = remote
-            ? await IofeSigningCore.OpenRemoteAsync(
-                options.RemoteService!,
-                options.RemoteServiceDeclaration!,
-                options.Trust,
-                IofePolicies.AgentSigning,
-                IofePolicies.AgentValidation,
-                options.Audit,
-                options.Timestamp?.ToOptions(),
-                options.Contingency,
-                options.HttpClientProvider,
-                options.TimeProvider,
-                cancellationToken).ConfigureAwait(false)
-            : await IofeSigningCore.OpenModuleAsync(
-                options.Module!,
-                options.ModuleDeclaration!,
-                options.Trust,
-                IofePolicies.AgentSigning,
-                IofePolicies.AgentValidation,
-                options.Audit,
-                options.Timestamp?.ToOptions(),
-                options.Contingency,
-                options.HttpClientProvider,
-                options.TimeProvider,
-                cancellationToken).ConfigureAwait(false);
         return new IofeSigningAgent(core, transactions);
     }
 

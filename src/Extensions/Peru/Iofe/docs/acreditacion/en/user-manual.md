@@ -38,6 +38,7 @@ simplesign iofe sign factura.pdf --output factura-firmada.pdf \
 | `--csc-url`, `--csc-credential`, `--pin` | The remote signing service (Cloud Signature Consortium API v2), the credential and its PIN, instead of the module |
 | `--csc-token`, or `--csc-client-id` and `--csc-client-secret` | How the agent authenticates to the service (`env:NAME` reads the secret from an environment variable) |
 | `--service-…` | The declared service: provider, the name it reports about itself, accreditation and its reference |
+| `--chain file` | A certificate of an issuing CA (PEM or DER), when the module or the service holds the signing certificate alone; repeatable. Without it, a missing issuer is downloaded from the address the certificate names (AIA) |
 | `--transaction type/id` | The transaction the signature is for |
 | `--allow type` | The kinds of transaction this agent is allowed |
 | `--audit-log` | The audit trail of the signatures |
@@ -65,8 +66,9 @@ When the operation is refused, the message gives the reason and the exit code is
 | `Error (RevocationStatusUnknown)` | Neither OCSP nor the CRL could be reached: check the outbound network access |
 | `Error (CertificateExpired)` | The certificate expired |
 | `Error (KeyUsageNotPermitted)` | The certificate lacks the nonRepudiation bit |
-| `Error (UntrustedRoot)` | The root CA is not in the trusted list, or an issuing CA's certificate is missing from the module |
+| `Error (UntrustedRoot)` | The root CA is not in the trusted list, or an issuing CA's certificate is missing: the message says which. Load it into the module or give it with `--chain` |
 | `Error (TimestampUntrusted)` | The token does not come from the configured authority, or the authority is not trusted |
+| `Error (TimestampInvalid)` | The token received is not valid: its signature does not verify or it is not over what was sent |
 | `Error (TimestampCertificateRevoked)` | The time-stamp authority's certificate is revoked |
 
 ## Verifying a received document

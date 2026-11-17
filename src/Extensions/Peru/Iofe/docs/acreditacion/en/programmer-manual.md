@@ -55,8 +55,10 @@ IofeSignedDocument xml = await agent.SignXmlAsync(xmlBytes, new IofeTransaction(
   was signed under a contingency and where the key that signed is (`KeySource`: module or remote service).
 - Level of the signature: B-B without a time-stamp authority (signing time and certificate chain, protected by the
   signature); B-LT with one (also the time-stamp and the revocation data of the whole chain).
-- The certificate's chain is completed up to the root with the certificates of the module and those of the trust.
-  Load the issuing CAs' certificates into the module.
+- The certificate's chain is completed up to the root with the certificates of the module, those of
+  `ChainCertificates` (the issuing CAs' certificates, for a module or service that holds the signing certificate
+  alone), those of the trust and, when an issuer is missing, the one downloaded from the address the certificate names
+  (AIA). The root must be a trusted one.
 
 ### With the key in a remote signing service
 
@@ -100,14 +102,17 @@ await using var agent = await IofeSigningAgent.OpenAsync(new IofeSigningAgentOpt
 | Exception | When |
 |---|---|
 | `IofeAccreditationException` (`Refusal`) | A refusal of the accredited configuration itself: `KeyNotInModule`, `ModuleMismatch`, `RemoteServiceMismatch`, `RemoteAuthorizationNotUnattended`, `TransactionNotAllowed`, `AuditMissing`, `OptionsIncomplete`, `ContingencyExpired`, `NoticeNotDelivered` |
-| `SigningException` (`Reason`) | A check of the policy refused the certificate, the key, the algorithm or the time-stamp: `CertificateRevoked`, `RevocationStatusUnknown`, `CertificateExpired`, `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`… |
+| `SigningException` (`Reason`) | A check of the policy refused the certificate, the key, the algorithm or the time-stamp: `CertificateRevoked`, `RevocationStatusUnknown`, `CertificateExpired`, `ChainCertificateNotValid`, `KeyUsageNotPermitted`, `KeyTooWeak`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampInvalid`, `TimestampCertificateRevoked`… |
 | `Pkcs11Exception` | The module could not be opened or refused to sign (driver, PIN, key selection) |
 | `CloudSigningException` | The remote signing service refused the agent or the credential (token, client secret, disabled key). A PIN refused when signing comes inside a `SigningException` |
 
-Every refusal of a signature asked for, and of a key, a module or a service that is not the right one, is in the
-audit trail before the exception reaches the caller. What keeps the agent from reaching the key — the trusted list
-could not be read, the module refused the PIN — is reported with its exception and leaves no record: no signature
-with a certificate was asked for.
+Every refusal is in the audit trail before the exception reaches the caller: that of a signature asked for, that of
+a key, a module or a service that is not the right one, and that of an agent that does not get to open
+(`AgentNotOpened`: the trusted list could not be read, the module refused the PIN, the service refused the agent, the
+options are incomplete). The exception is the same in each case.
+
+The verification agent is created before any document arrives: when it cannot read the trusted list, `CreateAsync`
+throws and there is no record, because there is no document to record.
 
 ## Verification by an automated agent (section 4.3)
 

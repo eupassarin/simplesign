@@ -136,6 +136,123 @@ public sealed class AnnexBTests : IClassFixture<IofeRemoteServiceFixture>, IDisp
         ex.Reason.ShouldBe(SigningErrorReason.UntrustedRoot);
     }
 
+    // ── The chain of the signing certificate ────────────────────────────
+
+    [Fact]
+    public async Task Sign_KeyHolderWithoutTheIssuersCertificate_IsRefusedNamingTheMissingIssuer()
+    {
+        _service.WithoutIssuerCertificate = true;
+
+        var ex = await RefusedAsync(Options());
+
+        ex.Reason.ShouldBe(SigningErrorReason.UntrustedRoot);
+        ex.Message.ShouldContain(_pki.Pki.IntermediateCa.Subject);
+        ex.Message.ShouldContain("ChainCertificates");
+    }
+
+    [Fact]
+    public async Task Sign_IssuersCertificateGivenByTheOperator_Signs()
+    {
+        _service.WithoutIssuerCertificate = true;
+        await using var agent = await IofeSigningAgent.OpenAsync(Options() with { ChainCertificates = [_pki.Pki.IntermediateCa] });
+
+        var signed = await agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice);
+
+        await using var verifier = await VerifierAsync();
+        (await verifier.VerifyAsync(signed.Document, Sender)).Accepted.ShouldBeTrue();
+        _pki.IssuerDownloads.ShouldBe(0, "nothing is fetched when the operator gave the issuer");
+    }
+
+    [Fact]
+    public async Task Sign_IssuersCertificateAtTheAddressTheCertificateNames_IsFetchedOnceAndSigns()
+    {
+        _service.WithoutIssuerCertificate = true;
+        var key = RSA.Create(2048);
+        _service.AddCredential("con-aia", _pki.IssueSigner(
+            "CN=Con AIA, O=SimpleSign Tests", key, X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, namesItsIssuer: true), key);
+        await using var agent = await IofeSigningAgent.OpenAsync(Options("con-aia"));
+
+        var first = await agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice);
+        await agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice);
+
+        _pki.IssuerDownloads.ShouldBe(1, "the issuer fetched for the first signature is kept for the next");
+        await using var verifier = await VerifierAsync();
+        (await verifier.VerifyAsync(first.Document, Sender)).Accepted.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Sign_GivenIssuerDoesNotMakeAnUntrustedRootTrusted()
+    {
+        using var other = new SyntheticPki();
+
+        var ex = await RefusedAsync(Options(trust: IofeTrust.InstalledRoots([other.RootCa])) with { ChainCertificates = [_pki.Pki.IntermediateCa, _pki.Pki.RootCa] });
+
+        ex.Reason.ShouldBe(SigningErrorReason.UntrustedRoot);
+    }
+
+    // ── An agent that does not open is recorded ─────────────────────────
+
+    [Fact]
+    [Trait("AnnexB", "F-15")]
+    public async Task Open_ServiceRefusesTheAgent_IsRecordedAndThrownAsItWas()
+    {
+        var options = Options() with
+        {
+            RemoteService = FakeRemoteSigningService.Service() with
+            {
+                Service = new() { BaseUri = FakeRemoteSigningService.BaseUri, ClientId = FakeRemoteSigningService.ClientId, ClientSecret = "otro" },
+            },
+        };
+
+        await Should.ThrowAsync<SimpleSign.Signers.Cloud.CloudSigningException>(() => IofeSigningAgent.OpenAsync(options));
+
+        var record = _audit.Events.ShouldHaveSingleItem();
+        record.Signed.ShouldBeFalse();
+        record.Message.ShouldNotBeNull().ShouldStartWith("AgentNotOpened: CloudSigningException");
+        record.Message.ShouldNotContain("otro");
+        record.CertificateSubject.ShouldBeNull();
+    }
+
+    [Fact]
+    [Trait("AnnexB", "F-15")]
+    public async Task Open_IncompleteOptions_IsRecorded()
+    {
+        var ex = await Should.ThrowAsync<IofeAccreditationException>(() => IofeSigningAgent.OpenAsync(Options() with { Transactions = [] }));
+
+        ex.Refusal.ShouldBe(IofeRefusal.OptionsIncomplete);
+        _audit.Events.ShouldHaveSingleItem().Message.ShouldNotBeNull().ShouldStartWith("AgentNotOpened: IofeAccreditationException");
+    }
+
+    [Fact]
+    public async Task Open_RefusalOfTheServiceItself_IsRecordedOnce()
+    {
+        _service.ReportedName = "Otro Servicio";
+
+        await Should.ThrowAsync<IofeAccreditationException>(() => IofeSigningAgent.OpenAsync(Options()));
+
+        _audit.Events.ShouldHaveSingleItem().Message.ShouldNotBeNull().ShouldStartWith(nameof(IofeRefusal.RemoteServiceMismatch));
+    }
+
+    // ── The reasons of a rejection, in Spanish ──────────────────────────
+
+    [Fact]
+    public async Task Verify_RevokedSignerAndChangedDocument_GiveTheirReasonsInSpanish()
+    {
+        byte[] received = await ReceivedPdfAsync();
+        await using var verifier = await VerifierAsync();
+        byte[] changed = (byte[])received.Clone();
+        int at = received.AsSpan().IndexOf("/MediaBox"u8) + 12;
+        changed[at] ^= 0x01;
+
+        var tampered = await verifier.VerifyAsync(changed, Sender);
+        _pki.LeafRevoked = true;
+        var revoked = await verifier.VerifyAsync(received, Sender);
+
+        tampered.Reasons.ShouldHaveSingleItem().ShouldContain("el documento fue modificado después de la firma (HashFailure)");
+        revoked.Reasons.ShouldHaveSingleItem().ShouldContain("el certificado del firmante está revocado");
+        revoked.Notice.ShouldNotBeNull().Text.ShouldNotContain("revocation check failed");
+    }
+
     // ── Revocation (items 6, 7 and 9) ───────────────────────────────────
 
     [Fact]
@@ -265,7 +382,9 @@ public sealed class AnnexBTests : IClassFixture<IofeRemoteServiceFixture>, IDisp
     {
         _pki.TsaTampered = true;
 
-        await RefusedAsync(Options() with { Timestamp = new IofeTimestampAuthority(new Uri(IofeTestPki.TsaUrl), _pki.Tsa) }, beforeTheKeyIsUsed: false);
+        var ex = await RefusedAsync(Options() with { Timestamp = new IofeTimestampAuthority(new Uri(IofeTestPki.TsaUrl), _pki.Tsa) }, beforeTheKeyIsUsed: false);
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampInvalid, "a token that does not verify is not a failure of the network");
     }
 
     [Fact]

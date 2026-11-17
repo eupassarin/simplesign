@@ -17,7 +17,8 @@
     {
       "id": "tsl-otro-firmante",
       "items": [
-        "F-1"
+        "F-1",
+        "F-15"
       ],
       "keys": "signing",
       "title": {
@@ -455,13 +456,14 @@
     {
       "id": "pin-incorrecto",
       "items": [
+        "F-15",
         "F-17"
       ],
       "keys": "signing",
       "title": {
-        "es": "PIN incorrecto: no se firma",
-        "en": "Wrong PIN: nothing is signed",
-        "pt": "PIN incorreto: não assina"
+        "es": "PIN incorrecto: no se firma, y el intento queda registrado",
+        "en": "Wrong PIN: nothing is signed, and the attempt is recorded",
+        "pt": "PIN incorreto: não assina, e a tentativa fica registrada"
       }
     },
     {

@@ -195,9 +195,10 @@ queda sin prueba o sin escenario.
 | TSA del Sandbox | La TSA contratada: `--tsa URL --tsa-cert archivo` |
 | Paquetes locales | `dotnet tool install --global SimpleSign.Cli` y `simplesign extension install SimpleSign.Peru.Iofe.Cli` desde nuget.org |
 
-En el HSM real, **cargue en el módulo los certificados de las EC emisoras** junto al certificado de firma: el agente
-arma la cadena con lo que hay en el módulo y en la lista de confianza. Sin ellos la firma se rechaza con
-`UntrustedRoot` (es lo que mostró el ensayo antes de que el token de pruebas los tuviera).
+En el HSM real, si el módulo solo guarda el certificado de firma, el agente completa la cadena con los certificados
+de las EC emisoras indicados con `--chain archivo` o, a falta de ellos, descargados de la dirección que el propio
+certificado indica (AIA). Si aun así falta un emisor, el rechazo es `UntrustedRoot` y el mensaje dice cuál. Ensayado
+con un token sin los certificados de las EC: rechazó sin red, firmó con `--chain` y firmó mediante AIA.
 
 Los escenarios de falla (CRL de clave ajena, TSA revocada) dependen del Sandbox: con la PKI real se muestra el camino
 correcto y los rechazos que no requieren la falla de un tercero (transacción, módulo no declarado, opción inexistente,
@@ -231,11 +232,9 @@ itself"). Los datos del alcance (a–k) están en [`acreditacion/alcance.md`](ac
 - **Sección 4.1** (software de usuario final): no está cubierta.
 - **Vía remota**: la acreditación del prestador y que la clave no sea extraíble son una declaración del operador; el
   protocolo no las informa.
-- Los rechazos que ocurren **antes de que el agente se abra** —lista de confianza ilegible, PIN incorrecto en el
-  módulo— se muestran con su motivo, pero **no dejan registro de auditoría**.
-- El **comunicado al emisor** está en español, pero algunos motivos salen en inglés (por ejemplo "Certificate
-  revocation check failed.").
-- Un sello de tiempo con la firma alterada se rechaza, pero con el motivo clasificado como `NetworkFailure`.
+- El **agente de verificación** se crea antes de que haya documento: si no puede leer la lista de confianza, el
+  comando falla con su motivo, pero no hay registro de verificación (no hay documento que registrar). El agente de
+  firma que no llega a abrirse sí queda registrado (`AgentNotOpened`).
 - El agente firma en B-B (sin TSA) o B-LT (con TSA); el paquete acreditado no produce B-LTA.
 
 ## 12. Problemas comunes
@@ -243,7 +242,7 @@ itself"). Los datos del alcance (a–k) están en [`acreditacion/alcance.md`](ac
 | Síntoma | Causa y solución |
 |---|---|
 | `Error (RevocationStatusUnknown)` contra el Sandbox | La línea de comandos rechaza direcciones locales: agregue `--allow-origin http://localhost:5300` (el guion ya lo hace) |
-| `Error (UntrustedRoot)` en la vía PKCS#11 | Faltan en el token los certificados de las EC emisoras: `tools/stack/softhsm-provision.sh --force` |
+| `Error (UntrustedRoot)` en la vía PKCS#11 | Falta el certificado de una EC emisora y no se pudo descargar (el mensaje dice cuál): `--chain archivo`, o `tools/stack/softhsm-provision.sh --force` en el ensayo |
 | Escenarios `(pkcs11)` omitidos | `SOFTHSM2_CONF` no está exportada o el token no fue aprovisionado |
 | `Unknown option --…` en `simplesign iofe` | El comando no tiene esa opción; una opción desconocida es un error, a propósito |
 | El Sandbox se reinició y el token "no coincide" | Cada Sandbox `--ephemeral` tiene una PKI nueva: aprovisione de nuevo |

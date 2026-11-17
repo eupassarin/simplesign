@@ -219,13 +219,14 @@ def _(r):
     r.sign("rsa-2048").signed()
 
 
-@scenario("tsl-otro-firmante", ["F-1"], "signing",
+@scenario("tsl-otro-firmante", ["F-1", "F-15"], "signing",
           "TSL firmada por un certificado que no es el de la AAC: no se firma",
           "List signed by a certificate other than the AAC's: nothing is signed",
           "TSL assinada por certificado que não é o da AAC: não assina")
 def _(r):
     with r.faults(trustedList="WrongSigner"):
         r.sign("rsa-2048").fails("not signed by the scheme operator")
+    r.audit_has(signed=False, message="AgentNotOpened")
 
 
 @scenario("tsl-alterada", ["F-1"], "signing",
@@ -235,6 +236,7 @@ def _(r):
 def _(r):
     with r.faults(trustedList="Tampered"):
         r.sign("rsa-2048").fails("list was refused")
+    r.audit_has(signed=False, message="AgentNotOpened")
 
 
 @scenario("tsl-expirada", ["F-2"], "signing",
@@ -242,6 +244,7 @@ def _(r):
 def _(r):
     with r.faults(trustedList="Expired"):
         r.sign("rsa-2048").fails("trusted list expired")
+    r.audit_has(signed=False, message="AgentNotOpened")
 
 
 @scenario("raiz-no-listada", ["F-3"], "signing",
@@ -538,11 +541,14 @@ def _(r):
     r.sign("rsa-2048", credential="rsa-oauth").refused("RemoteAuthorizationNotUnattended")
 
 
-@scenario("pin-incorrecto", ["F-17"], "signing",
-          "PIN incorrecto: no se firma", "Wrong PIN: nothing is signed", "PIN incorreto: não assina")
+@scenario("pin-incorrecto", ["F-15", "F-17"], "signing",
+          "PIN incorrecto: no se firma, y el intento queda registrado",
+          "Wrong PIN: nothing is signed, and the attempt is recorded",
+          "PIN incorreto: não assina, e a tentativa fica registrada")
 def _(r):
     r.sign("rsa-2048", pin="9999").fails()
     r.audit_lacks_signed()
+    r.audit_has(signed=False)
 
 
 @scenario("pfx-no-aceptado", ["F-17", "F-18"], "none",
@@ -630,7 +636,7 @@ def _(r):
           "Carimbo de tempo com a assinatura alterada: recusado")
 def _(r):
     with r.faults(tsa="InvalidToken"):
-        r.sign("rsa-2048", tsa="tsa").fails("token signature", "invalid")
+        r.sign("rsa-2048", tsa="tsa").error("TimestampInvalid").has("token signature")
 
 
 @scenario("tsa-revocada", ["S-3"], "signing",
