@@ -23,26 +23,32 @@ public enum TrustProfileChoice
     /// <summary>Peru (IOFE): <c>IofeProfile</c>, with INDECOPI's list or the Sandbox's (<see cref="ProfileListSource"/>).</summary>
     Iofe,
 
-    /// <summary>ICP-Brasil: <c>IcpBrasilProfile</c> (AC Raiz roots and chain validation).</summary>
+    /// <summary>
+    /// Brazil (ICP-Brasil): <c>IcpBrasilProfile</c> (AC Raiz roots and chain validation), with the Sandbox's root added as an
+    /// AC Raiz when <see cref="ProfileListSource.Sandbox"/>.
+    /// </summary>
     IcpBrasil,
 
-    /// <summary>Gov.br: <c>GovBrProfile</c> (validation only).</summary>
+    /// <summary>Brazil (Gov.br): <c>GovBrProfile</c> (validation only).</summary>
     GovBr,
 
     /// <summary>EU (eIDAS): <c>EidasProfile</c>, with the EU LOTL or the Sandbox's (<see cref="ProfileListSource"/>), and the qualification of each signature.</summary>
     Eidas,
 }
 
-/// <summary>Which list a profile of a trusted list (IOFE, eIDAS) reads.</summary>
+/// <summary>Which list a profile of a trusted list (IOFE, eIDAS) reads, or which roots ICP-Brasil trusts.</summary>
 public enum ProfileListSource
 {
     /// <summary>
     /// The real one, checked against the signers bundled with the package: INDECOPI's list (iofe.indecopi.gob.pe) for IOFE,
-    /// the EU LOTL (ec.europa.eu) and its national lists for eIDAS.
+    /// the EU LOTL (ec.europa.eu) and its national lists for eIDAS, the bundled AC Raiz roots for ICP-Brasil.
     /// </summary>
     Official,
 
-    /// <summary>The connected Sandbox's (test): its certificates chain to it, and its faults show. IOFE reads /tl/tl.xml, eIDAS /tl/lotl.xml.</summary>
+    /// <summary>
+    /// The connected Sandbox's (test): its certificates chain to it, and its faults show. IOFE reads /tl/tl.xml, eIDAS
+    /// /tl/lotl.xml; ICP-Brasil adds the Sandbox's root to the AC Raiz roots (<c>IcpBrasilExtensionOptions.AdditionalRoots</c>).
+    /// </summary>
     Sandbox,
 }
 
@@ -99,7 +105,7 @@ internal sealed class ProfileTrust : IDisposable
     };
 
     /// <summary>
-    /// The profile <paramref name="main"/> (read from <paramref name="source"/> for IOFE) with the trust of <paramref name="extras"/>
+    /// The profile <paramref name="main"/> (read from <paramref name="source"/> for IOFE, eIDAS and ICP-Brasil) with the trust of <paramref name="extras"/>
     /// added; null when none is chosen, or when its list cannot be read (logged). For <paramref name="signing"/> an expired
     /// Sandbox list gives no anchors; for validation it is kept, and the policy's <c>TLNotExpired</c> judges it.
     /// </summary>
@@ -143,7 +149,18 @@ internal sealed class ProfileTrust : IDisposable
                     : await IndecopiAsync(sandbox, cancellationToken) is { } indecopi ? new IofeExtension(indecopi) : null;
                 return extension is null ? null : IofeProfile.Create(extension);
             case TrustProfileChoice.IcpBrasil:
-                return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = sandbox.GetClient(), Logger = RunLog.Logger });
+                if (source == ProfileListSource.Sandbox && sandbox.Current is null)
+                {
+                    RunLog.Logger.LogWarning("The ICP-Brasil profile on the Sandbox needs a connected Sandbox: its root is the extra AC Raiz.");
+                    return null;
+                }
+
+                return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions
+                {
+                    HttpClient = sandbox.GetClient(),
+                    Logger = RunLog.Logger,
+                    AdditionalRoots = source == ProfileListSource.Sandbox ? [sandbox.Current!.Root] : [],
+                });
             case TrustProfileChoice.GovBr:
                 return GovBrProfile.Create(new GovBrExtensionOptions { HttpClient = sandbox.GetClient(), Logger = RunLog.Logger });
             case TrustProfileChoice.Eidas:

@@ -9,13 +9,13 @@ import { cn } from "@/lib/utils"
 import { asText, getPath, setPath, type Options } from "./schema"
 
 // A trust profile (SimpleSign's TrustProfile: IofeProfile, IcpBrasilProfile, GovBrProfile, the Sandbox's) is one option of
-// its own, `profile` (with `profileSource` for IOFE and `trustProfiles` for the others' trust), on the signing controls and
+// its own, `profile` (with `profileSource` for IOFE, eIDAS and ICP-Brasil and `trustProfiles` for the others' trust), on the signing controls and
 // on the validation. Only one profile sets the policies: the menu writes its presets in the policy fields, where they show.
 
 export type Profile = "Sandbox" | "Iofe" | "Eidas" | "IcpBrasil" | "GovBr"
 export type ProfileSource = "Official" | "Sandbox"
 
-/** The profile on: which one, and for IOFE which list it reads. */
+/** The profile on: which one, and for IOFE and eIDAS which list it reads (for ICP-Brasil, whether the Sandbox's root is added). */
 export interface ProfileChoice {
   profile: Profile
   source: ProfileSource
@@ -44,8 +44,15 @@ export const profiles: Record<Profile, ProfileDefinition> = {
 
 const all = Object.keys(profiles) as Profile[]
 
-/** The profiles that read a trusted list, real or the Sandbox's: the list is chosen inside their entry. */
-const withSource: Profile[] = ["Iofe", "Eidas"]
+/** The profiles that have a test version on the Sandbox (its list, or its root for ICP-Brasil): chosen inside their entry. */
+const withSource: Profile[] = ["Iofe", "Eidas", "IcpBrasil"]
+
+/** The words of the real and test sources of a profile: the title's suffix, the short label of the switch. */
+const sourceLabels: Partial<Record<Profile, { official: MessageKey; sandbox: MessageKey; officialShort: MessageKey; label: MessageKey }>> = {
+  Iofe: { official: "wb.profile.listIndecopi", sandbox: "wb.profile.listSandbox", officialShort: "wb.profile.listIndecopiShort", label: "wb.profile.listLabel" },
+  Eidas: { official: "wb.profile.lotlEu", sandbox: "wb.profile.lotlSandbox", officialShort: "wb.profile.lotlEuShort", label: "wb.profile.listLabel" },
+  IcpBrasil: { official: "wb.profile.rootsAcRaiz", sandbox: "wb.profile.rootsSandbox", officialShort: "wb.profile.rootsAcRaizShort", label: "wb.profile.rootsLabel" },
+}
 
 /** The menu's profiles: one entry each (Peru's and the EU's list is chosen inside the entry), Gov.br on Validate only. */
 function entries(page: ProfilePage): Profile[] {
@@ -76,9 +83,9 @@ export function extraProfiles(options: Options): Profile[] {
 
 /** The name of a profile on: "Peru (IOFE) · Sandbox's list". */
 export function profileTitle(choice: ProfileChoice, t: ReturnType<typeof useT>): string {
-  if (choice.profile === "Iofe") return `${t("wb.profile.peru")} · ${t(choice.source === "Sandbox" ? "wb.profile.listSandbox" : "wb.profile.listIndecopi")}`
-  if (choice.profile === "Eidas") return `${t("wb.profile.eidas")} · ${t(choice.source === "Sandbox" ? "wb.profile.lotlSandbox" : "wb.profile.lotlEu")}`
-  return t(profiles[choice.profile].title)
+  const labels = sourceLabels[choice.profile]
+  const title = t(profiles[choice.profile].title)
+  return labels ? `${title} · ${t(choice.source === "Sandbox" ? labels.sandbox : labels.official)}` : title
 }
 
 /** The policy preset the profile puts at <paramref name="path"/>, or null (SimpleSign's default). */
@@ -159,7 +166,7 @@ function effects(choice: ProfileChoice, page: ProfilePage, t: ReturnType<typeof 
     Sandbox: "wb.profile.effect.trustSandbox",
     Iofe: choice.source === "Sandbox" ? "wb.profile.effect.trustPeruSandbox" : "wb.profile.effect.trustPeru",
     Eidas: choice.source === "Sandbox" ? "wb.profile.effect.trustEidasSandbox" : "wb.profile.effect.trustEidas",
-    IcpBrasil: "wb.profile.effect.trustIcp",
+    IcpBrasil: choice.source === "Sandbox" ? "wb.profile.effect.trustIcpSandbox" : "wb.profile.effect.trustIcp",
     GovBr: "wb.profile.effect.trustGovBr",
   }
   lines.push(t(trust[choice.profile]))
@@ -241,15 +248,15 @@ export function ProfileMenu({ page, options, update, icpPolicies = true }: {
                   </span>
                 </span>
               </button>
-              {withSource.includes(profile) && (
-                <div className="flex items-center gap-1.5 pr-2 pb-1.5 pl-8 text-xs" role="radiogroup" aria-label={t("wb.profile.listLabel")}>
-                  <span className="text-muted-foreground">{t("wb.profile.listLabel")}</span>
+              {sourceLabels[profile] && (
+                <div className="flex items-center gap-1.5 pr-2 pb-1.5 pl-8 text-xs" role="radiogroup" aria-label={t(sourceLabels[profile].label)}>
+                  <span className="text-muted-foreground">{t(sourceLabels[profile].label)}</span>
                   {(["Official", "Sandbox"] as const).map((source) => (
                     <button key={source} type="button" role="radio" aria-checked={sourceOf(profile) === source}
                       className={cn("rounded border px-1.5 py-0.5",
                         sourceOf(profile) === source ? "border-primary/40 bg-primary/10 text-primary" : "hover:bg-accent text-muted-foreground")}
                       onClick={() => choose({ profile, source })}>
-                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : profile === "Eidas" ? "wb.profile.lotlEuShort" : "wb.profile.listIndecopiShort")}
+                      {t(source === "Sandbox" ? "wb.profile.listSandboxShort" : sourceLabels[profile]!.officialShort)}
                     </button>
                   ))}
                 </div>

@@ -48,6 +48,14 @@ public sealed class ProfileTrustTests : IDisposable
     }
 
     [Fact]
+    public async Task ResolveAsync_IcpBrasilOnTheSandboxWithoutAConnectedSandbox_IsNull()
+    {
+        using var profiles = new ProfileTrust();
+
+        (await profiles.ResolveAsync(TrustProfileChoice.IcpBrasil, ProfileListSource.Sandbox, [], _sandbox, default)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task ResolveAsync_GovBr_ValidatesOnly()
     {
         using var profiles = new ProfileTrust();
@@ -136,6 +144,28 @@ public sealed class ProfileTrustTests : IDisposable
     }
 
     [Fact]
+    public void ValidationCli_IcpBrasilOnTheSandbox_SaysTheProfileAndTheSandbox()
+    {
+        var line = new CliLine("validate", CliLine.Placeholders.Output);
+
+        ValidationService.ProfileCli(line, new ValidationSettings { Profile = TrustProfileChoice.IcpBrasil, ProfileSource = ProfileListSource.Sandbox }, _sandbox);
+
+        line.ToString().ShouldContain("--profile icp-brasil");
+        line.ToString().ShouldContain("--sandbox ");
+    }
+
+    [Fact]
+    public void ValidationCli_IcpBrasilWithTheRealRoots_NeedsNoSandbox()
+    {
+        var line = new CliLine("validate", CliLine.Placeholders.Output);
+
+        ValidationService.ProfileCli(line, new ValidationSettings { Profile = TrustProfileChoice.IcpBrasil }, _sandbox);
+
+        line.ToString().ShouldContain("--profile icp-brasil");
+        line.ToString().ShouldNotContain("--sandbox");
+    }
+
+    [Fact]
     public void FillProfilePolicies_ProfileWithoutPolicy_TakesTheProfilesPresetAndKeepsAnExplicitOne()
     {
         var options = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(
@@ -150,6 +180,10 @@ public sealed class ProfileTrustTests : IDisposable
     [Fact]
     public void ProfileText_IofeOnTheSandboxPlusGovBr_NamesBoth() =>
         PlaybookRunner.ProfileText(TrustProfileChoice.Iofe, ProfileListSource.Sandbox, [TrustProfileChoice.GovBr]).ShouldBe("iofe (Sandbox's list) + gov-br");
+
+    [Fact]
+    public void ProfileText_IcpBrasilOnTheSandbox_NamesTheSandboxRoot() =>
+        PlaybookRunner.ProfileText(TrustProfileChoice.IcpBrasil, ProfileListSource.Sandbox, []).ShouldBe("icp-brasil (Sandbox's root)");
 
     private static string RepositoryRoot()
     {

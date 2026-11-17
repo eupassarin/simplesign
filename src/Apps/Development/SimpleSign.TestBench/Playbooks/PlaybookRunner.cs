@@ -1094,6 +1094,7 @@ internal sealed class PlaybookRunner(
             {
                 TrustFrameworks.TrustProfileChoice.Iofe => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's list)" : " (INDECOPI's list)",
                 TrustFrameworks.TrustProfileChoice.Eidas => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's LOTL)" : " (EU LOTL)",
+                TrustFrameworks.TrustProfileChoice.IcpBrasil => source == TrustFrameworks.ProfileListSource.Sandbox ? " (Sandbox's root)" : "",
                 _ => "",
             }
             : "default";

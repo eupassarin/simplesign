@@ -43,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`SimpleSign.Peru.Iofe.Cli`, the first extension**: `--profile iofe`, the `iofe` and `iofe-agent` policies,
   `--tsl-profile iofe` and `simplesign iofe sign|verify|view`.
 - **`SimpleSign.Brazil.Cli`, the extension of ICP-Brasil and Gov.br** (`simplesign extension install SimpleSign.Brazil.Cli`):
-  `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, and
+  `--profile icp-brasil` (with `--sandbox URL`, the Sandbox's root is one more AC Raiz) and `gov-br`, the `icp-brasil`
+  and `govbr` policies, and
   - `simplesign brasil sign` (also `icp-brasil sign`): `simplesign sign`, every option of it, plus `--icp-policy`,
     `--aea` (the old `--brasil`, still accepted) with `--cpf` and `--institution-cnpj`, and `--health-document` with
     `--registration`. The Brazilian options go anywhere on the line.
@@ -120,6 +121,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Xades).ToReference()`), and
   `IcpBrasilPolicyValidator.Validate(…, IcpBrasilPolicyFormat.Xades)` checks its hash, period and time-stamp; the
   attribute rules of the XML PAs are no longer enforced. The TestBench's XAdES page lost the ICP-Brasil signature type.
+
+### Fixed
+
+- **PKCS#11: a process on macOS no longer crashes after the last signer of a driver is disposed.**
+  `SimpleSign.Signers.Pkcs11` now keeps a driver loaded until the process ends.
+  - *Before:* disposing the last `Pkcs11Signer` of a driver (or the end of `Pkcs11Signer.ListTokens`,
+    so also `Pkcs11Drivers.FindTokensAsync`/`FindLibraryAsync` and `simplesign pkcs11 list`) called
+    `C_Finalize` and unloaded the library. With SoftHSM2 and OpenSC on macOS the process later died
+    with SIGSEGV in `_pthread_exit`: a thread that had called the driver exited and ran the cleanup of
+    the state the driver's `libcrypto` kept for it, in memory that was no longer mapped. It depended
+    on timing — typically a service or a test run that opened and closed several signers.
+  - *After:* the library is never unloaded once it is known to be a PKCS#11 driver. Initialization
+    still follows the signers: `C_Finalize` when the last one is disposed, `C_Initialize` again on the
+    next use, so a token plugged in between two uses is still found. A driver whose `C_Initialize`
+    fails stays loaded and is tried again on the next call. See
+    [How long a driver stays loaded](docs/articles/pkcs11.md#how-long-a-driver-stays-loaded).
 
 ## [0.12.0] - 2026-11-16
 

@@ -67,10 +67,38 @@ public sealed class BrasilCliExtensionTests : IDisposable
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "icp-brasil", "gov-br", "ICP-Brasil", "Gov.br" })
+        foreach (string name in new[] { "sandbox", "icp-brasil", "gov-br", "Brazil (ICP-Brasil)", "Brazil (Gov.br)" })
         {
             output.ShouldContain(name);
         }
+    }
+
+    [Fact]
+    public async Task Profile_IcpBrasilWithSandbox_TrustsTheSandboxRootAsAnAcRaiz()
+    {
+        var requested = new List<Uri>();
+        using var http = new HttpClient(new MockHttpHandler(request =>
+        {
+            requested.Add(request.RequestUri!);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(_cert.ExportCertificatePem()) });
+        }));
+        var icpBrasil = new BrasilCliExtension().Profiles[0];
+
+        var without = await icpBrasil.LoadAsync(new CliProfileContext(new FixedHttp(http), null, Signing: true), CancellationToken.None);
+        var with = await icpBrasil.LoadAsync(new CliProfileContext(new FixedHttp(http), new Uri("http://localhost:5300/"), Signing: true), CancellationToken.None);
+
+        requested.ShouldBe([new Uri("http://localhost:5300/root.pem")]);
+        Anchors(without).ShouldNotContain(_cert.Thumbprint);
+        Anchors(with).ShouldContain(_cert.Thumbprint);
+        Anchors(with).Count.ShouldBe(Anchors(without).Count + 1);   // the bundled AC Raiz roots stay
+
+        static List<string> Anchors(SimpleSign.Core.Extensions.TrustProfile profile) =>
+            [.. profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()).Select(c => c.Thumbprint)];
+    }
+
+    private sealed class FixedHttp(HttpClient client) : SimpleSign.Core.Http.IHttpClientProvider
+    {
+        public HttpClient GetClient() => client;
     }
 
     [Theory]

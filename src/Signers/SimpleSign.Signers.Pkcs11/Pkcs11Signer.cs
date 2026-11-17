@@ -259,7 +259,10 @@ public sealed class Pkcs11Signer : IExternalSigner, IDisposable
             plan.IsEcdsa ? Pkcs11SignatureEncoder.EcdsaRawToDer(signature) : signature);
     }
 
-    /// <summary>Logs out, closes the session, releases the driver and disposes the certificates.</summary>
+    /// <summary>
+    /// Logs out, closes the session and disposes the certificates. The driver is finalized
+    /// (C_Finalize) when this was its last signer, and stays loaded until the process ends.
+    /// </summary>
     public void Dispose()
     {
         lock (_gate)

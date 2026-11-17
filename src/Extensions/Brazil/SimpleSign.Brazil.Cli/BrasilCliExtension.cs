@@ -1,3 +1,4 @@
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SimpleSign.Brazil.GovBr;
@@ -71,16 +72,16 @@ public sealed class BrasilCliExtension : ICliExtension
         new()
         {
             Name = IcpBrasilProfile.Name,
-            Title = "ICP-Brasil",
+            Title = "Brazil (ICP-Brasil)",
             SigningPolicy = "icp-brasil",
             ValidationPolicy = "icp-brasil",
-            Trust = "the AC Raiz roots and the ICP-Brasil chain validation",
-            LoadAsync = (context, _) => Task.FromResult(IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = context.Http.GetClient() })),
+            Trust = "the AC Raiz roots and the ICP-Brasil chain validation (with --sandbox: the Sandbox's root added as an AC Raiz)",
+            LoadAsync = LoadIcpBrasilAsync,
         },
         new()
         {
             Name = GovBrProfile.Name,
-            Title = "Gov.br",
+            Title = "Brazil (Gov.br)",
             SigningPolicy = "— (validates only)",
             ValidationPolicy = "govbr",
             Trust = "the Gov.br roots and their chain validation",
@@ -106,6 +107,20 @@ public sealed class BrasilCliExtension : ICliExtension
 
     /// <inheritdoc />
     public IReadOnlyList<CliTrustedListProfile> TrustedListProfiles { get; } = [];
+
+    // The Sandbox's root belongs to the profile, which lives as long as the command: not disposed.
+#pragma warning disable CA2000
+    private static async Task<TrustProfile> LoadIcpBrasilAsync(CliProfileContext context, CancellationToken cancellationToken)
+    {
+        // With --sandbox, the Sandbox's root is trusted as one more AC Raiz: its certificates and TSAs chain to it
+        // (a test PKI: its own address is trusted for it).
+        HttpClient http = context.Http.GetClient();
+        IReadOnlyList<X509Certificate2> roots = context.Sandbox is { } sandbox
+            ? [X509Certificate2.CreateFromPem(await http.GetStringAsync(new Uri(sandbox, "root.pem"), cancellationToken).ConfigureAwait(false))]
+            : [];
+        return IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = http, AdditionalRoots = roots });
+    }
+#pragma warning restore CA2000
 
     /// <inheritdoc />
     public IReadOnlyList<CliPassThroughCommand> PassThroughCommands { get; } =

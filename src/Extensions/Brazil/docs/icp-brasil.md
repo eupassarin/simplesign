@@ -60,6 +60,24 @@ portal's signatures next to ICP-Brasil's, let Gov.br's profile set the policy an
 simplesign validate signed.pdf --profile gov-br --trust-profile icp-brasil
 ```
 
+#### Testing with the Sandbox
+
+The SimpleSign Sandbox's certificates do not chain to an AC Raiz. To try the ICP-Brasil profile with them (its
+policies, levels AD-RB…AD-RA and checks before signing), add the Sandbox's root as one more AC Raiz:
+
+```csharp
+var sandboxRoot = X509Certificate2.CreateFromPem(await http.GetStringAsync("http://localhost:5300/root.pem"));
+var icp = IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { AdditionalRoots = [sandboxRoot] });
+```
+
+```bash
+simplesign sign contract.pdf --profile icp-brasil --sandbox http://localhost:5300 …
+```
+
+In the TestBench it is the Profile menu's "Brazil (ICP-Brasil) · Sandbox's root (test)" (`"profile": "IcpBrasil",
+"profileSource": "Sandbox"`). The bundled AC Raiz roots stay trusted; the Sandbox's certificates carry no ICP-Brasil
+fields (CPF/CNPJ, A1/A3), so the ICP-Brasil chain rules that read them do not apply.
+
 ### Intermediate ACs (offline chains)
 
 The package also bundles the ~176 intermediate ICP-Brasil ACs published by the ITI

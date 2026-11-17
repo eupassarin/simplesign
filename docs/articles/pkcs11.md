@@ -160,6 +160,30 @@ simplesign pkcs11 list
 > `Environment.SetEnvironmentVariable` does not reach native code, so variables such as
 > `SOFTHSM2_CONF` must be set before the process starts.
 
+## How long a driver stays loaded
+
+A driver is loaded the first time it is used and stays loaded until the process ends; SimpleSign
+never unloads it. A driver, or a library it brings with it (OpenSSL's `libcrypto` in SoftHSM2 and
+OpenSC), keeps per-thread state whose cleanup runs when a thread that called it exits, and those
+threads belong to the application (the thread pool, a test runner). With the driver unloaded that
+cleanup runs in memory that is no longer mapped and the process dies — on macOS, a SIGSEGV in
+`_pthread_exit` some time after the last signer was disposed. So there is nothing to release
+besides the signers; `FindTokensAsync` leaves loaded every driver it tried, including those that
+failed to initialize. Only a library that turns out not to be a PKCS#11 driver is unloaded.
+
+What does follow the signers is the driver's initialization:
+
+- The first `Pkcs11Signer.Open` or `ListTokens` on a driver calls `C_Initialize`; when the last
+  signer is disposed and no listing is running, `C_Finalize` is called. The next use initializes
+  the driver again, which is when a driver looks for its readers and tokens: a token plugged in
+  (or swapped) between two uses is seen by the next `ListTokens`, `FindTokensAsync`,
+  `FindLibraryAsync` or `Open`.
+- While a signer is open the driver stays initialized. Whether a token plugged in meanwhile shows
+  up then depends on the driver; and a signer whose token was removed fails with a
+  `Pkcs11Exception` — dispose it and open a new one.
+- A driver that another component of the process had already initialized
+  (`CKR_CRYPTOKI_ALREADY_INITIALIZED`) is used as it is and is not finalized by SimpleSign.
+
 ## CLI
 
 ```bash

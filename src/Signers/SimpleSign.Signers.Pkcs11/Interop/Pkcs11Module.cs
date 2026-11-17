@@ -8,12 +8,23 @@ internal sealed record CkTokenInfo(string Label, string Manufacturer, string Mod
 
 /// <summary>
 /// A loaded PKCS#11 module (driver library). One instance exists per library path in the
-/// process; it is initialized on first use and finalized when the last user releases it.
+/// process; it is initialized (C_Initialize) for its first user and finalized (C_Finalize) when
+/// the last one releases it, and initialized again for the next user.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Functions are called through delegates over the pointers in CK_FUNCTION_LIST. Every delegate
 /// takes only <see cref="nint"/>, <see cref="nuint"/> and <see cref="byte"/> arguments, so the
 /// calls are blittable: no <c>unsafe</c> code and no runtime marshalling.
+/// </para>
+/// <para>
+/// A driver stays loaded until the process ends: it is never unloaded once C_GetFunctionList was
+/// found. A driver, or a library it brings with it (OpenSSL's libcrypto in SoftHSM2 and OpenSC),
+/// leaves per-thread state behind whose cleanup runs when a thread that called it exits; with the
+/// library unmapped that cleanup jumps to an address that no longer exists and the process dies
+/// (SIGSEGV in <c>_pthread_exit</c> on macOS). The threads are the caller's (thread pool, test
+/// runner), so there is no moment at which unloading is known to be safe.
+/// </para>
 /// </remarks>
 internal sealed class Pkcs11Module
 {
@@ -41,9 +52,7 @@ internal sealed class Pkcs11Module
     private const int IndexSignInit = 42;
     private const int IndexSign = 43;
 
-    private readonly string _key;
-    private readonly nint _library;
-    private readonly bool _initializedByUs;
+    private bool _initializedByUs;
     private readonly CInitialize _initialize;
     private readonly CFinalize _finalize;
     private readonly CGetSlotList _getSlotList;
@@ -109,10 +118,8 @@ internal sealed class Pkcs11Module
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate nuint CSign(nuint session, nint data, nuint dataLength, nint signature, nint signatureLength);
 
-    private Pkcs11Module(string key, nint library, CkLayout layout)
+    private Pkcs11Module(nint library, CkLayout layout)
     {
-        _key = key;
-        _library = library;
         Layout = layout;
 
         var getFunctionList = Marshal.GetDelegateForFunctionPointer<CGetFunctionList>(
@@ -145,28 +152,28 @@ internal sealed class Pkcs11Module
         _findObjectsFinal = Function<CFindObjectsFinal>(functionList, IndexFindObjectsFinal);
         _signInit = Function<CSignInit>(functionList, IndexSignInit);
         _sign = Function<CSign>(functionList, IndexSign);
-
-        using (var memory = new NativeAllocations())
-        {
-            nint args = memory.Allocate(layout.InitArgsSize);
-            layout.WriteULong(args, layout.InitArgsFlagsOffset, CkConstants.CkfOsLockingOk);
-            ulong rv = layout.Normalize(_initialize(args));
-            if (rv != CkConstants.CkrCryptokiAlreadyInitialized)
-            {
-                Check("C_Initialize", rv);
-                _initializedByUs = true;
-            }
-        }
     }
 
     /// <summary>The structure layout of this process.</summary>
     internal CkLayout Layout { get; }
 
-    /// <summary>Loads (or reuses) the module at <paramref name="libraryPath"/> and adds a reference.</summary>
+    /// <summary>Whether the driver at <paramref name="libraryPath"/> is loaded in this process (in use or not).</summary>
+    internal static bool IsLoaded(string libraryPath)
+    {
+        lock (ModulesGate)
+        {
+            return Modules.ContainsKey(Key(libraryPath));
+        }
+    }
+
+    /// <summary>
+    /// Loads the module at <paramref name="libraryPath"/>, or reuses the one already loaded, and
+    /// adds a reference. The first reference initializes the module.
+    /// </summary>
     /// <exception cref="Pkcs11Exception">The library cannot be loaded or initialized.</exception>
     internal static Pkcs11Module Acquire(string libraryPath)
     {
-        string key = Path.IsPathRooted(libraryPath) ? Path.GetFullPath(libraryPath) : libraryPath;
+        string key = Key(libraryPath);
         lock (ModulesGate)
         {
             if (!Modules.TryGetValue(key, out var module))
@@ -188,20 +195,22 @@ internal sealed class Pkcs11Module
 
                 try
                 {
-                    module = new Pkcs11Module(key, library, CkLayout.Current);
+                    module = new Pkcs11Module(library, CkLayout.Current);
                 }
                 catch (EntryPointNotFoundException ex)
                 {
+                    // Not a driver, and none of its functions was called: the only case that unloads.
                     NativeLibrary.Free(library);
                     throw new Pkcs11Exception($"'{libraryPath}' is not a PKCS#11 library (no C_GetFunctionList).", ex);
                 }
-                catch
-                {
-                    NativeLibrary.Free(library);
-                    throw;
-                }
 
                 Modules[key] = module;
+            }
+
+            if (module._references == 0)
+            {
+                // A module whose C_Initialize fails stays loaded and is initialized again on the next call.
+                module.Initialize();
             }
 
             module._references++;
@@ -209,7 +218,10 @@ internal sealed class Pkcs11Module
         }
     }
 
-    /// <summary>Removes a reference; the last one finalizes and unloads the module.</summary>
+    /// <summary>
+    /// Removes a reference; the last one finalizes the module (when this class initialized it).
+    /// The library stays loaded, see the remarks of <see cref="Pkcs11Module"/>.
+    /// </summary>
     internal void Release()
     {
         lock (ModulesGate)
@@ -219,13 +231,11 @@ internal sealed class Pkcs11Module
                 return;
             }
 
-            Modules.Remove(_key);
             if (_initializedByUs)
             {
+                _initializedByUs = false;
                 _ = _finalize(0);
             }
-
-            NativeLibrary.Free(_library);
         }
     }
 
@@ -434,6 +444,23 @@ internal sealed class Pkcs11Module
 
         return result;
     }
+
+    /// <summary>Calls C_Initialize; a module another component initialized is used as it is and not finalized here.</summary>
+    private void Initialize()
+    {
+        using var memory = new NativeAllocations();
+        nint args = memory.Allocate(Layout.InitArgsSize);
+        Layout.WriteULong(args, Layout.InitArgsFlagsOffset, CkConstants.CkfOsLockingOk);
+        ulong rv = Layout.Normalize(_initialize(args));
+        if (rv != CkConstants.CkrCryptokiAlreadyInitialized)
+        {
+            Check("C_Initialize", rv);
+            _initializedByUs = true;
+        }
+    }
+
+    private static string Key(string libraryPath) =>
+        Path.IsPathRooted(libraryPath) ? Path.GetFullPath(libraryPath) : libraryPath;
 
     private static void Check(string function, ulong rv)
     {
