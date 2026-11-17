@@ -717,7 +717,7 @@ public sealed partial class XadesSignerBuilder
                 {
                     throw new SigningException(
                         $"Signature timestamp request failed: {ex.Message}",
-                        SigningErrorReason.NetworkFailure,
+                        TimestampException.ReasonOf(ex),
                         ex);
                 }
 
@@ -1090,7 +1090,7 @@ public sealed partial class XadesSignerBuilder
         catch (Exception ex)
         {
             logger.TimestampFailed(operationId, ex.Message);
-            throw new SigningException($"Data objects timestamp request failed: {ex.Message}", SigningErrorReason.NetworkFailure, ex);
+            throw new SigningException($"Data objects timestamp request failed: {ex.Message}", TimestampException.ReasonOf(ex), ex);
         }
     }
 

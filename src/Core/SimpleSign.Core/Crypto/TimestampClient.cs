@@ -418,11 +418,11 @@ public sealed class TimestampClient : ITimestampClient
         catch (TimestampException) { throw; }
         catch (AsnContentException ex)
         {
-            throw new TimestampException("TSA response contains malformed ASN.1.", ex);
+            throw new TimestampException("TSA response contains malformed ASN.1.", SigningErrorReason.TimestampInvalid, ex);
         }
         catch (InvalidDataException ex)
         {
-            throw new TimestampException("TSA response contains invalid timestamp data.", ex);
+            throw new TimestampException("TSA response contains invalid timestamp data.", SigningErrorReason.TimestampInvalid, ex);
         }
     }
 
@@ -458,12 +458,13 @@ public sealed class TimestampClient : ITimestampClient
         }
         catch (Exception ex) when (ex is AsnContentException or CryptographicException or NotSupportedException)
         {
-            throw new TimestampException("The TSA signature of the timestamp token could not be verified.", ex);
+            throw new TimestampException("The TSA signature of the timestamp token could not be verified.", SigningErrorReason.TimestampInvalid, ex);
         }
 
         if (!valid)
         {
-            throw new TimestampException("The timestamp token is not validly signed by a time-stamping authority: " + string.Join(" ", errors));
+            throw new TimestampException(
+                "The timestamp token is not validly signed by a time-stamping authority: " + string.Join(" ", errors), SigningErrorReason.TimestampInvalid);
         }
     }
 
@@ -479,7 +480,7 @@ public sealed class TimestampClient : ITimestampClient
             var contentInfo = tokenReader.ReadSequence();
             if (contentInfo.ReadObjectIdentifier() != Oids.SignedData)
             {
-                throw new TimestampException("TSA response token is not CMS SignedData.");
+                throw new TimestampException("TSA response token is not CMS SignedData.", SigningErrorReason.TimestampInvalid);
             }
 
             var wrapper = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
@@ -489,12 +490,12 @@ public sealed class TimestampClient : ITimestampClient
             var encap = signedData.ReadSequence();
             if (encap.ReadObjectIdentifier() != "1.2.840.113549.1.9.16.1.4")
             {
-                throw new TimestampException("TSA response token does not encapsulate TSTInfo.");
+                throw new TimestampException("TSA response token does not encapsulate TSTInfo.", SigningErrorReason.TimestampInvalid);
             }
 
             if (!encap.HasData)
             {
-                throw new TimestampException("TSA response token does not contain TSTInfo.");
+                throw new TimestampException("TSA response token does not contain TSTInfo.", SigningErrorReason.TimestampInvalid);
             }
 
             var tstInfoWrapper = encap.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
@@ -513,7 +514,7 @@ public sealed class TimestampClient : ITimestampClient
             byte[] responseHash = messageImprint.ReadOctetString();
             if (responseHashOid != expectedHashOid || !CryptographicOperations.FixedTimeEquals(responseHash, expectedHash))
             {
-                throw new TimestampException("Timestamp response message imprint does not match the request.");
+                throw new TimestampException("Timestamp response message imprint does not match the request.", SigningErrorReason.TimestampInvalid);
             }
 
             _ = tstInfo.ReadInteger();
@@ -536,14 +537,15 @@ public sealed class TimestampClient : ITimestampClient
 
             if (!tstInfo.HasData || tstInfo.PeekTag() is not { TagClass: TagClass.Universal, TagValue: (int)UniversalTagNumber.Integer })
             {
-                throw new TimestampException("Timestamp response did not include the request nonce.");
+                throw new TimestampException("Timestamp response did not include the request nonce.", SigningErrorReason.TimestampInvalid);
             }
 
             var responseNonce = tstInfo.ReadInteger();
             if (responseNonce != requestNonce.Value)
             {
                 throw new TimestampException(
-                    $"Timestamp nonce mismatch: expected {requestNonce.Value}, got {responseNonce}. Possible replay attack.");
+                    $"Timestamp nonce mismatch: expected {requestNonce.Value}, got {responseNonce}. Possible replay attack.",
+                    SigningErrorReason.TimestampInvalid);
             }
             VerifyTokenIntegrity(tokenBytes);
         }
@@ -553,7 +555,7 @@ public sealed class TimestampClient : ITimestampClient
         }
         catch (AsnContentException ex)
         {
-            throw new TimestampException("TSA response contains malformed ASN.1.", ex);
+            throw new TimestampException("TSA response contains malformed ASN.1.", SigningErrorReason.TimestampInvalid, ex);
         }
     }
 
@@ -562,8 +564,8 @@ public sealed class TimestampClient : ITimestampClient
         var warnings = new List<string>();
         if (!TimestampValidator.VerifyTokenSignature(tokenBytes, warnings))
         {
-            throw new TimestampException("TSA token signature or signed content is invalid: "
-                + string.Join("; ", warnings));
+            throw new TimestampException(
+                "TSA token signature or signed content is invalid: " + string.Join("; ", warnings), SigningErrorReason.TimestampInvalid);
         }
     }
     #endregion

@@ -94,4 +94,11 @@ public enum SigningErrorReason
     /// or its key is not declared to be on a qualified signature creation device (no QcSSCD, <c>SigningCertificate/QcSSCD</c>).
     /// </summary>
     CertificateNotQualified = 26,
+
+    /// <summary>
+    /// A timestamp obtained while signing does not pass its own checks: the authority's signature does not verify, it
+    /// is not over what was sent (message imprint, nonce) or its structure cannot be read. Not a failure of the network
+    /// (<see cref="NetworkFailure"/>): the authority answered, and what it answered is not a timestamp to accept.
+    /// </summary>
+    TimestampInvalid = 27,
 }

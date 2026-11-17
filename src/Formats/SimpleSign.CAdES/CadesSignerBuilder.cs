@@ -669,7 +669,7 @@ public sealed partial class CadesSignerBuilder
                 {
                     throw new SigningException(
                         $"Signature timestamp request failed: {ex.Message}",
-                        SigningErrorReason.NetworkFailure,
+                        TimestampException.ReasonOf(ex),
                         ex);
                 }
 
@@ -1011,7 +1011,7 @@ public sealed partial class CadesSignerBuilder
         catch (Exception ex)
         {
             logger.TimestampFailed(operationId, ex.Message);
-            throw new SigningException($"Content timestamp request failed: {ex.Message}", SigningErrorReason.NetworkFailure, ex);
+            throw new SigningException($"Content timestamp request failed: {ex.Message}", TimestampException.ReasonOf(ex), ex);
         }
     }
 
