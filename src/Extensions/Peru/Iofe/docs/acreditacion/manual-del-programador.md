@@ -3,7 +3,7 @@
 Funcionamiento y configuración adecuada de la librería `SimpleSign.Peru.Iofe.Accredited` (Req. 20: "manual de
 programador"). Espacio de nombres: `SimpleSign.Peru.Iofe.Accredited`. Marcos: .NET 8 y .NET 10; compatible con
 Native AOT. Toda la criptografía usa `System.Security.Cryptography`; la operación con la clave privada ocurre en el
-módulo PKCS#11.
+módulo PKCS#11 o en el servicio de firma remota.
 
 ```bash
 dotnet add package SimpleSign.Peru.Iofe.Accredited
@@ -103,7 +103,10 @@ await using var agent = await IofeSigningAgent.OpenAsync(new IofeSigningAgentOpt
 | `Pkcs11Exception` | El módulo no pudo abrirse o se negó a firmar (controlador, PIN, selección de clave) |
 | `CloudSigningException` | El servicio de firma remota rechazó al agente o la credencial (token, secreto del cliente, clave deshabilitada). Un PIN rechazado al firmar llega dentro de una `SigningException` |
 
-Todo rechazo queda en el registro de auditoría antes de que la excepción llegue a quien llama.
+Todo rechazo de una firma solicitada, y de una clave, un módulo o un servicio que no son los debidos, queda en el
+registro de auditoría antes de que la excepción llegue a quien llama. Lo que impide llegar a la clave —la lista de
+confianza no pudo leerse, el módulo rechazó el PIN— se informa con su excepción y no deja registro: no hubo firma
+solicitada con un certificado.
 
 ## Verificación por agente automatizado (sección 4.3)
 
@@ -193,7 +196,11 @@ política de salida (`OutboundPolicy`): proxy, hosts permitidos y `AllowLdap = t
 
 ## Pruebas
 
-Para probar sin un HSM: SoftHSM2 como módulo PKCS#11 y el SimpleSign Sandbox como PKI de pruebas (CRL, OCSP, TSA y
-TSL, con fallas activables). Las pruebas del paquete están en
-`tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited.Tests` y se ejecutan con
-`scripts/tests/pkcs11.sh`.
+Para probar sin un HSM: SoftHSM2 como módulo PKCS#11 y el SimpleSign Sandbox como PKI de pruebas (CRL, OCSP, TSA,
+TSL y un servicio de firma remota, con fallas activables). Las pruebas del paquete están en
+`tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited.Tests`: las de la clave en un servicio remoto se
+ejecutan en cualquier máquina; las de token, con `scripts/tests/pkcs11.sh`. Cada prueba que demuestra un ítem del
+Anexo B lleva el rasgo `AnnexB` (`dotnet test --filter "AnnexB=F-8"`).
+
+El guion `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py` ejecuta `simplesign iofe` en cada ítem del Anexo B
+contra el Sandbox y conserva las evidencias: ver el [guion de la auditoría](../guion-de-auditoria.md).

@@ -33,7 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `IofeViewer` (Req. 18, 28), and `IofeTrust`: INDECOPI's trusted list (default), a list already loaded, or roots
     the operator installed.
   - CLI: `simplesign iofe sign` (`--pkcs11-lib …` or `--csc-url …`), `iofe verify` and `iofe view`, in the IOFE
-    extension (below).
+    extension (below). They refuse an option they do not have (a PFX, a policy, a switch that skips a check).
+  - **Annex B shown by the accredited package itself.** `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py`
+    prepares a Sandbox for each of 70 scenarios (a failure of the CRL, OCSP, TSA or trusted list, a revocation, a
+    credential), runs `simplesign iofe sign|verify|view`, checks the signature or the refusal and its reason with
+    the key in a PKCS#11 module, in a remote signing service or both, and keeps the evidence with a report by item
+    in Spanish, English and Portuguese (`--item F-8` runs one item step by step). The tests that show an item carry
+    the trait `AnnexB`; `AnnexBCoverageTests` fails when an item software can show has no test or no scenario.
+  - The audit walk-through, rehearsed: `src/Extensions/Peru/Iofe/docs/roteiro-de-auditoria.md` (Portuguese),
+    `audit-walkthrough.md` (English) and `guion-de-auditoria.md` (Spanish). The manuals are also in English
+    (`docs/acreditacion/en/`); the Spanish text is the one handed to INDECOPI.
   - The manuals the guide asks for, in Spanish, under `src/Extensions/Peru/Iofe/docs/acreditacion/` (administration,
     user, programmer, security configuration, scope); `src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md` marks
     what the package guarantees (**A**).

@@ -81,9 +81,9 @@ src/
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 │       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (key in a PKCS#11 module or a declared remote service; no PFX), verification agent, audit
 │       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe, `simplesign iofe …`
-│       ├── docs/                             iofe.md; acreditacion/ = the manuals in Spanish
+│       ├── docs/                             iofe.md; acreditacion/ = the manuals in Spanish (en/ = in English); the audit walk-through (pt, en, es)
 │       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
-│       └── tools/indecopi.py                 writes that playbook
+│       └── tools/                            indecopi.py writes that playbook; auditoria/auditoria.py runs annex B through `simplesign iofe` and keeps the evidence
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2

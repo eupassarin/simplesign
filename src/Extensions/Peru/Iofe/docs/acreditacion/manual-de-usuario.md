@@ -48,7 +48,7 @@ Resultado: `✓ Signed`, con el firmante, el nivel (B-B sin sello de tiempo, B-L
 el módulo y la protección de la clave (o el servicio de firma remota y su credencial). Código de salida 0.
 
 No hay opción para firmar con un archivo PKCS#12 (PFX): está fuera del alcance de la acreditación (manual de
-administración, sección 3.3).
+administración, sección 3.3). Una opción que el comando no tiene es un error; no se ignora.
 
 Si la operación se rechaza, el mensaje indica el motivo y el código de salida es distinto de 0:
 
@@ -64,7 +64,7 @@ Si la operación se rechaza, el mensaje indica el motivo y el código de salida 
 | `Error (RevocationStatusUnknown)` | No se pudo consultar OCSP ni la CRL: revise la salida de red |
 | `Error (CertificateExpired)` | El certificado expiró |
 | `Error (KeyUsageNotPermitted)` | El certificado no tiene el bit nonRepudiation |
-| `Error (UntrustedRoot)` | La EC raíz no figura en la TSL |
+| `Error (UntrustedRoot)` | La EC raíz no figura en la TSL, o falta en el módulo el certificado de una EC emisora |
 | `Error (TimestampUntrusted)` | El sello no proviene de la autoridad configurada, o esta no es de confianza |
 | `Error (TimestampCertificateRevoked)` | El certificado de la autoridad de sellado de tiempo está revocado |
 

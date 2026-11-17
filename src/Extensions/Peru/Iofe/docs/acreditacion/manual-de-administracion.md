@@ -75,6 +75,10 @@ simplesign pkcs11 list --lib /ruta/al/controlador.so
 La certificación FIPS 140-2 o Common Criteria del módulo **no puede comprobarse por software**: es una declaración del
 operador (`Certification`, `CertificateNumber`) que el auditor contrasta con el certificado del fabricante.
 
+**Cargue en el módulo los certificados de las EC emisoras** junto al certificado de firma. El agente arma la cadena
+con los certificados del módulo y los de la lista de confianza; si falta el de una EC intermedia, la firma se rechaza
+con `UntrustedRoot`.
+
 ### 3.2 Servicio de firma remota
 
 El servicio debe hablar el protocolo *Cloud Signature Consortium API v2* (el de ETSI TS 119 432). El agente firma de
@@ -176,7 +180,8 @@ Antes de cada firma, y para cada firma de un documento recibido, se verifica:
 | El certificado tiene activo el bit nonRepudiation | `KeyUsageNotPermitted` |
 | RSA de 2048 bits o más, o ECDSA de 256 o más; SHA-2 o SHA-3; sin SHA-1 ni MD5 en la cadena | `KeyTooWeak`, `AlgorithmNotPermitted` |
 
-No existe parámetro, archivo ni variable de entorno que desactive estas verificaciones.
+No existe parámetro, archivo ni variable de entorno que desactive estas verificaciones. La línea de comandos rechaza
+una opción que no tiene.
 
 ### Contingencia
 
