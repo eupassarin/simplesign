@@ -84,7 +84,7 @@ internal static class CliExtensionLoader
         try
         {
             string assemblyPath = Path.Combine(directory, manifest.Assembly);
-            var assembly = new ExtensionLoadContext(directory).LoadFromAssemblyPath(assemblyPath);
+            var assembly = new ExtensionLoadContext(directory).LoadFromFile(assemblyPath);
             var type = assembly.GetType(manifest.Type, throwOnError: true)!;
             return Activator.CreateInstance(type) is ICliExtension instance
                 ? new InstalledExtension(manifest, directory, instance, null)
@@ -104,6 +104,17 @@ internal static class CliExtensionLoader
     /// </summary>
     private sealed class ExtensionLoadContext(string directory) : AssemblyLoadContext(isCollectible: false)
     {
+        /// <summary>
+        /// Loads an assembly from a copy of its bytes, so its file is not held: Windows does not let a loaded assembly's
+        /// file be deleted or replaced, and <c>extension remove</c> and <c>extension install</c> of a new version are run by
+        /// the very process that loaded the extension.
+        /// </summary>
+        internal Assembly LoadFromFile(string path)
+        {
+            using var image = new MemoryStream(File.ReadAllBytes(path), writable: false);
+            return LoadFromStream(image);
+        }
+
         protected override Assembly? Load(AssemblyName assemblyName)
         {
             if (assemblyName.Name is not { } name)
@@ -118,7 +129,7 @@ internal static class CliExtensionLoader
             catch (Exception ex) when (ex is FileNotFoundException or FileLoadException)
             {
                 string path = Path.Combine(directory, name + ".dll");
-                return File.Exists(path) ? LoadFromAssemblyPath(path) : null;
+                return File.Exists(path) ? LoadFromFile(path) : null;
             }
         }
     }

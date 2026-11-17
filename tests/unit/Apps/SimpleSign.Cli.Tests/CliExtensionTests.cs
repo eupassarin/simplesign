@@ -234,6 +234,19 @@ public sealed class CliExtensionTests : IDisposable
     }
 
     [Fact]
+    public void Load_Extension_DoesNotHoldItsFiles()
+    {
+        // 'extension remove' and a new 'extension install' are run by the process that loaded the extension, and
+        // Windows does not let a loaded assembly's file be deleted: the loader reads the assembly, it does not map it.
+        string root = WriteExtension("a", "sample", Manifest());
+
+        var instance = CliExtensionLoader.Load([root], Cli).ShouldHaveSingleItem().Instance.ShouldNotBeNull();
+
+        instance.GetType().Assembly.Location.ShouldBeEmpty();
+        Should.NotThrow(() => Directory.Delete(Path.Combine(root, "sample"), recursive: true));
+    }
+
+    [Fact]
     public void Load_SameNameInTwoFolders_IsLoadedOnceFromTheFirst()
     {
         string first = WriteExtension("first", "sample", Manifest());

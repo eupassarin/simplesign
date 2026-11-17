@@ -38,7 +38,9 @@ The library already had the right shape (ADR 0009, ADR 0029: `ICountryExtension`
   lacks. Both sides therefore see the same types, whatever version of them the extension was built with; the
   manifest's `contract` and `minCliVersion` say when that is not safe, and the CLI then refuses the extension with
   the reason. An extension that fails to load is reported on the error stream and left out: it never takes the
-  command line down.
+  command line down. The assemblies are loaded from a copy of their bytes, not mapped from the file: Windows does not
+  let a loaded assembly's file be deleted, and `extension remove` and a new `extension install` are run by the very
+  process that loaded the extension.
 - **Peru moves out of the CLI.** `SimpleSign.Cli` no longer references `SimpleSign.Peru.Iofe`; the profile, the
   presets, the list profile and the `iofe` commands are `SimpleSign.Peru.Iofe.Cli`.
 - **Then ICP-Brasil, Gov.br and eIDAS** (second round). The CLI references no trust framework: its own profile is
