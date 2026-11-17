@@ -284,7 +284,7 @@ internal static class PlaybookValidator
         }
     }
 
-    /// <summary>The profiles of a step: known names, <c>profileSource</c> with iofe only, and no Gov.br signature.</summary>
+    /// <summary>The profiles of a step: known names, <c>profileSource</c> with Iofe, Eidas or IcpBrasil only, and no Gov.br signature.</summary>
     private static void CheckProfiles(JsonObject options, string at, Action<string, string> error)
     {
         foreach (string part in new[] { "signingControls", "validation", "settings" })
@@ -306,9 +306,10 @@ internal static class PlaybookValidator
             }
 
             if (holder["profileSource"] is not null && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Iofe), StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Eidas), StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.Eidas), StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.IcpBrasil), StringComparison.OrdinalIgnoreCase))
             {
-                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe or Eidas profile: set profile to one of them.");
+                error($"{at}.{part}.profileSource", "profileSource chooses the list of the Iofe or Eidas profile, or the roots of IcpBrasil: set profile to one of them.");
             }
 
             if (part == "signingControls" && string.Equals(profile, nameof(TrustFrameworks.TrustProfileChoice.GovBr), StringComparison.OrdinalIgnoreCase))

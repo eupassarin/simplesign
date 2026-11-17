@@ -212,6 +212,7 @@ internal sealed class SigningControls
             TrustProfileChoice.Iofe => "await IofeProfile.LoadAsync()",
             TrustProfileChoice.Eidas when p.ProfileSource == ProfileListSource.Sandbox => "await EidasProfile.LoadAsync(new EidasExtensionOptions { LotlUrl = sandboxLotl, LotlSigners = [lotlSigner] })",
             TrustProfileChoice.Eidas => "await EidasProfile.LoadAsync()",
+            TrustProfileChoice.IcpBrasil when p.ProfileSource == ProfileListSource.Sandbox => "IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { AdditionalRoots = [sandboxRoot] })",
             TrustProfileChoice.IcpBrasil => "IcpBrasilProfile.Create()",
             TrustProfileChoice.Sandbox => "the Sandbox's LOTL as a TrustProfile",
             _ => "TrustProfile.Default",
@@ -253,7 +254,7 @@ internal sealed class SigningControls
             }
 
             if (p.Profile == TrustProfileChoice.Sandbox || p.TrustProfiles.Contains(TrustProfileChoice.Sandbox)
-                || (p.Profile is TrustProfileChoice.Iofe or TrustProfileChoice.Eidas && p.ProfileSource == ProfileListSource.Sandbox))
+                || (p.Profile is TrustProfileChoice.Iofe or TrustProfileChoice.Eidas or TrustProfileChoice.IcpBrasil && p.ProfileSource == ProfileListSource.Sandbox))
             {
                 line.Add("--sandbox", _sandboxUrl ?? "http://localhost:5300/");
             }

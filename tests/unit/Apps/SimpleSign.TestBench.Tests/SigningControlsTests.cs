@@ -12,6 +12,7 @@ namespace SimpleSign.TestBench.Tests;
 public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
 {
     private static readonly string IofeSigning = PolicyPresets.Id("signing", "iofe");
+    private static readonly string IcpBrasilSigning = PolicyPresets.Id("signing", "icp-brasil");
 
     public void Dispose()
     {
@@ -123,6 +124,38 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
         var (result, _) = await RunAsync(options, engine);
 
         result.ErrorType.ShouldBe("SigningException (TimestampUntrusted)", result.Error);
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task IcpBrasilProfileOnTheSandbox_SignsWithTheSandboxRootAsAnAcRaiz(string engine)
+    {
+        var options = Timestamped() with
+        {
+            SigningPolicyId = IcpBrasilSigning,
+            SigningControls = new SigningControlsOptions { Trust = [], Profile = TrustProfileChoice.IcpBrasil, ProfileSource = ProfileListSource.Sandbox },
+        };
+
+        var (result, _) = await RunAsync(options, engine);
+
+        result.Error.ShouldBeNull(string.Join(" | ", result.Issues.Select(i => i.ToString())));
+    }
+
+    [SkippableTheory]
+    [InlineData(RunEngines.Library)]
+    [InlineData(RunEngines.Cli)]
+    public async Task IcpBrasilProfileWithTheRealRoots_RefusesTheSandboxCertificate(string engine)
+    {
+        var options = Timestamped() with
+        {
+            SigningPolicyId = IcpBrasilSigning,
+            SigningControls = new SigningControlsOptions { Trust = [], Profile = TrustProfileChoice.IcpBrasil, ProfileSource = ProfileListSource.Official },
+        };
+
+        var (result, _) = await RunAsync(options, engine);
+
+        result.Error.ShouldNotBeNull();
     }
 
     private SigningOptions Timestamped(TsaProvider tsa = TsaProvider.Sandbox) =>
