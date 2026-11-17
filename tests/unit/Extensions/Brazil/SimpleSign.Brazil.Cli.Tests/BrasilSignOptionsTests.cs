@@ -1,9 +1,8 @@
 using Shouldly;
 using SimpleSign.Brazil.Signing;
-using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Signing;
 
-namespace SimpleSign.Cli.Tests;
+namespace SimpleSign.Brazil.Cli.Tests;
 
 [Trait("Category", "Unit")]
 public sealed class BrasilSignOptionsTests

@@ -9,16 +9,18 @@ inspect PAdES, CAdES, and XAdES documents.
 dotnet tool install --global SimpleSign.Cli
 ```
 
-Trust frameworks beyond the built-in ones (ICP-Brasil, Gov.br, eIDAS) are extensions, installed afterwards:
+Trust frameworks are extensions, installed afterwards:
 
 ```bash
+simplesign extension install SimpleSign.Brazil.Cli        # ICP-Brasil, Gov.br: --profile icp-brasil|gov-br, 'simplesign brasil sign …'
+simplesign extension install SimpleSign.Europe.Eidas.Cli  # EU (eIDAS): --profile eidas
 simplesign extension install SimpleSign.Peru.Iofe.Cli     # Peru (IOFE): --profile iofe, 'simplesign iofe …'
 ```
 
 ## Usage
 
 ```bash
-# Sign a PDF with an ICP-Brasil certificate from the Windows store
+# Sign a PDF with a certificate from the Windows store
 simplesign sign document.pdf --thumbprint <THUMBPRINT>
 
 # Validate all signatures (--trust adds your own root CA; --json for scripts)

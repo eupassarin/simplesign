@@ -23,7 +23,6 @@
     <InternalsVisibleTo Include="SimpleSign.Brazil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Tests" />
     <InternalsVisibleTo Include="SimpleSign.Brazil.GovBr.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Cli" />
   </ItemGroup>
 
   <ItemGroup>

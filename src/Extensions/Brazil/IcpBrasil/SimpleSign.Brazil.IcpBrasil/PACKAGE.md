@@ -24,8 +24,8 @@ Add `SimpleSign.Brazil.GovBr` and pass `new GovBrExtension()` too to accept Gov.
 
 `IcpBrasilPolicies.Signing` and `IcpBrasilPolicies.Validation` are SimpleSign checks for ICP-Brasil certificates (the
 chain must reach an ICP-Brasil root, the revocation of the whole chain is required, no SHA-1 in the chain): pass them
-to `WithSigningPolicy` and `ValidationOptions.Policy`, or as `--policy icp-brasil` in the CLI. They do not put an
+to `WithSigningPolicy` and `ValidationOptions.Policy`, or as `--policy icp-brasil` in the CLI (extension `SimpleSign.Brazil.Cli`). They do not put an
 ICP-Brasil signature policy (AD-RB…) into the signature: that is `WithIcpBrasilPolicy`.
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles/icp-brasil.md). MIT licensed.
+and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/src/Extensions/Brazil/docs/icp-brasil.md). MIT licensed.

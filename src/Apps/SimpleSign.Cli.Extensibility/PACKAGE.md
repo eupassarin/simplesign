@@ -2,7 +2,8 @@
 
 The contract of the extensions of the `simplesign` command line: implement `ICliExtension` to add commands, trust
 profiles (`--profile`), policy presets (`--signing-policy`, `--policy`) and trusted-list profiles (`--tsl-profile`) to
-a CLI that is already installed.
+a CLI that is already installed — and, for a trust framework, a command that runs the standard `sign` with options of
+its own (`CliSignRequest`), its chain validation in `validate`, and what it has to say about each signature shown.
 
 ```bash
 simplesign extension install SimpleSign.Peru.Iofe.Cli     # adds --profile iofe and 'simplesign iofe …'

@@ -2,23 +2,22 @@ using System.IO.Compression;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.CAdES;
 using SimpleSign.Cli.Commands;
 using SimpleSign.Cli.Extensibility;
 using SimpleSign.Cli.Extensions;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Policies;
-using SimpleSign.PAdES.DependencyInjection;
-using SimpleSign.XAdES;
 using SimpleSign.XAdES.TrustedLists;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Tests;
 
-/// <summary>An extension for the tests: one profile, one policy of each kind, one trusted-list profile and one command.</summary>
+/// <summary>
+/// An extension for the tests: one profile, one policy of each kind, one trusted-list profile, one command of its own,
+/// one that runs the standard <c>sign</c> with an option of its own (<c>sample sign --note TEXT</c>), and a note about
+/// every signature shown.
+/// </summary>
 public sealed class SampleCliExtension : ICliExtension
 {
     public string Name => "sample";
@@ -30,7 +29,49 @@ public sealed class SampleCliExtension : ICliExtension
     public void Initialize(CliExtensionContext context) => Context = context;
 
     public void AddCommands(IConfigurator config) =>
-        config.AddBranch("sample", branch => branch.AddCommand<SampleCommand>("hello").WithDescription("Says hello"));
+        config.AddBranch("sample", branch =>
+        {
+            branch.AddCommand<SampleCommand>("hello").WithDescription("Says hello");
+            branch.AddCommand<SampleSignCommand>("sign").WithDescription("Signs as 'sign' does, with a note");
+        });
+
+    public IReadOnlyList<CliPassThroughCommand> PassThroughCommands { get; } = [new(["sample", "sign"], typeof(SampleSignCommand.Settings))];
+
+    /// <summary>Whether the CLI asked for the extension's services.</summary>
+    public bool ServicesConfigured { get; private set; }
+
+    /// <summary>How many times the CLI asked for the extension's chain validation.</summary>
+    public int ChainValidationRequests { get; private set; }
+
+    /// <summary>What <c>sample sign</c> saw of the standard options, the last time it configured a signer.</summary>
+    public static CliSignOptions? LastSignOptions { get; set; }
+
+    /// <summary>The note of the last <c>sample sign</c> that configured a signer.</summary>
+    public static string? LastNote { get; set; }
+
+    public void ConfigureServices(IServiceCollection services) => ServicesConfigured = true;
+
+    public IReadOnlyList<IChainValidationProvider> CreateChainValidationProviders(HttpClient httpClient, Microsoft.Extensions.Logging.ILogger? logger)
+    {
+        ChainValidationRequests++;
+        return [];
+    }
+
+    public IReadOnlyList<CliSignatureAnnotation> Annotate(CliSignatureFacts signature) =>
+    [
+        new()
+        {
+            Label = "Sample",
+            Value = signature.Validation is null ? "inspected" : "validated",
+            Lines = [new("Field", signature.Validation?.FieldName ?? "-")],
+            Json = new Dictionary<string, System.Text.Json.JsonElement>
+            {
+                ["sample"] = System.Text.Json.JsonDocument.Parse(signature.Validation is null ? "\"inspected\"" : "{\"validated\":true}").RootElement,
+                // A name the CLI's own JSON already has: it must not replace it.
+                ["fieldName"] = System.Text.Json.JsonDocument.Parse("\"replaced\"").RootElement,
+            },
+        },
+    ];
 
     public IReadOnlyList<CliProfile> Profiles { get; } =
     [
@@ -73,6 +114,34 @@ public sealed class SampleCliExtension : ICliExtension
             AnsiConsole.MarkupLine("hello from the sample extension");
             return 0;
         }
+    }
+
+    // Spectre.Console.Cli creates the command and its settings by reflection.
+#pragma warning disable CA1812
+    internal sealed class SampleSignCommand : AsyncCommand<SampleSignCommand.Settings>
+    {
+        internal sealed class Settings : CommandSettings
+        {
+            [CommandOption("--note|-n <TEXT>")]
+            public string? Note { get; init; }
+
+            [CommandOption("--loud")]
+            public bool Loud { get; init; }
+        }
+#pragma warning restore CA1812
+
+        public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) =>
+            CliExtensions.Context.SignAsync(new CliSignRequest
+            {
+                Arguments = [.. context.Remaining.Raw],
+                Validate = sign => sign.LongTerm ? "sample sign does not take --ltv." : null,
+                Configure = (builder, sign, _) =>
+                {
+                    LastSignOptions = sign;
+                    LastNote = settings.Loud ? settings.Note?.ToUpperInvariant() : settings.Note;
+                    return ValueTask.FromResult(builder.WithDocumentInfo("Note", LastNote ?? string.Empty));
+                },
+            }, cancellationToken);
     }
 }
 
@@ -374,16 +443,114 @@ public sealed class CliExtensionTests : IDisposable
         TrustedListProfiles.HasBundledSigner(null).ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("sample sign in.pdf --cert c.pfx --note hi --ltv", "sample sign --note hi -- in.pdf --cert c.pfx --ltv")]
+    [InlineData("sample sign --loud in.pdf -n hi", "sample sign --loud -n hi -- in.pdf")]
+    [InlineData("sample sign in.pdf --note=hi --output out.pdf", "sample sign --note=hi -- in.pdf --output out.pdf")]
+    [InlineData("SAMPLE SIGN in.pdf --help", "SAMPLE SIGN --help -- in.pdf")]
+    [InlineData("sample sign --note hi -- in.pdf --loud", "sample sign --note hi -- in.pdf --loud")]
+    [InlineData("sample hello --note hi", "sample hello --note hi")]
+    [InlineData("sign in.pdf --note hi", "sign in.pdf --note hi")]
+    [InlineData("sample", "sample")]
+    public void Normalize_PassThroughCommand_PutsItsOwnOptionsFirst(string line, string expected) =>
+        string.Join(' ', CliArguments.Normalize(line.Split(' '), new SampleCliExtension().PassThroughCommands)).ShouldBe(expected);
+
+    [Fact]
+    public async Task PassThroughCommand_OptionsInAnyOrder_SignsWithWhatTheExtensionAdds()
+    {
+        var (pfx, input) = WriteSigningInputs();
+        string output = Path.Combine(_directory, "noted.pdf");
+        SampleCliExtension.LastSignOptions = null;
+
+        var (exit, text) = await RunAsync([new SampleCliExtension()],
+            "sample", "sign", input, "--cert", pfx, "--password", "test", "--note", "hello", "--output", output, "--signer-name", "Ana", "--loud");
+
+        exit.ShouldBe(0, text);
+        File.Exists(output).ShouldBeTrue();
+        SampleCliExtension.LastNote.ShouldBe("HELLO");
+        SampleCliExtension.LastSignOptions!.SignerName.ShouldBe("Ana");
+        SampleCliExtension.LastSignOptions.Timestamp.ShouldBeNull();
+        Encoding.Latin1.GetString(await File.ReadAllBytesAsync(output)).ShouldContain("/Note");
+    }
+
+    [Fact]
+    public async Task PassThroughCommand_StandardOptionTheExtensionRefuses_IsAnErrorAndNothingIsSigned()
+    {
+        var (pfx, input) = WriteSigningInputs();
+        string output = Path.Combine(_directory, "refused.pdf");
+
+        var (exit, text) = await RunAsync([new SampleCliExtension()],
+            "sample", "sign", input, "--cert", pfx, "--password", "test", "--output", output, "--tsa", "https://tsa.example.test", "--ltv");
+
+        exit.ShouldNotBe(0);
+        text.ShouldContain("sample sign does not take --ltv.");
+        File.Exists(output).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task PassThroughCommand_ErrorOfTheStandardSign_IsTheCommandsError()
+    {
+        var (exit, text) = await RunAsync([new SampleCliExtension()], "sample", "sign", Path.Combine(_directory, "missing.pdf"), "--cert", "missing.pfx");
+
+        exit.ShouldNotBe(0);
+        text.ShouldContain("Error");
+    }
+
+    [Fact]
+    public async Task Sign_AfterAPassThroughCommand_DoesNotSeeItsRequest()
+    {
+        var (pfx, input) = WriteSigningInputs();
+        await RunAsync([new SampleCliExtension()], "sample", "sign", input, "--cert", pfx, "--password", "test", "--note", "x", "--output", Path.Combine(_directory, "first.pdf"));
+        string output = Path.Combine(_directory, "plain.pdf");
+
+        var (exit, text) = await RunAsync([new SampleCliExtension()], "sign", input, "--cert", pfx, "--password", "test", "--output", output);
+
+        exit.ShouldBe(0, text);
+        SignScope.Current.ShouldBeNull();
+        Encoding.Latin1.GetString(await File.ReadAllBytesAsync(output)).ShouldNotContain("/Note");
+    }
+
+    [Fact]
+    public async Task ValidateAndInspect_WithAnExtension_ShowItsAnnotationAndUseItsChainValidation()
+    {
+        var (pfx, input) = WriteSigningInputs();
+        string signed = Path.Combine(_directory, "annotated.pdf");
+        var extension = new SampleCliExtension();
+        (await RunAsync([extension], "sign", input, "--cert", pfx, "--password", "test", "--output", signed)).Exit.ShouldBe(0);
+
+        var (_, validateJson) = await RunAsync([extension], "validate", signed, "--no-revocation", "--json");
+        var (_, validateText) = await RunAsync([extension], "validate", signed, "--no-revocation");
+        var (_, inspectJson) = await RunAsync([extension], "inspect", signed, "--json");
+        var (_, inspectText) = await RunAsync([extension], "inspect", signed);
+
+        extension.ServicesConfigured.ShouldBeTrue();
+        extension.ChainValidationRequests.ShouldBe(2);
+        using var validated = System.Text.Json.JsonDocument.Parse(validateJson);
+        var signature = validated.RootElement.GetProperty("signatures")[0];
+        signature.GetProperty("sample").GetProperty("validated").GetBoolean().ShouldBeTrue();
+        signature.GetProperty("fieldName").GetString().ShouldNotBe("replaced");
+        validateText.ShouldContain("Sample:");
+        validateText.ShouldContain("validated");
+        validateText.ShouldContain("Field:");
+        using var inspected = System.Text.Json.JsonDocument.Parse(inspectJson);
+        inspected.RootElement.GetProperty("signatures")[0].GetProperty("sample").GetString().ShouldBe("inspected");
+        inspectText.ShouldContain("inspected");
+    }
+
+    /// <summary>A PFX (password "test") and a PDF to sign, in the test folder.</summary>
+    private (string Pfx, string Input) WriteSigningInputs()
+    {
+        string pfx = Path.Combine(_directory, "signer.pfx");
+        string input = Path.Combine(_directory, "input.pdf");
+        using var certificate = SimpleSign.TestHelpers.TestCertificateFactory.CreateSelfSignedCert();
+        File.WriteAllBytes(pfx, certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx, "test"));
+        File.WriteAllBytes(input, SimpleSign.TestHelpers.TestPdfFactory.CreateMinimalPdf());
+        return (pfx, input);
+    }
+
     private static async Task<(int Exit, string Output)> RunAsync(IReadOnlyList<ICliExtension>? extensions, params string[] args)
     {
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var app = new CommandApp(new SimpleSignServiceRegistry(services));
-        Program.ConfigureApp(app, extensions);
+        var app = Program.CreateApp(extensions);
 
         IAnsiConsole originalAnsi = AnsiConsole.Console;
         TextWriter originalOut = Console.Out;

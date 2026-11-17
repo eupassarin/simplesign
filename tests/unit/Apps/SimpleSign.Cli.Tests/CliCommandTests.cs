@@ -1,17 +1,12 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Crypto;
-using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
 using Spectre.Console;
-using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -221,39 +216,98 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Profiles_ListsEveryProfile()
+    public async Task Profiles_NoExtension_ListsTheSandboxOnly()
     {
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "eidas", "icp-brasil", "gov-br" })
+        output.ShouldContain("sandbox");
+        foreach (string name in new[] { "eidas", "icp-brasil", "gov-br", "iofe" })
         {
-            output.ShouldContain(name);
+            output.ShouldNotContain(name);
         }
     }
 
-    [Fact]
-    public async Task Validate_ProfileOfAnExtensionNotInstalled_SaysHowToGetIt()
+    [Theory]
+    [InlineData("iofe", "SimpleSign.Peru.Iofe.Cli")]
+    [InlineData("icp-brasil", "SimpleSign.Brazil.Cli")]
+    [InlineData("gov-br", "SimpleSign.Brazil.Cli")]
+    [InlineData("eidas", "SimpleSign.Europe.Eidas.Cli")]
+    public async Task Validate_ProfileOfAnExtensionNotInstalled_SaysWhichPackageToInstall(string profile, string package)
     {
         string signed = await SignAsync("no-extension.pdf");
 
-        var (exit, output) = await RunAsync("validate", signed, "--profile", "iofe");
+        var (exit, output) = await RunAsync("validate", signed, "--profile", profile);
 
         exit.ShouldNotBe(0);
-        output.ShouldContain("Unknown profile 'iofe'");
-        output.ShouldContain("simplesign extension install");
+        Flat(output).ShouldContain(Flat($"simplesign extension install {package}"));
     }
 
     [Fact]
-    public async Task Sign_ProfileGovBr_IsRefusedBecauseItValidatesOnly()
+    public async Task Validate_UnknownProfile_ListsTheProfilesAndPointsToExtensions()
     {
-        string input = WriteMinimalPdf("govbr-input.pdf");
+        string signed = await SignAsync("unknown-profile.pdf");
 
-        var (exit, output) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", Path.Combine(_tempDir, "govbr.pdf"), "--profile", "gov-br");
+        var (exit, output) = await RunAsync("validate", signed, "--profile", "nowhere");
 
         exit.ShouldNotBe(0);
-        output.ShouldContain("Gov.br");
+        output.ShouldContain("Unknown profile 'nowhere'");
+        output.ShouldContain("simplesign extension install");
     }
+
+    [Theory]
+    [InlineData("--policy", "govbr", "SimpleSign.Brazil.Cli")]
+    [InlineData("--policy", "eidas", "SimpleSign.Europe.Eidas.Cli")]
+    public async Task Validate_PolicyOfAnExtensionNotInstalled_SaysWhichPackageToInstall(string option, string policy, string package)
+    {
+        string signed = await SignAsync("no-extension-policy.pdf");
+
+        var (exit, output) = await RunAsync("validate", signed, option, policy);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain(Flat($"simplesign extension install {package}"));
+    }
+
+    [Fact]
+    public async Task Sign_SigningPolicyOfAnExtensionNotInstalled_SaysWhichPackageToInstall()
+    {
+        var (exit, output) = await RunAsync("sign", WriteMinimalPdf("no-extension-signing.pdf"), "--cert", _pfxPath, "--password", Password,
+            "--signing-policy", "icp-brasil");
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain(Flat("simplesign extension install SimpleSign.Brazil.Cli"));
+    }
+
+    [Theory]
+    [InlineData("--icp-policy", "ad-rb")]
+    [InlineData("--brasil")]
+    [InlineData("--health-document", "prescricao")]
+    public async Task Sign_BrazilianOption_IsRefusedAndPointsToTheBrazilianSign(params string[] options)
+    {
+        string output = Path.Combine(_tempDir, "brazilian-option-out.pdf");
+
+        var (exit, text) = await RunAsync(["sign", WriteMinimalPdf("brazilian-option.pdf"), "--cert", _pfxPath, "--password", Password, "--output", output, .. options]);
+
+        exit.ShouldNotBe(0);
+        Flat(text).ShouldContain(Flat("simplesign brasil sign"));
+        Flat(text).ShouldContain(Flat("simplesign extension install SimpleSign.Brazil.Cli"));
+        File.Exists(output).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Sign_UnknownOption_IsRefusedAndNothingIsSigned()
+    {
+        string output = Path.Combine(_tempDir, "unknown-option-out.pdf");
+
+        var (exit, text) = await RunAsync("sign", WriteMinimalPdf("unknown-option.pdf"), "--cert", _pfxPath, "--password", Password, "--output", output, "--no-such-option");
+
+        exit.ShouldNotBe(0);
+        text.ShouldContain("Unknown option --no-such-option");
+        File.Exists(output).ShouldBeFalse();
+    }
+
+    /// <summary>The output without white space: the console wraps long lines.</summary>
+    private static string Flat(string text) => new([.. text.Where(c => !char.IsWhiteSpace(c))]);
 
     [Fact]
     public async Task Sign_ProfileSandboxWithoutSandbox_IsRefused()
@@ -264,18 +318,6 @@ public sealed class CliCommandTests : IDisposable
 
         exit.ShouldNotBe(0);
         output.ShouldContain("--sandbox");
-    }
-
-    [Fact]
-    public async Task Sign_ProfileIcpBrasil_RefusesACertificateOutsideIcpBrasil()
-    {
-        string input = WriteMinimalPdf("icp-input.pdf");
-
-        // The icp-brasil signing policy requires the chain to reach an ICP-Brasil root: a self-signed test certificate does not.
-        var (exit, output) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", Path.Combine(_tempDir, "icp.pdf"), "--profile", "icp-brasil");
-
-        exit.ShouldNotBe(0, output);
-        output.ShouldContain("UntrustedRoot");
     }
 
     [Fact]
@@ -513,8 +555,8 @@ public sealed class CliCommandTests : IDisposable
     }
 
     [Theory]
-    [InlineData("signing", "eidas", "eIDAS")]
-    [InlineData("validation", "eidas", "eIDAS")]
+    [InlineData("signing", "strict", "revocation")]
+    [InlineData("validation", "strict", "SimpleSign default, strict")]
     public async Task PolicyExport_Preset_WritesTheBuiltInPolicy(string kind, string preset, string name)
     {
         string path = Path.Combine(_tempDir, $"{kind}-{preset}.json");
@@ -936,38 +978,8 @@ public sealed class CliCommandTests : IDisposable
 
     // ── helpers ─────────────────────────────────────────────────────────
 
-    // ── ICP-Brasil options ──────────────────────────────────────────────
-
     [Fact]
-    public async Task Sign_IcpPolicyAndHealthDocument_WritesIcpAttributesAndNoLei14063ForASelfSignedChain()
-    {
-        string input = WriteMinimalPdf("icp-input.pdf");
-        string output = Path.Combine(_tempDir, "icp.pdf");
-
-        var (exit, text) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password, "--output", output,
-            "--icp-policy", "ad-rb", "--health-document", "prescricao", "--registration", "crm:123456/SP");
-
-        exit.ShouldBe(0, text);
-        string pdf = Encoding.Latin1.GetString(await File.ReadAllBytesAsync(output));
-        pdf.ShouldContain("/Filter /PBAD_PAdES");
-        pdf.ShouldContain("/SubFilter /PBAD.PAdES");
-        pdf.ShouldContain("/2.16.76.1.4.2.2.1 (123456)");
-        pdf.ShouldContain("/2.16.76.1.4.2.2.2 (SP)");
-
-        var (validateExit, json) = await RunAsync("validate", output, "--no-revocation", "--trust", _cerPath, "--json");
-        validateExit.ShouldBe(0, json);
-        using var doc = JsonDocument.Parse(json);
-        var signature = doc.RootElement.GetProperty("signatures")[0];
-        // Lei 14.063 is a Brazilian concept, so it is reported only for a signature actually
-        // validated under the Brazilian framework. This chain is self-signed, so it is neither
-        // ICP-Brasil nor Gov.br and both fields stay null — the same guard keeps the level out of
-        // a Peruvian (IOFE) report, where it used to appear as "Simples".
-        signature.GetProperty("lei14063").ValueKind.ShouldBe(JsonValueKind.Null);
-        signature.GetProperty("brasil").ValueKind.ShouldBe(JsonValueKind.Null);
-    }
-
-    [Fact]
-    public async Task Validate_SignatureOutsideTheBrazilianFramework_JsonOmitsLei14063()
+    public async Task Validate_NoExtension_JsonHasNoPropertyOfATrustFramework()
     {
         string signed = await SignAsync("no-lei14063.pdf");
 
@@ -977,30 +989,13 @@ public sealed class CliCommandTests : IDisposable
         using var doc = JsonDocument.Parse(json);
         var signature = doc.RootElement.GetProperty("signatures")[0];
         signature.GetProperty("indication").GetString().ShouldBe("Valid");
-        signature.GetProperty("lei14063").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        // Lei 14.063 and the Brazilian data are the Brazilian extension's to report.
+        signature.TryGetProperty("lei14063", out _).ShouldBeFalse();
+        signature.TryGetProperty("brasil", out _).ShouldBeFalse();
     }
 
     [Theory]
-    [InlineData("--icp-policy", "ad-xx")]
-    [InlineData("--icp-policy", "ad-rt")]
-    [InlineData("--health-document", "prescricao")]
-    [InlineData("--registration", "crm-123")]
-    public async Task Sign_InvalidIcpOptions_ReturnsError(string option, string value)
-    {
-        string input = WriteMinimalPdf($"bad-{Guid.NewGuid():N}.pdf");
-
-        var (exit, _) = await RunAsync("sign", input, "--cert", _pfxPath, "--password", Password,
-            "--output", Path.Combine(_tempDir, "bad-out.pdf"), option, value);
-
-        exit.ShouldNotBe(0);
-    }
-
-    [Theory]
-    [InlineData("requires --tsa", "--icp-policy", "ad-rc")]
-    [InlineData("requires --tsa", "--icp-policy", "ad-ra")]
-    [InlineData("remove --sub-filter", "--icp-policy", "ad-rb", "--sub-filter", "etsi-cades-detached")]
-    [InlineData("sets the level", "--icp-policy", "ad-rt", "--tsa", "http://tsa.example.test", "--ltv")]
-    [InlineData("sets the level", "--icp-policy", "ad-rt", "--tsa", "http://tsa.example.test", "--archival")]
     [InlineData("--archival requires --tsa", "--archival")]
     public async Task Sign_IncompatibleLevelOptions_ReturnsError(string expected, params string[] options)
     {
@@ -1764,14 +1759,7 @@ public sealed class CliCommandTests : IDisposable
 
     private static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var app = new CommandApp(new SimpleSignServiceRegistry(services));
-        Program.ConfigureApp(app);
+        var app = Program.CreateApp();
 
         IAnsiConsole originalAnsi = AnsiConsole.Console;
         TextWriter originalOut = Console.Out;

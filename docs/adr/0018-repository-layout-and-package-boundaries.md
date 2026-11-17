@@ -23,7 +23,7 @@ Stay a **single repository**, but make the boundaries real so that a later split
 - A Core change and the Brasil change that uses it land in one pull request and one CI run.
 - Extracting Brasil (or the apps) later is a `git filter-repo` on `src/Extensions/Brazil/` (or `src/Apps/`) and its tests, plus switching `ProjectReference` to `PackageReference`. No API redesign is needed.
 - Some Core APIs became public for extension authors and are now under compatibility rules.
-- Cross-implementation evidence that interop and fuzzing used to provide is gone. Conformance relies on unit tests with independent vectors (ADR 0016), `SimpleSign.Contracts.Tests`, and manual checks with external validators (for example ITI VALIDAR, see `docs/articles/icp-brasil-validar-check.md`).
+- Cross-implementation evidence that interop and fuzzing used to provide is gone. Conformance relies on unit tests with independent vectors (ADR 0016), `SimpleSign.Contracts.Tests`, and manual checks with external validators (for example ITI VALIDAR, see `src/Extensions/Brazil/docs/icp-brasil-validar-check.md`).
 - Contributors and agents read one instruction file, `CLAUDE.md`.
 
 **Alternatives considered:**

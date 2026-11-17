@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
-using SimpleSign.Brazil.Signing;
+using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Inspection;
@@ -224,39 +225,8 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
             propsNode.AddNode($"Policy:     [blue]{sig.SignaturePolicyOid}[/]");
         }
 
-        // Signature Manifest
-        if (sig.ManifestJson is { Length: > 0 })
-        {
-            var manifest = SignatureManifest.FromJsonUtf8(sig.ManifestJson);
-            if (manifest is not null)
-            {
-                var manifestNode = propsNode.AddNode("[blue]Signature Manifest[/] [dim]— Lei 14.063[/]");
-                manifestNode.AddNode($"Name:           [bold]{manifest.Signer.Name.EscapeMarkup()}[/]");
-                manifestNode.AddNode($"CPF:            {manifest.Signer.Cpf.EscapeMarkup()}");
-                if (manifest.Signer.Email is not null)
-                {
-                    manifestNode.AddNode($"Email:          {manifest.Signer.Email.EscapeMarkup()}");
-                }
-                if (manifest.Evidence.Ip is not null)
-                {
-                    manifestNode.AddNode($"IP:             {manifest.Evidence.Ip.EscapeMarkup()}");
-                }
-                manifestNode.AddNode($"Authentication: {manifest.Evidence.AuthMethod.EscapeMarkup()}");
-                manifestNode.AddNode($"Timestamp:      {manifest.Evidence.Timestamp:yyyy-MM-dd HH:mm:ss} UTC");
-                if (manifest.Institution is not null)
-                {
-                    if (manifest.Institution.Name is not null)
-                    {
-                        manifestNode.AddNode($"Institution:    {manifest.Institution.Name.EscapeMarkup()}");
-                    }
-                    if (manifest.Institution.Cnpj is not null)
-                    {
-                        manifestNode.AddNode($"CNPJ:           {manifest.Institution.Cnpj.EscapeMarkup()}");
-                    }
-                }
-                manifestNode.AddNode($"Commitment:     {TranslateCommitment(manifest.Commitment)}");
-            }
-        }
+        // What the extensions in use read of it: the signer's manifest of a Brazilian advanced signature, for one.
+        ExtensionAnnotations.AddNodes(propsNode, new CliSignatureFacts { ManifestJson = sig.ManifestJson, CommitmentTypeOid = sig.CommitmentTypeOid });
 
         propsNode.AddNode($"CMS Data:   {Formatting.FormatBytes(sig.CmsRawData.Length)}");
 
@@ -436,13 +406,6 @@ internal sealed class InspectCommand : AsyncCommand<InspectCommand.Settings>
         2 => "[yellow]![/] Locked — [bold]form filling[/] only",
         3 => "[green]✓[/] Certified — [bold]form filling and annotations[/] allowed",
         _ => "Not locked"
-    };
-
-    private static string TranslateCommitment(string commitment) => commitment switch
-    {
-        "proofOfApproval" => "Approval",
-        "proofOfOrigin" => "Authorship",
-        _ => commitment
     };
 
     private static string DetermineRole(CertificateInfo cert, SignatureFieldInfo sig)

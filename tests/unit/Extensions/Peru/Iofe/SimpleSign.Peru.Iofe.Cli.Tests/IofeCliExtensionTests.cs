@@ -63,7 +63,7 @@ public sealed class IofeCliExtensionTests : IDisposable
         var (exit, output) = await RunAsync("profiles");
 
         exit.ShouldBe(0, output);
-        foreach (string name in new[] { "sandbox", "eidas", "icp-brasil", "gov-br", "iofe", "Peru (IOFE)" })
+        foreach (string name in new[] { "sandbox", "iofe", "Peru (IOFE)" })
         {
             output.ShouldContain(name);
         }

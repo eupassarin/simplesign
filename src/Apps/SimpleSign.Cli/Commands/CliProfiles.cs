@@ -1,19 +1,17 @@
 using System.Security.Cryptography.X509Certificates;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
-using SimpleSign.Europe.Eidas;
 using SimpleSign.XAdES.TrustedLists;
 
 namespace SimpleSign.Cli.Commands;
 
 /// <summary>
-/// The trust profiles of <c>--profile</c> and <c>--trust-profile</c>: the ones the CLI comes with (<c>sandbox</c> for a
-/// running SimpleSign Sandbox, <see cref="EidasProfile"/>, <see cref="IcpBrasilProfile"/>, <see cref="GovBrProfile"/>)
-/// and those of the installed extensions (<see cref="ICliExtension.Profiles"/>).
+/// The trust profiles of <c>--profile</c> and <c>--trust-profile</c>: the one the CLI comes with (<c>sandbox</c>, for a
+/// running SimpleSign Sandbox) and those of the installed extensions (<see cref="ICliExtension.Profiles"/>): every
+/// trust framework — ICP-Brasil, Gov.br, eIDAS, IOFE — is an extension.
 /// </summary>
 internal static class CliProfiles
 {
@@ -27,25 +25,6 @@ internal static class CliProfiles
             Name = Sandbox, Title = "SimpleSign Sandbox (test)",
             Trust = "the Sandbox's LOTL and trusted list (needs --sandbox URL)",
             LoadAsync = LoadSandboxAsync,
-        },
-        new()
-        {
-            Name = EidasProfile.Name, Title = "EU (eIDAS)", SigningPolicy = "eidas", ValidationPolicy = "eidas",
-            Trust = "the EU LOTL and its lists, checked against the bundled signers (pivots followed); qualifies each signature (with --sandbox: the Sandbox's LOTL)",
-            LoadAsync = LoadEidasAsync,
-        },
-        new()
-        {
-            Name = IcpBrasilProfile.Name, Title = "ICP-Brasil", SigningPolicy = "icp-brasil", ValidationPolicy = "icp-brasil",
-            Trust = "the AC Raiz roots and the ICP-Brasil chain validation",
-            LoadAsync = (context, _) => Task.FromResult(IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { HttpClient = context.Http.GetClient() })),
-        },
-        new()
-        {
-            Name = GovBrProfile.Name, Title = "Gov.br", SigningPolicy = "— (validates only)", ValidationPolicy = "govbr",
-            Trust = "the Gov.br roots and their chain validation",
-            CannotSign = "Gov.br signatures are made on Gov.br's service; it validates only.",
-            LoadAsync = (context, _) => Task.FromResult(GovBrProfile.Create(new GovBrExtensionOptions { HttpClient = context.Http.GetClient() })),
         },
     ];
 
@@ -86,7 +65,9 @@ internal static class CliProfiles
         {
             if (!IsKnown(name))
             {
-                return $"Unknown profile '{name}': use {Names}. The profiles of other trust frameworks come with extensions: 'simplesign extension install PACKAGE'.";
+                return KnownExtensions.PackageOfProfile(name!) is { } package
+                    ? $"The profile '{name}' comes with an extension: 'simplesign extension install {package}'."
+                    : $"Unknown profile '{name}': use {Names}. The profiles of trust frameworks come with extensions: 'simplesign extension install PACKAGE'.";
             }
 
             if (string.Equals(name, Sandbox, StringComparison.OrdinalIgnoreCase) && sandbox is null)
@@ -145,30 +126,6 @@ internal static class CliProfiles
         return new TrustProfile(Sandbox, "SimpleSign Sandbox", SigningPolicy.Default, ValidationPolicy.Default, [set], []);
     }
 
-    private static async Task<TrustProfile> LoadEidasAsync(CliProfileContext context, CancellationToken cancellationToken)
-    {
-        // An expired list is kept for validation: the policy's TLNotExpired judges it. With --sandbox, the Sandbox's LOTL.
-        var options = new EidasExtensionOptions { HttpClientProvider = context.Http, ListOptions = new TrustedListOptions { RejectExpired = context.Signing } };
-        if (context.Sandbox is { } url)
-        {
-            options = options with
-            {
-                LotlUrl = new Uri(url, "tl/lotl.xml"),
-                LotlSigners = [await SignerAsync(context.Http, new Uri(url, "tl/lotl-signer.pem"), cancellationToken)],
-            };
-        }
-
-        try
-        {
-            return EidasProfile.Create(await EidasExtension.LoadAsync(options, cancellationToken));
-        }
-        catch (Exception ex) when (ex is HttpRequestException or System.Security.Cryptography.CryptographicException or InvalidDataException)
-        {
-            // A LOTL that cannot be read or is not signed by its operator gives no anchors, as in the library.
-            Spectre.Console.AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Spectre.Console.Markup.Escape($"{ex.Message} No anchor comes from it.")}");
-            return new TrustProfile(EidasProfile.Name, "EU (eIDAS)", EidasPolicies.Signing, EidasPolicies.Validation, [], []);
-        }
-    }
 #pragma warning restore CA2000
 
     private static async Task<X509Certificate2> SignerAsync(IHttpClientProvider http, Uri url, CancellationToken cancellationToken) =>

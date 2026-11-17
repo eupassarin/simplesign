@@ -127,7 +127,7 @@ internal static class CodeGenerator
             case RunMode.Deferred:
                 {
                     // The first phase is sign with --prepare: every option of sign, and the signer's certificate without its key.
-                    var prepare = new CliLine("sign", CliLine.Placeholders.Input)
+                    var prepare = new CliLine([.. SignCommand(o), CliLine.Placeholders.Input])
                         .Add("--prepare")
                         .Add("--cert", CliLine.Placeholders.SignerCertificate)
                         .Add("--chain", CliLine.Placeholders.Chain)
@@ -188,7 +188,7 @@ internal static class CodeGenerator
 
             default:
                 {
-                    var sign = new CliLine("sign", CliLine.Placeholders.Input).Add("--output", CliLine.Placeholders.Output);
+                    var sign = new CliLine([.. SignCommand(o), CliLine.Placeholders.Input]).Add("--output", CliLine.Placeholders.Output);
                     CliCredential(credential, sign, notes);
                     Level(sign, o, context);
                     if (o.Level != BaselineLevel.BB && o.ReturnLowerLevel && o.Kind != SignatureKind.IcpBrasil)
@@ -208,6 +208,12 @@ internal static class CodeGenerator
                 }
         }
     }
+
+    /// <summary>
+    /// The command that signs: <c>sign</c>, or the Brazilian extension's <c>brasil sign</c> — <c>sign</c> and its
+    /// options plus <c>--icp-policy</c> — for a signature under an ICP-Brasil policy.
+    /// </summary>
+    private static string[] SignCommand(SigningOptions o) => o.Kind == SignatureKind.IcpBrasil ? ["brasil", "sign"] : ["sign"];
 
     internal static bool HasTsaCredentials(TimestampChoice choice) =>
         choice.Provider == TsaProvider.SandboxAuthenticated || choice.Auth != TsaAuth.None || !string.IsNullOrEmpty(choice.ClientCertificateUploadId);

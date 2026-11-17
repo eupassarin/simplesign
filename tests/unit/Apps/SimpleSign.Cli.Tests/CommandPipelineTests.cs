@@ -1,17 +1,11 @@
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
-using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
-using SimpleSign.XAdES;
 using Shouldly;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 namespace SimpleSign.Cli.Tests;
 
@@ -38,19 +32,7 @@ public sealed class CommandPipelineTests : IDisposable
         }
     }
 
-    private static CommandApp CreateConfiguredApp()
-    {
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var registry = new SimpleSignServiceRegistry(services);
-        var app = new CommandApp(registry);
-        Program.ConfigureApp(app);
-        return app;
-    }
+    private static CommandApp CreateConfiguredApp() => Program.CreateApp();
 
     [Fact]
     public async Task Version_ReturnsZero()
@@ -218,30 +200,6 @@ public sealed class CommandPipelineTests : IDisposable
             "--cert", certPath,
             "--password", "test",
             "--font-size", "12"
-        ]);
-
-        result.ShouldNotBe(0);
-    }
-
-    [Fact]
-    public async Task Sign_BrasilWithoutCpf_ReturnsError()
-    {
-        var pdfPath = Path.Combine(_tempDir, "input.pdf");
-        File.WriteAllBytes(pdfPath, CreateMinimalPdf());
-
-        var certPath = Path.Combine(_tempDir, "cert.pfx");
-        using (var cert = TestCertificateFactory.CreateSelfSignedCert())
-        {
-            File.WriteAllBytes(certPath, cert.Export(X509ContentType.Pfx, "test"));
-        }
-
-        using var capture = new ConsoleCapture();
-        var app = CreateConfiguredApp();
-        var result = await Program.RunWithAsync(app, [
-            "sign", pdfPath,
-            "--cert", certPath,
-            "--password", "test",
-            "--brasil"
         ]);
 
         result.ShouldNotBe(0);

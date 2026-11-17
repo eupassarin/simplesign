@@ -13,6 +13,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Core\SimpleSign.Core\SimpleSign.Core.csproj" />
     <ProjectReference Include="..\..\Formats\SimpleSign.XAdES\SimpleSign.XAdES.csproj" />
+    <!-- The signer a pass-through 'sign' command configures (CliSignRequest). -->
+    <ProjectReference Include="..\..\Formats\SimpleSign.PAdES\SimpleSign.PAdES.csproj" />
   </ItemGroup>
 
   <ItemGroup>

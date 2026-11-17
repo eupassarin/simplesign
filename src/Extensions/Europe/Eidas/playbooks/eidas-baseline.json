@@ -3,7 +3,7 @@
   "schema": 2,
   "id": "eidas-baseline",
   "title": "eIDAS: trusted lists and qualification",
-  "description": "The eIDAS profile (SimpleSign.Europe.Eidas) against the Sandbox's list of trusted lists, through the library and the CLI: the faults of the LOTL and the TL, the qualification of each signature (QESig, QESeal, AdESig-QC, AdESig) and of its time-stamps (QTSA). Tags name the items of docs/playbooks/eidas-checklist.md. Not cross-validated with EU DSS: the TestBench does not compare DSS's qualification yet.",
+  "description": "The eIDAS profile (SimpleSign.Europe.Eidas) against the Sandbox's list of trusted lists, through the library and the CLI: the faults of the LOTL and the TL, the qualification of each signature (QESig, QESeal, AdESig-QC, AdESig) and of its time-stamps (QTSA). Tags name the items of src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md. Not cross-validated with EU DSS: the TestBench does not compare DSS's qualification yet.",
   "defaults": {
     "engine": "both",
     "format": "pades",

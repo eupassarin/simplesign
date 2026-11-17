@@ -200,7 +200,7 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
 
             if (o.Kind == CadesKind.IcpBrasil)
             {
-                return Failure(o, report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."), "CliUnsupported", code);
+                return Failure(o, report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (brasil sign --icp-policy): run this one through the library."), "CliUnsupported", code);
             }
 
             var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);

@@ -67,7 +67,7 @@ The package also bundles the ~176 intermediate ICP-Brasil ACs published by the I
 the signer certificate. They only help build chains; trust still comes from the AC Raiz.
 `IcpBrasilChainValidator.LoadBundledIntermediateCerts()` returns them, and the ICP-Brasil trust
 anchor provider passes them to `PdfSignatureValidator`. Maintainers refresh them with
-`scripts/update-icp-intermediates.sh`; a unit test checks that each one chains to a bundled root.
+`src/Extensions/Brazil/tools/update-icp-intermediates.sh`; a unit test checks that each one chains to a bundled root.
 
 ### LCR cache
 
@@ -144,7 +144,7 @@ Console.WriteLine($"{check.IsValid} at {check.Info?.GenerationTime}");
 
 `TimestampToken.CreateForHashAsync` / `VerifyHash` work from a hash; `TimestampToken.Verify(token, data, trustAnchors)`
 checks any TSA. CLI: `simplesign timestamp create contrato.pdf --tsa <url>` and
-`simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp`.
+`simplesign brasil timestamp verify contrato.pdf --token contrato.pdf.tst` (the [extension](#cli-support)).
 
 ## CPF and CNPJ
 
@@ -499,42 +499,64 @@ var level = GovBrChainValidator.DetectAssuranceLevel(certificate);
 
 ## CLI Support
 
-`validate` runs the ICP-Brasil and Gov.br providers and shows, per signature, the Lei 14.063 level,
-the hierarchy and certificate type, CPF/CNPJ, professional registrations, the signature policy
-and its status, and the revocation status at the validation time (`--json` adds `lei14063` and a
-`brasil` object):
+Brazil is an extension of the `simplesign` command line (`SimpleSign.Brazil.Cli`, in
+[`../SimpleSign.Brazil.Cli`](../SimpleSign.Brazil.Cli)); the standard CLI references none of the Brazilian packages:
+
+```bash
+dotnet tool install --global SimpleSign.Cli
+simplesign extension install SimpleSign.Brazil.Cli
+```
+
+With it, `validate` (and `validate-dir`) runs the ICP-Brasil and Gov.br providers and trusts their roots for every
+signature, and shows the Lei 14.063 level, the hierarchy and certificate type, CPF/CNPJ, professional registrations,
+the signature policy and its status, and the revocation status at the validation time (`--json` adds `lei14063` and a
+`brasil` object to a signature they apply to; `inspect` shows the manifest of an advanced signature, `manifest` in
+its JSON). `--profile icp-brasil` and `--profile gov-br` set the policies and the trust of each, and the policies go
+by name (`--signing-policy icp-brasil`, `--policy icp-brasil`, `--policy govbr`):
 
 ```bash
 simplesign validate signed.pdf
 simplesign validate signed.pdf --json
+simplesign validate signed.pdf --profile icp-brasil --trust-profile gov-br
 ```
 
-`sign` can sign under an ICP-Brasil policy and mark health documents for VALIDAR:
+`brasil sign` is `sign` — every option and credential of it — plus the Brazilian options: an ICP-Brasil policy, an
+advanced electronic signature (Lei 14.063) and the health documents of VALIDAR. They go anywhere on the line.
 
 ```bash
 # AD-RB
-simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rb
+simplesign brasil sign doc.pdf --cert cert.pfx --icp-policy ad-rb
 
 # AD-RT with an ICP-Brasil ACT
-simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+simplesign brasil sign doc.pdf --cert cert.pfx --icp-policy ad-rt --tsa https://act.example/tsa
 
 # AD-RC and AD-RA (AD-RA downloads the PA and LPA from the ITI)
-simplesign sign doc.pdf --cert cert.pfx --icp-policy ad-ra --tsa https://act.example/tsa
+simplesign brasil sign doc.pdf --cert cert.pfx --icp-policy ad-ra --tsa https://act.example/tsa
 
 # Prescription: document type and CRM in the PDF metadata
-simplesign sign receita.pdf --cert cert.pfx --icp-policy ad-rb \
+simplesign brasil sign receita.pdf --cert cert.pfx --icp-policy ad-rb \
   --health-document prescricao --registration crm:123456/SP
+
+# Advanced electronic signature (AEA): the signer's manifest goes in the signature
+simplesign brasil sign recibo.pdf --cert cert.pfx --aea --cpf 12345678901 --signer-name "Nome do Signatário" \
+  --signer-email nome@exemplo.org --institution "Universidade" --institution-cnpj 12345678000195
 ```
+
+| Option of `brasil sign` | |
+|---|---|
+| `--icp-policy ad-rb\|ad-rt\|ad-rc\|ad-ra` | The policy sets the level and the PBAD.PAdES sub-filter: no `--ltv`, `--archival`, `--sub-filter` or `--policy-oid` with it; all but `ad-rb` need `--tsa` (an ACT) |
+| `--aea` (or `--brasil`), `--cpf`, `--institution-cnpj` | The advanced signature; needs `--cpf` and `--signer-name`, and reads `--auth-method`, `--signer-email`, `--institution`, `--commitment`, `--policy-oid`, `--policy-uri` of `sign` |
+| `--health-document prescricao\|atestado\|exame\|relatorio`, `--registration COUNCIL:NUMBER/UF` | VALIDAR; the registration (crm, crf, cro, oab, coren… or the federal council acronym) may be repeated |
+
+`simplesign icp-brasil sign` is the same command. Without the extension, `simplesign sign --icp-policy …` is refused
+with the command that installs it; it is never signed without the policy.
 
 Standalone timestamps:
 
 ```bash
 simplesign timestamp create contrato.pdf --tsa https://act.example/tsa
-simplesign timestamp verify contrato.pdf --token contrato.pdf.tst --icp
+simplesign brasil timestamp verify contrato.pdf --token contrato.pdf.tst      # the authority must be an ICP-Brasil ACT
 ```
-
-`--registration` takes `COUNCIL:NUMBER/UF` (crm, crf, cro, oab, coren… or the federal council
-acronym) and may be repeated.
 
 ## AEA — Advanced Electronic Signature (Lei 14.063/2020)
 

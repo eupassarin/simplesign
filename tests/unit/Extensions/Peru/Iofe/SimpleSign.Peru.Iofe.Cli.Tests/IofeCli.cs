@@ -1,12 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.CAdES;
-using SimpleSign.Cli;
-using SimpleSign.PAdES.DependencyInjection;
-using SimpleSign.XAdES;
 using Spectre.Console;
-using Spectre.Console.Cli;
 
 namespace SimpleSign.Peru.Iofe.Cli.Tests;
 
@@ -30,14 +22,7 @@ internal static class IofeCli
     /// <summary>Runs the CLI and returns the exit code with everything this run wrote to both consoles.</summary>
     internal static async Task<(int Exit, string Output)> RunAsync(params string[] args)
     {
-        var services = new ServiceCollection();
-        services.AddSimpleSign();
-        services.AddSimpleSignIcpBrasil();
-        services.AddSimpleSignGovBr();
-        services.AddSimpleSignCades();
-        services.AddSimpleSignXades();
-        var app = new CommandApp(new SimpleSignServiceRegistry(services));
-        Program.ConfigureApp(app, [new IofeCliExtension()]);
+        var app = Program.CreateApp([new IofeCliExtension()]);
 
         IAnsiConsole originalAnsi = AnsiConsole.Console;
         TextWriter originalOut = Console.Out;

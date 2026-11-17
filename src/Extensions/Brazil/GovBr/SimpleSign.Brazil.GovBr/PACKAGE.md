@@ -17,7 +17,7 @@ var results = await validator.ValidateAsync(File.OpenRead("signed.pdf"));
 
 `GovBrPolicies.Validation` is SimpleSign's validation policy for Gov.br signatures (a signing certificate without
 digitalSignature or nonRepudiation fails; a missing signing-certificate attribute only warns, as Gov.br's portal signs
-in adbe.pkcs7.detached without it): pass it as `ValidationOptions.Policy`, or as `--policy govbr` in the CLI.
+in adbe.pkcs7.detached without it): pass it as `ValidationOptions.Policy`, or as `--policy govbr` in the CLI (extension `SimpleSign.Brazil.Cli`).
 
 More at [github.com/eupassarin/SimpleSign](https://github.com/eupassarin/SimpleSign)
-and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/docs/articles/icp-brasil.md). MIT licensed.
+and the [docs](https://github.com/eupassarin/SimpleSign/tree/main/src/Extensions/Brazil/docs/icp-brasil.md). MIT licensed.

@@ -4,7 +4,7 @@ using SimpleSign.Core.Extensions;
 
 namespace SimpleSign.Brazil.IcpBrasil.Tests;
 
-/// <summary>The bundled ICP-Brasil intermediate ACs (scripts/update-icp-intermediates.sh).</summary>
+/// <summary>The bundled ICP-Brasil intermediate ACs (src/Extensions/Brazil/tools/update-icp-intermediates.sh).</summary>
 [Trait("Category", "Unit")]
 public sealed class IcpBrasilIntermediatesTests
 {

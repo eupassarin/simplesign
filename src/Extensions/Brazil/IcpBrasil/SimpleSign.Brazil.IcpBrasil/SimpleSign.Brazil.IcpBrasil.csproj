@@ -20,7 +20,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Tests" />
-    <InternalsVisibleTo Include="SimpleSign.Cli" />
   </ItemGroup>
 
   <ItemGroup>

@@ -891,7 +891,7 @@ internal static class Translations
         ["AD-RA"] = "AD-RA",
         ["PAdES has no AD-RV policy (DOC-ICP-15.03): choose AD-RB, AD-RT, AD-RC or AD-RA."] = "O PAdES não tem política AD-RV (DOC-ICP-15.03): escolha AD-RB, AD-RT, AD-RC ou AD-RA.",
         ["AD-RA embeds the policy's artifacts (PA, LPA), which a two-phase signature cannot: sign in one call."] = "A AD-RA embute os artefatos da política (PA, LPA), o que uma assinatura em duas fases não consegue: assine em uma chamada.",
-        ["The CLI signs under an ICP-Brasil policy for PAdES only (sign --icp-policy): run this one through the library."] = "A CLI assina com política ICP-Brasil só em PAdES (sign --icp-policy): rode esta pela biblioteca.",
+        ["The CLI signs under an ICP-Brasil policy for PAdES only (brasil sign --icp-policy): run this one through the library."] = "A CLI assina com política ICP-Brasil só em PAdES (brasil sign --icp-policy): rode esta pela biblioteca.",
         ["ICP-Brasil signature policy"] = "Política de assinatura ICP-Brasil",
         ["A signature under an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA): its identifier and hash, and the level it sets. For real ICP-Brasil certificates."] = "Uma assinatura sob uma política de assinatura ICP-Brasil (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA): seu identificador e hash, e o nível que ela define. Para certificados ICP-Brasil reais.",
         ["ICP-Brasil policy"] = "Política ICP-Brasil",

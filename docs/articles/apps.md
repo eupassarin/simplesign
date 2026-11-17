@@ -22,7 +22,7 @@ expired TSA, a CRL without `nextUpdate`, a trusted list signed by the wrong key)
 Playbook tab runs a list of steps written beforehand against it, through the library *and* through
 the CLI, and exports the evidence as an HTML page and a zip. That is how
 [INDECOPI's guide v4.0](../../src/Extensions/Peru/Iofe/docs/iofe.md), the [ETSI checklist](../playbooks/etsi-checklist.md) and the
-[eIDAS checklist](../playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
+[eIDAS checklist](../../src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md) are demonstrated. See [playbook.md](playbook.md).
 
 **For signing in a browser** — the Agent. A web page cannot reach a smartcard or the OS certificate
 store, so the Agent runs on the user's machine and the page calls it over loopback. The server keeps
@@ -51,8 +51,9 @@ The CLI targets **net8.0** and covers what the library does: `sign`, `sign-dir`,
 `timestamp`, `policy`, `audit`, `pkcs11`, `psc`, `csc`, `profiles`, `explain` and
 `html-to-pdf`.
 
-A whole trust framework comes from one flag: `--profile icp-brasil`, `iofe`, `gov-br`, `eidas` or
-`sandbox` sets the trust anchors *and* the policies together (`simplesign profiles` lists them).
+A whole trust framework comes from one flag: `--profile NAME` sets the trust anchors *and* the policies together
+(`simplesign profiles` lists them). `sandbox` is the CLI's own; `icp-brasil`, `gov-br`, `eidas` and `iofe` come with
+[extensions](cli-extensions.md), installed with `simplesign extension install PACKAGE`.
 
 ```console
 $ simplesign --help

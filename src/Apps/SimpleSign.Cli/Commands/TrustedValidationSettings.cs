@@ -12,12 +12,12 @@ internal class TrustedValidationSettings : CommonSettings
 {
     /// <summary>Validation policy (JSON).</summary>
     [CommandOption("--policy <PATH>")]
-    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, eidas, icp-brasil, govbr, or one an extension adds). Write one with 'simplesign policy export validation [[--preset NAME]]'")]
+    [Description("Validation policy: a JSON file (root ValidationConstraints) or a built-in name (default, strict, or one an extension adds: eidas, icp-brasil, govbr, iofe…). Write one with 'simplesign policy export validation [[--preset NAME]]'")]
     public string? PolicyPath { get; init; }
 
     /// <summary>The trust profile: its validation policy (unless --policy) and its trust (unless --tsl/--lotl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, eidas, icp-brasil, gov-br, or one an extension adds. Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, or one an extension adds (eidas, icp-brasil, gov-br, iofe…). Sets the validation policy (unless --policy) and the trust (unless --tsl or --lotl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added (their policies are not used).</summary>
@@ -27,7 +27,7 @@ internal class TrustedValidationSettings : CommonSettings
 
     /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
     [CommandOption("--sandbox <URL>")]
-    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (eidas, or an extension's) reads the Sandbox's instead of the real one")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (an extension's: eidas, iofe) reads the Sandbox's instead of the real one")]
     public string? Sandbox { get; init; }
 
     /// <summary>Certificate the policy must be signed with (detached CMS next to it, .p7s).</summary>
@@ -172,7 +172,8 @@ internal class TrustedValidationSettings : CommonSettings
         {
             if (path is not null && !File.Exists(path))
             {
-                return Spectre.Console.ValidationResult.Error($"{what} file not found: {path}");
+                return Spectre.Console.ValidationResult.Error(
+                    (what == "Policy" ? PolicyPresets.InstallHint(path) : null) ?? $"{what} file not found: {path}");
             }
         }
 

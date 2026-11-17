@@ -1,7 +1,16 @@
 # eIDAS (EU)
 
-`SimpleSign.Europe.Eidas` — the EU trust framework (Regulation (EU) No 910/2014). It follows the layout of `../../Peru/`:
-a project implementing `ICountryExtension`, built on the public API of Core and XAdES.
+Everything SimpleSign has for the EU trust framework (Regulation (EU) No 910/2014), in one folder.
+
+| | |
+|---|---|
+| [`SimpleSign.Europe.Eidas/`](SimpleSign.Europe.Eidas) | The library: trust anchors from the EU list of trusted lists, the qualification of a signature, the policies. One `ICountryExtension`, built on the public API of Core and XAdES |
+| [`SimpleSign.Europe.Eidas.Cli/`](SimpleSign.Europe.Eidas.Cli) | The extension of the `simplesign` command line: `--profile eidas` and the `eidas` policies |
+| [`docs/eidas.md`](docs/eidas.md) | The article: the lists, the qualification, the profile |
+| [`playbooks/`](playbooks) | `eidas-checklist.md`, what each item shows, and `eidas-baseline.json`, the playbook the TestBench runs |
+| [`tools/eidas.py`](tools/eidas.py) | Writes that playbook |
+
+The tests are in `tests/unit/Extensions/Europe/Eidas`.
 
 - `EidasExtension`: trust anchors from the EU list of trusted lists (LOTL) and the national lists it points to
   (`TrustedListSet`), with the status history of each service. The LOTL is checked against
@@ -13,10 +22,7 @@ a project implementing `ICountryExtension`, built on the public API of Core and 
   certificate's issuance and at signing time, its Qualifications over the QC statements) and TS 119 172-4 (QESig,
   QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal) — and of its time-stamps (QTSA when a granted TSA/QTST issued them).
 - `EidasPolicies.Signing` / `Validation` and `EidasProfile` (`eidas`): `WithProfile(eidas)` for signers,
-  `ValidationOptions.Profile = eidas` for validators; `simplesign … --profile eidas` in the CLI.
-
-Documentation: [docs/articles/eidas.md](../../../../docs/articles/eidas.md); what each item shows in
-[docs/playbooks/eidas-checklist.md](../../../../docs/playbooks/eidas-checklist.md).
+  `ValidationOptions.Profile = eidas` for validators; `simplesign … --profile eidas` in the CLI (the extension).
 
 ## The bundled LOTL signers
 
@@ -46,3 +52,11 @@ byte[] signed = await PadesSigner.Document(pdf).WithCertificate(certificate, cha
 var results = await new PdfSignatureValidator(new ValidationOptions { Profile = eidas }).ValidateAsync(signed);
 Console.WriteLine(results[0].Qualification?.Level); // QESig, AdESig-QC…
 ```
+
+```bash
+simplesign extension install SimpleSign.Europe.Eidas.Cli
+simplesign validate contract.pdf --profile eidas
+```
+
+What is still elsewhere: the TestBench, the Agent and the Sandbox know eIDAS directly (the profile menu, the catalog of
+frameworks, the Sandbox's LOTL); see [ADR 0030](../../../../docs/adr/0030-cli-extensions.md).

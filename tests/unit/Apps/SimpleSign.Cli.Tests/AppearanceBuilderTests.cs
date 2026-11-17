@@ -180,24 +180,6 @@ public sealed class AppearanceBuilderTests
         AppearanceBuilder.ParseColor("2,-1,0.5").ShouldBe((1f, 0f, 0.5f));
 
     [Fact]
-    public void AddAeaExtraLines_AddsNameAndMaskedCpf()
-    {
-        var baseAppearance = AppearanceBuilder.Build(true, null, null, 1, 50f, 60f, true, false);
-
-        var result = AppearanceBuilder.AddAeaExtraLines(baseAppearance, "André Almeida", "12345678901");
-
-        result.ShouldNotBeNull();
-        result.ExtraLines.ShouldNotBeNull();
-        result.ExtraLines.Count.ShouldBe(2);
-        result.ExtraLines[0].ShouldBe("André Almeida");
-        result.ExtraLines[1].ShouldBe("CPF: ***.456.789-**");
-        result.Page.ShouldBe(1);
-        result.X.ShouldBe(50f);
-        result.Y.ShouldBe(60f);
-        result.AutoPosition.ShouldBeFalse();
-    }
-
-    [Fact]
     public void Build_WithTextOptions_SetsLabelsAndDate()
     {
         var text = new AppearanceTextOptions("Assinado por", "Motivo: ", "Local: ", "Data: ", "dd/MM/yyyy HH:mm zzz", "-03:00");
@@ -299,16 +281,6 @@ public sealed class AppearanceBuilderTests
         result.VerticalAlignment.ShouldBe(PAdES.Signing.SignatureVerticalAlignment.Top);
         result.ShrinkToFit.ShouldBeTrue();
         result.MaxTextLength.ShouldBe(new PAdES.Signing.SignatureAppearance().MaxTextLength);
-    }
-
-    [Fact]
-    public void AddAeaExtraLines_AfterExtraLines_KeepsThem()
-    {
-        var result = AppearanceBuilder.AddAeaExtraLines(
-            new PAdES.Signing.SignatureAppearance().WithExtraLines(["Linha"]), "Ana", "12345678901");
-
-        result.ExtraLines![0].ShouldBe("Linha");
-        result.ExtraLines.Count.ShouldBe(3);
     }
 
     [Theory]

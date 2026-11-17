@@ -1,7 +1,6 @@
 using System.ComponentModel;
-using SimpleSign.Brazil;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
+using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Cli.Json;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
@@ -13,7 +12,6 @@ using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -132,27 +130,18 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             integrityVerifier: _integrityVerifier,
             cmsParser: _cmsParser,
             timestampValidator: _timestampValidator,
-            chainValidationProviders:
-            [
-                .. new IcpBrasilExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders,
-                .. new GovBrExtension(_httpClientProvider.GetClient(), logger).ChainValidationProviders,
-            ]);
+            chainValidationProviders: CliExtensions.ChainValidationProviders(_httpClientProvider.GetClient(), logger));
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
         settings.WriteReports([.. results.Select(r => r.ToReportEntry())]);
 
-        // Run inspection to get PAdES conformance levels and AEA info
+        // Run inspection to get PAdES conformance levels and what the extensions annotate (a signer's manifest, the commitment)
         stream.Position = 0;
         var inspection = await _inspector.InspectAsync(stream, cancellationToken: cancellationToken);
         var conformanceLevels = _conformanceDetector.DetectAll(inspection)
             .GroupBy(x => x.Signature.FieldName)
             .ToDictionary(g => g.Key, g => g.First().Level);
-        var aeaInfo = inspection.Signatures
-            .Where(s => s.CommitmentTypeOid is not null)
-            .GroupBy(s => s.FieldName)
-            .ToDictionary(g => g.Key, g => (g.First().CommitmentTypeOid!, g.First().SignaturePolicyOid, g.First().ManifestJson));
-
         // Build lookup from field name to inspection signature
         var inspectionLookup = inspection.Signatures
             .GroupBy(s => s.FieldName)
@@ -160,8 +149,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 
         if (settings.Json)
         {
-            OutputJson(settings.InputPath, results, conformanceLevels,
-                inspectionLookup.ToDictionary(kv => kv.Key, kv => kv.Value.ManifestJson));
+            OutputJson(settings.InputPath, results, conformanceLevels, inspectionLookup);
         }
         else if (settings.Simple)
         {
@@ -169,7 +157,7 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
         else
         {
-            OutputText(settings.InputPath, results, conformanceLevels, aeaInfo, inspection, inspectionLookup, settings.Spanish);
+            OutputText(settings.InputPath, results, conformanceLevels, inspection, inspectionLookup, settings.Spanish);
         }
 
         bool hasUnvalidated = results.Any(r => r.Indication != SignatureIndication.Valid);
@@ -239,66 +227,25 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         }
     }
 
-    private static void AddBrasilNode(TreeNode sigNode, SignatureValidationResult result, byte[]? manifestJson)
+    /// <summary>A validated signature as the extensions annotate it: the result, and what the inspection read of it.</summary>
+    private static CliSignatureFacts Facts(SignatureValidationResult result, SignatureFieldInfo? inspected) => new()
     {
-        // Lei 14.063 is Brazilian: show it only for a signature validated under the Brazilian
-        // framework, or one carrying an advanced-signature (AEA) manifest, which is Brazilian too.
-        // Classify falls through to Simples for any valid signature, so without this guard a
-        // Peruvian (IOFE) signature would get a "Lei 14.063: Simples" node.
-        if (result.ChainValidationRegion != "BR" && manifestJson is not { Length: > 0 })
-        {
-            return;
-        }
-
-        var level = Lei14063.Classify(result, manifestJson);
-
-        var node = sigNode.AddNode($"Brasil:       [blue]{(level is null ? "—" : $"Lei 14.063: {level}")}[/]");
-        var metadata = result.ChainValidationMetadata ?? new Dictionary<string, string>();
-        if (metadata.TryGetValue("BR.Hierarchy", out var hierarchy))
-        {
-            node.AddNode($"Hierarchy:      {hierarchy.EscapeMarkup()} {(result.PolicyLevel ?? string.Empty).EscapeMarkup()}");
-        }
-
-        if (result.SignerId is not null)
-        {
-            node.AddNode($"{(result.SignerIdType ?? "ID").EscapeMarkup()}:{new string(' ', Math.Max(1, 16 - (result.SignerIdType ?? "ID").Length - 1))}{result.SignerId.EscapeMarkup()}");
-        }
-
-        if (metadata.TryGetValue("BR.ResponsibleCpf", out var responsible))
-        {
-            node.AddNode($"Responsible:    CPF {responsible.EscapeMarkup()}");
-        }
-
-        foreach (var (key, value) in metadata.Where(m => m.Key.StartsWith("BR.Registration.", StringComparison.Ordinal)))
-        {
-            node.AddNode($"Registration:   {key["BR.Registration.".Length..].ToUpperInvariant().EscapeMarkup()} {value.EscapeMarkup()}");
-        }
-
-        if (metadata.TryGetValue("BR.SignaturePolicy", out var policy))
-        {
-            string status = metadata.GetValueOrDefault("BR.SignaturePolicyStatus") ?? string.Empty;
-            string color = status == "Valid" ? "green" : status == "Invalid" ? "red" : "yellow";
-            node.AddNode($"Policy:         {policy.EscapeMarkup()} [{color}]{status.EscapeMarkup()}[/]");
-        }
-
-        if (metadata.TryGetValue("BR.RevocationStatus", out var revocation))
-        {
-            node.AddNode($"Revocation:     {revocation.EscapeMarkup()} [dim]at {metadata.GetValueOrDefault("BR.ValidationTime", string.Empty).EscapeMarkup()}[/]");
-        }
-    }
+        Validation = result,
+        ManifestJson = inspected?.ManifestJson,
+        CommitmentTypeOid = inspected?.CommitmentTypeOid,
+    };
 
     private static void OutputJson(string inputPath, IReadOnlyList<SignatureValidationResult> results,
-        Dictionary<string, PAdESConformanceLevel> conformanceLevels, IReadOnlyDictionary<string, byte[]?> manifests)
+        Dictionary<string, PAdESConformanceLevel> conformanceLevels, Dictionary<string, SignatureFieldInfo> inspected)
     {
         var fileName = Path.GetFileName(inputPath);
-        var output = JsonMapper.MapValidation(fileName, results, conformanceLevels, manifests);
+        var output = JsonMapper.MapValidation(fileName, results, conformanceLevels, r => Facts(r, inspected.GetValueOrDefault(r.FieldName)));
         var json = System.Text.Json.JsonSerializer.Serialize(output, CliJsonContext.Default.ValidateOutput);
         Console.WriteLine(json);
     }
 
     private static void OutputText(string inputPath, IReadOnlyList<SignatureValidationResult> results,
         Dictionary<string, PAdESConformanceLevel> conformanceLevels,
-        Dictionary<string, (string CommitmentOid, string? PolicyOid, byte[]? ManifestJson)> aeaInfo,
         PdfInspectionResult inspection,
         Dictionary<string, SignatureFieldInfo> inspectionLookup,
         bool spanish)
@@ -450,41 +397,8 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
                 valNode.AddNode($"Timestamp:  {Check(result.HasValidTimestamp.Value)}{tsTime}");
             }
 
-            // AEA info
-            if (aeaInfo.TryGetValue(result.FieldName, out var aea))
-            {
-                string commitmentName = aea.CommitmentOid switch
-                {
-                    "1.2.840.113549.1.9.16.6.1" => "Proof of Origin",
-                    "1.2.840.113549.1.9.16.6.5" => "Proof of Approval",
-                    _ => aea.CommitmentOid
-                };
-                var aeaNode = sigNode.AddNode($"AEA:          [blue]Lei 14.063 ({commitmentName})[/]");
-
-                if (aea.ManifestJson is { Length: > 0 })
-                {
-                    var manifest = SignatureManifest.FromJsonUtf8(aea.ManifestJson);
-                    if (manifest is not null)
-                    {
-                        aeaNode.AddNode($"CPF:            {manifest.Signer.Cpf.EscapeMarkup()}");
-                        if (manifest.Signer.Email is not null)
-                        {
-                            aeaNode.AddNode($"Email:          {manifest.Signer.Email.EscapeMarkup()}");
-                        }
-                        if (manifest.Evidence.Ip is not null)
-                        {
-                            aeaNode.AddNode($"IP:             {manifest.Evidence.Ip.EscapeMarkup()}");
-                        }
-                        aeaNode.AddNode($"Authentication: {manifest.Evidence.AuthMethod.EscapeMarkup()}");
-                        if (manifest.Institution?.Name is not null)
-                        {
-                            aeaNode.AddNode($"Institution:    {manifest.Institution.Name.EscapeMarkup()}");
-                        }
-                    }
-                }
-            }
-
-            AddBrasilNode(sigNode, result, sig?.ManifestJson);
+            // What the extensions in use say of it: the level under a country's law, the signer's manifest…
+            ExtensionAnnotations.AddNodes(sigNode, Facts(result, sig));
 
             sigNode.AddNode($"Algorithm:    {(result.DigestAlgorithmName ?? result.DigestAlgorithmOid ?? "\u2014").EscapeMarkup()}");
 

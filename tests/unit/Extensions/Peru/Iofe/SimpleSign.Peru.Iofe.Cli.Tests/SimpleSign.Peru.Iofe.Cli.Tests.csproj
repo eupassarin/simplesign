@@ -28,8 +28,6 @@
     <!-- The real command line, with the extension registered in memory. -->
     <ProjectReference Include="..\..\..\..\..\..\src\Apps\SimpleSign.Cli\SimpleSign.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Extensions\Peru\Iofe\SimpleSign.Peru.Iofe.Cli\SimpleSign.Peru.Iofe.Cli.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Extensions\Brazil\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
-    <ProjectReference Include="..\..\..\..\..\..\src\Extensions\Brazil\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Core.Policies;
 
 namespace SimpleSign.Cli.Commands;
@@ -26,8 +27,6 @@ internal static class PolicyPresets
                 .With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Ignore))
                 .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
                 .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore)),
-            ["eidas"] = () => SimpleSign.Europe.Eidas.EidasPolicies.Signing,
-            ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Signing,
         };
 
     /// <summary>The validation policies by name.</summary>
@@ -38,9 +37,6 @@ internal static class PolicyPresets
             ["strict"] = () => ValidationPolicy.Default
                 .WithName("SimpleSign default, strict")
                 .With("Timestamp/Coherence", Fail).With("SignatureConstraints/PolicyAvailable", Fail),
-            ["eidas"] = () => SimpleSign.Europe.Eidas.EidasPolicies.Validation,
-            ["icp-brasil"] = () => SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicies.Validation,
-            ["govbr"] = () => SimpleSign.Brazil.GovBr.GovBrPolicies.Validation,
         };
 
     /// <summary>The signing policies, by name.</summary>
@@ -66,6 +62,15 @@ internal static class PolicyPresets
 
         return all;
     }
+
+    /// <summary>
+    /// What to tell the user who gave <paramref name="name"/> where a policy name or file was expected and it is
+    /// neither: the command that installs the extension the policy comes with, when it is a known one; null otherwise.
+    /// </summary>
+    internal static string? InstallHint(string? name) =>
+        name is not null && KnownExtensions.PackageOfPolicy(name) is { } package
+            ? $"The policy '{name}' comes with an extension: 'simplesign extension install {package}'."
+            : null;
 
     /// <summary>The names, for messages.</summary>
     internal static string Names<T>(IReadOnlyDictionary<string, T> presets) => string.Join(", ", presets.Keys);

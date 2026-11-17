@@ -1,16 +1,20 @@
-"""Writes docs/playbooks/eidas-baseline.json: the eIDAS profile (SimpleSign.Europe.Eidas) run against the Sandbox's list of
+"""Writes src/Extensions/Europe/Eidas/playbooks/eidas-baseline.json: the eIDAS profile (SimpleSign.Europe.Eidas) run against the Sandbox's list of
 trusted lists, read the eIDAS way, through the library and the CLI: the faults of the lists, the qualification of the
 signatures (ETSI TS 119 615 and TS 119 172-4) and of the time-stamps, including those an augmentation adds later.
 
-Tags name the items of docs/playbooks/eidas-checklist.md (L-n: trusted lists; Q-n: qualification of the signature; T-n:
+Tags name the items of src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md (L-n: trusted lists; Q-n: qualification of the signature; T-n:
 time-stamps) and a topic. The checklist maps each item to the steps that show it.
 
-    python3 tools/playbooks/eidas.py docs/playbooks/eidas-baseline.json
+    python3 src/Extensions/Europe/Eidas/tools/eidas.py src/Extensions/Europe/Eidas/playbooks/eidas-baseline.json
 """
 import json
 import sys
+from pathlib import Path
 
-from describe import describe
+# describe.py is shared by the playbook generators, in tools/playbooks at the repository root.
+sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "tools" / "playbooks"))
+
+from describe import describe  # noqa: E402
 
 # The eidas profile on the Sandbox: its LOTL (/tl/lotl.xml) and the list it points to. The CLI says --profile eidas --sandbox URL.
 EIDAS_ON_SANDBOX = {"profile": "Eidas", "profileSource": "Sandbox"}
@@ -218,7 +222,7 @@ playbook = {
     "title": "eIDAS: trusted lists and qualification",
     "description": "The eIDAS profile (SimpleSign.Europe.Eidas) against the Sandbox's list of trusted lists, through the library and the CLI: "
                    "the faults of the LOTL and the TL, the qualification of each signature (QESig, QESeal, AdESig-QC, AdESig) and of its "
-                   "time-stamps (QTSA). Tags name the items of docs/playbooks/eidas-checklist.md. Not cross-validated with EU DSS: the "
+                   "time-stamps (QTSA). Tags name the items of src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md. Not cross-validated with EU DSS: the "
                    "TestBench does not compare DSS's qualification yet.",
     "defaults": {
         "engine": "both",

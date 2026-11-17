@@ -19,7 +19,7 @@ internal class PolicyExportCommand : Command<PolicyExportCommand.Settings>
 
         /// <summary>A built-in policy to write instead of the default.</summary>
         [CommandOption("--preset <NAME>")]
-        [Description("A built-in policy instead of the default: signing default|strict|minimal|eidas|icp-brasil; validation default|strict|eidas|icp-brasil|govbr; or one an extension adds")]
+        [Description("A built-in policy instead of the default: signing default|strict|minimal; validation default|strict; or one an extension adds (eidas, icp-brasil, govbr, iofe…)")]
         public string? Preset { get; init; }
 
         /// <summary>Output file; standard output when absent.</summary>
@@ -38,7 +38,7 @@ internal class PolicyExportCommand : Command<PolicyExportCommand.Settings>
             bool signing = string.Equals(Kind, "signing", StringComparison.OrdinalIgnoreCase);
             return Preset is null || (signing ? PolicyPresets.Signing.ContainsKey(Preset) : PolicyPresets.Validation.ContainsKey(Preset))
                 ? ValidationResult.Success()
-                : ValidationResult.Error($"Unknown {Kind} preset '{Preset}': use " +
+                : ValidationResult.Error(PolicyPresets.InstallHint(Preset) ?? $"Unknown {Kind} preset '{Preset}': use " +
                     (signing ? PolicyPresets.Names(PolicyPresets.Signing) : PolicyPresets.Names(PolicyPresets.Validation)) + ".");
         }
     }

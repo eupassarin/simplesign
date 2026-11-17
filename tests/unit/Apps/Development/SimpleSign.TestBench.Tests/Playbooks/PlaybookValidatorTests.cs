@@ -387,9 +387,9 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void EidasSample_CoversEveryChecklistItemARunCanShow()
     {
-        // Rows of docs/playbooks/eidas-checklist.md whose "How" is P: each needs a step of eidas-baseline tagged with its
+        // Rows of src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md whose "How" is P: each needs a step of eidas-baseline tagged with its
         // id, and every step id the row names must exist.
-        var rows = File.ReadAllLines(RepositoryPaths.Get("docs", "playbooks", "eidas-checklist.md"))
+        var rows = File.ReadAllLines(RepositoryPaths.Get("src", "Extensions", "Europe", "Eidas", "playbooks", "eidas-checklist.md"))
             .Select(l => l.Split('|', StringSplitOptions.TrimEntries))
             .Where(c => c.Length > 4 && System.Text.RegularExpressions.Regex.IsMatch(c[1], "^[LQT]-[0-9]+$"))
             .ToList();

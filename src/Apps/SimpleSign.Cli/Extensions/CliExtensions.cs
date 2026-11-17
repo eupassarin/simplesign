@@ -1,5 +1,8 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SimpleSign.Cli.Commands;
 using SimpleSign.Cli.Extensibility;
+using SimpleSign.Core.Extensions;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -16,7 +19,8 @@ internal static class CliExtensions
         CliExtensionLoader.CliVersion,
         () => CliNetwork.Provider,
         pin => PasswordResolver.ResolvePinAsync(pin),
-        ExternalCredentialSupport.Secret);
+        ExternalCredentialSupport.Secret,
+        SignAsync);
 
     /// <summary>The installed extensions that load; one that does not is reported on the error stream and left out.</summary>
     internal static IReadOnlyList<ICliExtension> LoadInstalled()
@@ -52,6 +56,39 @@ internal static class CliExtensions
         CliProfiles.Use(extensions);
         PolicyPresets.Use(extensions);
         TrustedListProfiles.Use(extensions);
+    }
+
+    /// <summary>Adds the services of the extensions in use to the CLI's container.</summary>
+    internal static void ConfigureServices(IServiceCollection services)
+    {
+        foreach (var extension in Active)
+        {
+            extension.ConfigureServices(services);
+        }
+    }
+
+    /// <summary>The chain validation of the trust frameworks of the extensions in use, for the validators of <c>validate</c>.</summary>
+    internal static IReadOnlyList<IChainValidationProvider> ChainValidationProviders(HttpClient httpClient, ILogger? logger) =>
+        [.. Active.SelectMany(e => e.CreateChainValidationProviders(httpClient, logger))];
+
+    /// <summary>The command line with the options of a pass-through command of an extension put first (<see cref="CliArguments"/>).</summary>
+    internal static string[] Normalize(string[] args) =>
+        CliArguments.Normalize(args, Active.SelectMany(e => e.PassThroughCommands));
+
+    /// <summary>
+    /// Runs the standard <c>sign</c> for an extension's command: a command line of its own, with the request in scope
+    /// for <see cref="SignCommand"/> to read. What goes wrong is thrown to the command that asked.
+    /// </summary>
+    private static async Task<int> SignAsync(CliSignRequest request, CancellationToken cancellationToken)
+    {
+        using var scope = SignScope.Enter(request);
+        var app = new CommandApp<SignCommand>(Program.CreateRegistrar());
+        app.Configure(config =>
+        {
+            config.SetApplicationName("simplesign sign");
+            config.PropagateExceptions();
+        });
+        return await app.RunAsync(request.Arguments, cancellationToken);
     }
 
     /// <summary>Adds the commands of the extensions in use.</summary>

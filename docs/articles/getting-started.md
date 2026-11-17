@@ -228,5 +228,5 @@ services.AddSimpleSignIofe(new IofeExtensionOptions
 - [CAdES and XAdES](cades-xades.md) — CMS and XML signatures, and augmenting an existing signature
 - [Observability](observability.md) — traces and metrics
 - [CLI](cli.md) — `simplesign sign`, `validate`, `augment`…
-- [ICP-Brasil](icp-brasil.md) — Brazilian PKI integration
+- [ICP-Brasil](../../src/Extensions/Brazil/docs/icp-brasil.md) — Brazilian PKI integration
 - [IOFE (Peru)](../../src/Extensions/Peru/Iofe/docs/iofe.md) — INDECOPI's trusted list and the accreditation guide's policies

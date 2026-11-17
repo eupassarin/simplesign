@@ -203,6 +203,8 @@ jobs:
                      src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
                      src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj \
                      src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj \
+                     src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj \
+                     src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas.Cli/SimpleSign.Europe.Eidas.Cli.csproj \
                      src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj \
                      src/Apps/SimpleSign.Cli.Extensibility/SimpleSign.Cli.Extensibility.csproj \
                      src/Apps/SimpleSign.Cli/SimpleSign.Cli.csproj \

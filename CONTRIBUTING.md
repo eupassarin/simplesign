@@ -96,16 +96,16 @@ src/
     SimpleSign.CAdES/              # CAdES signing and validation
     SimpleSign.XAdES/              # XAdES signing and validation; ETSI trusted lists
     SimpleSign/                    # meta-package
-  Extensions/
-    Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr
+  Extensions/                      # a trust framework's folder holds all that is its own; CliExtension.targets = what makes a CLI extension
+    Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Cli (CLI extension), docs, playbooks, tools
     Peru/Iofe/                     # SimpleSign.Peru.Iofe, .Accredited, .Cli (CLI extension), docs, playbooks, tools
-    Europe/Eidas/                  # SimpleSign.Europe.Eidas
+    Europe/Eidas/                  # SimpleSign.Europe.Eidas, .Cli (CLI extension), docs, playbooks, tools
   Signers/
     SimpleSign.Signers.Pkcs11/     # tokens, smartcards, HSMs
     SimpleSign.Signers.Cloud/      # cloud certificates (PSC, CSC v2)
   Extras/SimpleSign.HtmlToPdf/     # HTML-to-PDF converter
   Apps/
-    SimpleSign.Cli/                # dotnet tool
+    SimpleSign.Cli/                # dotnet tool; references no trust framework (each is an extension)
     SimpleSign.Cli.Extensibility/  # the contract of CLI extensions
     SimpleSign.Agent/              # tray app with a local signing API
     Development/

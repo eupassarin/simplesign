@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
-using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
+using SimpleSign.Cli.Extensibility;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
@@ -309,65 +309,35 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Hide signing date in visible signature")]
         public bool NoDate { get; init; }
 
-        /// <summary>Advanced Electronic Signature (AEA) per Lei 14.063/2020. Requires --cpf and --signer-name.</summary>
-        [CommandOption("--brasil")]
-        [Description("Advanced Electronic Signature (AEA) per Lei 14.063/2020. Requires --cpf and --signer-name.")]
-        public bool Brasil { get; init; }
-
-        /// <summary>CPF (11 digits, no punctuation) for AEA.</summary>
-        [CommandOption("--cpf <CPF>")]
-        [Description("CPF (11 digits, no punctuation) for AEA")]
-        public string? Cpf { get; init; }
-
-        /// <summary>Authentication method for AEA: digital-certificate (default), gov-br, institutional-login, facial-biometrics, token-otp, username-password.</summary>
+        /// <summary>How the signer was authenticated, in the signature's metadata.</summary>
         [CommandOption("--auth-method <METHOD>")]
-        [Description("Authentication method for AEA: digital-certificate (default), gov-br, institutional-login, facial-biometrics, token-otp, username-password")]
+        [Description("How the signer was authenticated, in the signature's metadata")]
         public string? AuthMethod { get; init; }
 
-        /// <summary>Signer email for AEA.</summary>
+        /// <summary>Signer email, in the signature's metadata.</summary>
         [CommandOption("--signer-email <EMAIL>")]
-        [Description("Signer email for AEA")]
+        [Description("Signer email, in the signature's metadata")]
         public string? SignerEmail { get; init; }
 
-        /// <summary>Institution name for AEA.</summary>
+        /// <summary>Institution name, in the signature's metadata.</summary>
         [CommandOption("--institution <NAME>")]
-        [Description("Institution name for AEA")]
+        [Description("Institution name, in the signature's metadata")]
         public string? Institution { get; init; }
 
-        /// <summary>Institution CNPJ (14 digits) for AEA.</summary>
-        [CommandOption("--institution-cnpj <CNPJ>")]
-        [Description("Institution CNPJ (14 digits) for AEA")]
-        public string? InstitutionCnpj { get; init; }
-
-        /// <summary>Commitment type for AEA: approval (default) or origin.</summary>
+        /// <summary>Commitment type: approval (default) or origin.</summary>
         [CommandOption("--commitment <TYPE>")]
-        [Description("Commitment type for AEA: approval (default) or origin")]
+        [Description("Commitment type: approval (default) or origin")]
         public string? Commitment { get; init; }
 
-        /// <summary>Signature policy OID for AEA.</summary>
+        /// <summary>Signature policy OID.</summary>
         [CommandOption("--policy-oid <OID>")]
-        [Description("Signature policy OID for AEA")]
+        [Description("Signature policy OID")]
         public string? PolicyOid { get; init; }
 
-        /// <summary>Signature policy URI for AEA.</summary>
+        /// <summary>Signature policy URI.</summary>
         [CommandOption("--policy-uri <URI>")]
-        [Description("Signature policy URI for AEA")]
+        [Description("Signature policy URI")]
         public string? PolicyUri { get; init; }
-
-        /// <summary>ICP-Brasil PAdES signature policy: ad-rb, ad-rt, ad-rc or ad-ra.</summary>
-        [CommandOption("--icp-policy <POLICY>")]
-        [Description("ICP-Brasil PAdES policy: ad-rb, ad-rt, ad-rc or ad-ra; the version follows the signer's root, and the policy sets the level and the PBAD.PAdES sub-filter (all but ad-rb require --tsa; ad-ra downloads the PA and LPA from the ITI)")]
-        public string? IcpPolicy { get; init; }
-
-        /// <summary>VALIDAR health document type.</summary>
-        [CommandOption("--health-document <TYPE>")]
-        [Description("Health document for VALIDAR: prescricao, atestado, exame or relatorio (requires --registration)")]
-        public string? HealthDocument { get; init; }
-
-        /// <summary>Professional registrations, COUNCIL:NUMBER/UF.</summary>
-        [CommandOption("--registration <COUNCIL:NUMBER/UF>")]
-        [Description("Professional registration for --health-document, e.g. crm:123456/SP (repeatable)")]
-        public string[]? Registrations { get; init; }
 
         /// <summary>The claimed signing time (ISO 8601) instead of now.</summary>
         [CommandOption("--signing-time <TIME>")]
@@ -447,8 +417,29 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         /// <summary>The level options, as <see cref="PadesProfileOptions"/> takes them.</summary>
         internal PadesProfileOptions.Level LevelOptions => new(TsaUrl, Ltv, Archival, ArchiveTsaUrl, ReturnLowerLevel, RevocationPreference);
 
-        /// <summary>Whether a structured-metadata option was given without --brasil.</summary>
-        internal bool HasMetadata => !Brasil && (SignerId ?? SignerIdType ?? IpAddress ?? InstitutionId ?? InstitutionIdType
+        /// <summary>
+        /// What an extension's command that is running this one reads of these options (<see cref="CliSignRequest"/>).
+        /// </summary>
+        internal CliSignOptions ExtensionOptions => new()
+        {
+            Timestamp = string.IsNullOrWhiteSpace(TsaUrl) ? null : Timestamp(TsaUrl),
+            LongTerm = Ltv,
+            Archival = Archival,
+            SubFilter = SubFilter,
+            PolicyOid = PolicyOid,
+            PolicyUri = PolicyUri,
+            PolicyHash = PolicyHash,
+            ExistingField = ExistingField,
+            SignerName = SignerName,
+            SignerEmail = SignerEmail,
+            Institution = Institution,
+            AuthMethod = AuthMethod,
+            Commitment = Commitment,
+            Visible = Visible,
+        };
+
+        /// <summary>Whether a structured-metadata option was given, and no extension's command writes the signer's data itself.</summary>
+        internal bool HasMetadata => SignScope.Current is not { OwnsSignerData: true } && (SignerId ?? SignerIdType ?? IpAddress ?? InstitutionId ?? InstitutionIdType
             ?? LegalBasis ?? SignerEmail ?? Institution ?? AuthMethod ?? Commitment
             ?? (PolicyHash is null ? PolicyOid : null)) is not null;
 
@@ -560,61 +551,6 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 return ValidationResult.Error("--signature-algorithm must be rsa-pkcs1 or rsassa-pss.");
             }
 
-            if (IcpPolicy is not null)
-            {
-                var policy = IcpBrasilCliOptions.ParsePolicy(IcpPolicy);
-                if (policy is null)
-                {
-                    return ValidationResult.Error("--icp-policy must be ad-rb, ad-rt, ad-rc or ad-ra.");
-                }
-
-                if (policy != IcpBrasilPolicy.AdRb && string.IsNullOrWhiteSpace(TsaUrl))
-                {
-                    return ValidationResult.Error($"--icp-policy {IcpPolicy.ToLowerInvariant()} requires --tsa (an ICP-Brasil ACT).");
-                }
-
-                if (SubFilter is not null)
-                {
-                    return ValidationResult.Error("--icp-policy sets the PBAD.PAdES sub-filter the ICP-Brasil PAs mandate; remove --sub-filter.");
-                }
-
-                if (Ltv || Archival)
-                {
-                    return ValidationResult.Error("--icp-policy sets the level: use ad-rc or ad-ra for the DSS and document timestamp instead of --ltv/--archival.");
-                }
-
-                if (PolicyOid is not null)
-                {
-                    return ValidationResult.Error("--icp-policy and --policy-oid are mutually exclusive.");
-                }
-            }
-
-            if (HealthDocument is not null)
-            {
-                if (IcpBrasilCliOptions.ParseHealthDocument(HealthDocument) is null)
-                {
-                    return ValidationResult.Error("--health-document must be prescricao, atestado, exame or relatorio.");
-                }
-
-                if (Registrations is not { Length: > 0 })
-                {
-                    return ValidationResult.Error("--health-document requires at least one --registration (e.g. crm:123456/SP).");
-                }
-
-                if (ExistingField is not null)
-                {
-                    return ValidationResult.Error("--health-document cannot be used with --existing-field.");
-                }
-            }
-
-            foreach (var registration in Registrations ?? [])
-            {
-                if (IcpBrasilCliOptions.ParseRegistration(registration) is null)
-                {
-                    return ValidationResult.Error($"--registration '{registration}' must be COUNCIL:NUMBER/UF, e.g. crm:123456/SP.");
-                }
-            }
-
             if (FontSize.HasValue && (FontSize < 1 || FontSize > 72))
             {
                 return ValidationResult.Error("--font-size must be between 1 and 72.");
@@ -698,34 +634,10 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 return ValidationResult.Error(extrasError);
             }
 
-#pragma warning disable IDE0046 // Convert to conditional expression — readability
-            if (Brasil)
-            {
-                if (string.IsNullOrWhiteSpace(Cpf))
-                {
-                    return ValidationResult.Error("--brasil requires --cpf.");
-                }
-
-                if (string.IsNullOrWhiteSpace(SignerName))
-                {
-                    return ValidationResult.Error("--brasil requires --signer-name.");
-                }
-
-                if (AuthMethod is not null && !IsValidAuthMethod(AuthMethod))
-                {
-                    return ValidationResult.Error("--auth-method must be digital-certificate, gov-br, institutional-login, facial-biometrics, token-otp, or username-password.");
-                }
-
-                if (Commitment is not null
-                    && !Commitment.Equals("approval", StringComparison.OrdinalIgnoreCase)
-                    && !Commitment.Equals("origin", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ValidationResult.Error("--commitment must be approval or origin.");
-                }
-            }
-#pragma warning restore IDE0046
-
-            return ValidationResult.Success();
+            // What an extension's command that is running this one has to say about these options.
+            return SignScope.Current?.Validate?.Invoke(ExtensionOptions) is { } extensionError
+                ? ValidationResult.Error(extensionError)
+                : ValidationResult.Success();
         }
 
         /// <summary>The error for the signing time, document info, policy hash, metadata and TSA options, or null.</summary>
@@ -773,11 +685,6 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                     return "--policy-hash requires --policy-oid.";
                 }
 
-                if (Brasil || IcpPolicy is not null)
-                {
-                    return "--policy-hash is for an explicit policy; --brasil and --icp-policy set their own.";
-                }
-
                 if (SignCommandOptions.ParseHex(PolicyHash) is null)
                 {
                     return "--policy-hash must be hexadecimal.";
@@ -797,8 +704,15 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
-        using var loggerFactory = settings.CreateLoggerFactory();
         SignJson.Enabled = settings.Json;
+
+        // An option sign does not have is not dropped: the signature would lack what the user asked for.
+        if (KnownExtensions.UnknownOptionError(context, "sign") is { } unknown)
+        {
+            throw new InvalidOperationException(unknown);
+        }
+
+        using var loggerFactory = settings.CreateLoggerFactory();
 
         var outputPath = settings.OutputPath ?? Path.Combine(
             Path.GetDirectoryName(settings.InputPath) ?? ".",
@@ -932,20 +846,12 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
             builder = builder.AsCertification(SignCommandOptions.ParseCertificationLevel(settings.Certify));
         }
 
-        // Brasil AEA — after explicit metadata so it adds extra CMS attributes
-        if (settings.Brasil)
+        // What an extension's command adds (ICP-Brasil's policy, an advanced signature…): after the explicit metadata,
+        // so it can add to it.
+        var extension = SignScope.Current;
+        if (extension?.Configure is { } configure)
         {
-            var info = BrasilSignOptions.Build(
-                signerName: settings.SignerName ?? "",
-                cpf: settings.Cpf!,
-                authMethod: settings.AuthMethod,
-                email: settings.SignerEmail,
-                institution: settings.Institution,
-                institutionCnpj: settings.InstitutionCnpj,
-                commitmentType: settings.Commitment,
-                policyOid: settings.PolicyOid,
-                policyUri: settings.PolicyUri);
-            builder = builder.WithAdvancedSignature(info);
+            builder = await configure(builder, settings.ExtensionOptions, cancellation);
         }
 
         // Visual appearance
@@ -958,7 +864,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 page: settings.Page,
                 x: settings.X,
                 y: settings.Y,
-                hasReason: settings.Reason is not null || settings.Brasil,
+                hasReason: settings.Reason is not null || extension is { ShowsReason: true },
                 hasLocation: settings.Location is not null,
                 fontSize: settings.FontSize,
                 labelFontSize: settings.LabelFontSize,
@@ -976,10 +882,9 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 extra: new AppearanceExtraOptions(settings.VerticalAlign, settings.NoShrinkToFit, settings.MaxTextLength, settings.DateCulture,
                     settings.SignerDisplayName, settings.ExtraLines, settings.HideReason, settings.HideLocation));
 
-            if (settings.Brasil)
+            if (extension?.ConfigureAppearance is { } configureAppearance)
             {
-                appearance = AppearanceBuilder.AddAeaExtraLines(
-                    appearance, settings.SignerName!, settings.Cpf!);
+                appearance = configureAppearance(appearance, settings.ExtensionOptions);
             }
 
             builder = builder.WithAppearance(appearance);
@@ -1006,31 +911,6 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         if (settings.PdfA)
         {
             builder = builder.WithPdfAPreservation();
-        }
-
-        // ICP-Brasil policy: version by the signer's root, PBAD.PAdES, and the level the policy needs.
-        if (IcpBrasilCliOptions.ParsePolicy(settings.IcpPolicy) is { } icpPolicy)
-        {
-            IcpBrasilPolicyArtifacts? artifacts = null;
-            if (icpPolicy == IcpBrasilPolicy.AdRa)
-            {
-                using var http = new HttpClient();
-                artifacts = await IcpBrasilPolicyArtifacts.DownloadAsync(
-                    http, builder.ResolveIcpBrasilPolicy(icpPolicy), cancellation);
-            }
-
-            builder = builder.WithIcpBrasilPolicy(icpPolicy, new IcpBrasilPadesOptions
-            {
-                Timestamp = settings.TsaUrl is null ? null : settings.Timestamp(settings.TsaUrl),
-                Artifacts = artifacts,
-            });
-        }
-
-        if (IcpBrasilCliOptions.ParseHealthDocument(settings.HealthDocument) is { } healthDocument)
-        {
-            builder = builder.WithHealthDocument(
-                healthDocument,
-                [.. (settings.Registrations ?? []).Select(r => IcpBrasilCliOptions.ParseRegistration(r)!)]);
         }
 
         if (settings.OperationId is not null)
@@ -1082,17 +962,6 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         "trustedpublisher" => StoreName.TrustedPublisher,
         _ => null
     };
-
-    private static bool IsValidAuthMethod(string value)
-    {
-        var lower = value.ToLowerInvariant();
-        return lower is "digital-certificate" or "digital_certificate"
-            or "gov-br" or "gov_br" or "govbr"
-            or "institutional-login" or "institutional_login"
-            or "facial-biometrics" or "facial_biometrics"
-            or "token-otp" or "token_otp"
-            or "username-password" or "username_password";
-    }
 
     internal static StoreLocation? ParseStoreLocation(string? value) => value?.ToLowerInvariant() switch
     {

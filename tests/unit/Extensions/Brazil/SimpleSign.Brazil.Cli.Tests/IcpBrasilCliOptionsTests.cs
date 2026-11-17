@@ -1,8 +1,7 @@
 using Shouldly;
 using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Cli.Rendering;
 
-namespace SimpleSign.Cli.Tests;
+namespace SimpleSign.Brazil.Cli.Tests;
 
 [Trait("Category", "Unit")]
 public sealed class IcpBrasilCliOptionsTests

@@ -19,8 +19,9 @@ them and the evidence groups by them.
 1. Start a Sandbox and the TestBench, and connect them (`tools/stack/up.sh`, or the two `dotnet run` lines of
    [testbench.md](testbench.md)). Start DSS too for steps with `crossValidate`.
 2. In the TestBench, open the **Playbook** tab (top bar, after Sign, Validate and Augment). Open a playbook file, or pick a
-   sample (`docs/playbooks/*.json` are bundled: `sandbox-basics`, `indecopi-guia-v4`, `etsi-baseline`,
-   `eidas-baseline`, `icp-brasil-pades`, `govbr-pades`, `augment-external`).
+   sample (`docs/playbooks/*.json` and each trust framework's `src/Extensions/**/playbooks/*.json` are bundled:
+   `sandbox-basics`, `etsi-baseline`, `augment-external`, and `indecopi-guia-v4`, `eidas-baseline`, `icp-brasil-pades`,
+   `govbr-pades`).
 3. The playbook is checked when it loads: every Sandbox signer and certificate, failure, preset and step reference.
    Errors stop it; warnings do not.
 4. The page has three columns:
@@ -177,8 +178,8 @@ that shows it, and the test names it.
 - `eidas-baseline` — the eIDAS profile on the Sandbox's list of trusted lists: the faults of the LOTL and the TL
   (`sandbox.lotl`, `sandbox.trustedList`), the qualification of each signature (`expect.qualification`: QESig, QESeal,
   AdESig-QC, AdESig) and of its time-stamps (`expect.timestampQualification`: QTSA, TSA), including those an
-  augmentation adds later (a QESig raised to B-LTA and renewed), through the library and the CLI. It covers the items [eidas-checklist.md](../playbooks/eidas-checklist.md) marks P; see [eidas.md](eidas.md).
-  Written by `tools/playbooks/eidas.py`.
+  augmentation adds later (a QESig raised to B-LTA and renewed), through the library and the CLI. It covers the items [eidas-checklist.md](../../src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md) marks P; see [eidas.md](../../src/Extensions/Europe/Eidas/docs/eidas.md).
+  Written by `src/Extensions/Europe/Eidas/tools/eidas.py`.
 - `icp-brasil-pades` — PAdES under the ICP-Brasil policies (AD-RB, AD-RT, AD-RC, AD-RA; DOC-ICP-15.03) with the
   `icp-brasil` profile and its policies, through the library and the CLI: the profile's trust, the policies, two-phase
   signing, PDF fields and a pt-BR stamp, validation under the ICP-Brasil policy and augmentation. The Sandbox's trust is added to the profile's; AD-RA downloads its artifacts from ITI's repository.

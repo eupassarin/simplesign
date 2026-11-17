@@ -24,10 +24,11 @@ simplesign validate signed.pdf --json
 simplesign augment signed.pdf --level BLTA --tsa http://timestamp.digicert.com
 ```
 
-A whole trust framework comes from one flag — `--profile icp-brasil`, `gov-br`, `eidas` or `sandbox` — which sets the
-trust anchors and the policies together. Other frameworks come as extensions, installed into the CLI:
-`simplesign extension install SimpleSign.Peru.Iofe.Cli` adds `--profile iofe` and `simplesign iofe …`
-([CLI extensions](../../../docs/articles/cli-extensions.md)).
+A whole trust framework comes from one flag, `--profile NAME`, which sets the trust anchors and the policies together.
+The CLI's own profile is `sandbox`; the trust frameworks are extensions, installed into the CLI
+([CLI extensions](../../../docs/articles/cli-extensions.md)): `simplesign extension install SimpleSign.Brazil.Cli` adds
+`--profile icp-brasil`, `gov-br` and `simplesign brasil sign …`, `SimpleSign.Europe.Eidas.Cli` adds `--profile eidas`,
+and `SimpleSign.Peru.Iofe.Cli` adds `--profile iofe` and `simplesign iofe …`. This project references none of them.
 
 ## Files here
 

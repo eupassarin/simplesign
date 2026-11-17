@@ -1,8 +1,9 @@
 using SimpleSign.Brazil.Signing;
 using SimpleSign.Core.Signing;
 
-namespace SimpleSign.Cli.Rendering;
+namespace SimpleSign.Brazil.Cli;
 
+/// <summary>Parses the options of an advanced electronic signature (AEA, Lei 14.063) of <c>brasil sign</c>.</summary>
 internal static class BrasilSignOptions
 {
     internal static AdvancedSignatureInfo Build(string signerName, string cpf, string? authMethod,
@@ -22,6 +23,15 @@ internal static class BrasilSignOptions
             PolicyUri = policyUri,
         };
     }
+
+    /// <summary>Whether <paramref name="value"/> is one of the authentication methods of <c>--auth-method</c>.</summary>
+    internal static bool IsAuthMethod(string value) => value.ToLowerInvariant()
+        is "digital-certificate" or "digital_certificate"
+        or "gov-br" or "gov_br" or "govbr"
+        or "institutional-login" or "institutional_login"
+        or "facial-biometrics" or "facial_biometrics"
+        or "token-otp" or "token_otp"
+        or "username-password" or "username_password";
 
     internal static AuthenticationMethod ParseAuthMethod(string? value) => value?.ToLowerInvariant() switch
     {

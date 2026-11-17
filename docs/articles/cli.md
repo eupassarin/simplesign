@@ -284,15 +284,15 @@ contract-signed.pdf  1/1 valid
 
 A **trust profile** sets, under one name, the policy and the trust of a trust framework. Each comes from its package
 (`EidasProfile`, `IcpBrasilProfile`, `GovBrProfile`, `IofeProfile`; the library takes them with `WithProfile` and
-`ValidationOptions.Profile`); `simplesign profiles` lists the ones this CLI has. `iofe` comes with the
-[IOFE extension](#extensions) (`simplesign extension install SimpleSign.Peru.Iofe.Cli`); the others are built in:
+`ValidationOptions.Profile`); `simplesign profiles` lists the ones this CLI has. `sandbox` is the CLI's own; the
+profile of a trust framework comes with its [extension](#extensions):
 
 | Profile | Signing policy | Validation policy | Trust |
 |---|---|---|---|
-| `iofe` (extension) | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
-| `eidas` | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](eidas.md) |
-| `icp-brasil` | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
-| `gov-br` | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
+| `iofe` (`SimpleSign.Peru.Iofe.Cli`) | `iofe` | `iofe` | INDECOPI's trusted list, checked against the signer bundled with `SimpleSign.Peru.Iofe` |
+| `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](../../src/Extensions/Europe/Eidas/docs/eidas.md) |
+| `icp-brasil` (`SimpleSign.Brazil.Cli`) | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
+| `gov-br` (`SimpleSign.Brazil.Cli`) | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
 | `sandbox` | `default` | `default` | A running SimpleSign Sandbox's LOTL (`--sandbox URL`) |
 
 ```bash
@@ -320,8 +320,8 @@ writes it out):
 | `default` | Validity of every certificate of the chain, key usage digitalSignature or nonRepudiation, RSA ≥ 2048 bits, SHA-2/SHA-3 |
 | `strict` | `default` plus the revocation of the whole chain (CRL/OCSP); give the chain up to the root |
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
-| `iofe` (extension) | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
-| `eidas` | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
+| `iofe` (`SimpleSign.Peru.Iofe.Cli`) | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
+| `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
 
 What the policy checks against comes from these options:
 
@@ -331,7 +331,7 @@ What the policy checks against comes from these options:
 | `--expected-tsa <file>` | The certificate the TSA must sign with; a timestamp from another is refused (`TimestampUntrusted`) |
 | `--audit-log <file>` | Appends a hash-chained record of each signature made or refused; `simplesign audit verify <file>` checks the chain |
 
-`validate --policy` takes a file or `default`, `strict` (time-stamps out of order and an unavailable signature policy fail), `icp-brasil`, `govbr` or `eidas`.
+`validate --policy` takes a file, `default` or `strict` (time-stamps out of order and an unavailable signature policy fail), or the policy of an installed extension (`icp-brasil`, `govbr`, `eidas`, `iofe`).
 
 A refusal prints the reason (`KeyTooWeak`, `KeyUsageNotPermitted`, `ChainCertificateNotValid`, `CertificateRevoked`,
 `RevocationStatusUnknown`, `AlgorithmNotPermitted`, `UntrustedRoot`, `TimestampUntrusted`, `TimestampCertificateRevoked`…) and what to do about it. `simplesign explain <TERM>` explains the
@@ -377,7 +377,7 @@ simplesign augment signed.xml --level BLTA --tsa http://timestamp.digicert.com -
 |---|---|---|
 | `timestamp create` | A standalone RFC 3161 time-stamp (`.tst`) over a file or a hash | |
 | `timestamp verify` | Checks a `.tst` against a file or a hash, and whether the token's `tsa` name matches its certificate | |
-| `policy export` | Writes the default signing or validation policy as JSON, to edit (`--preset NAME` for `strict`, `minimal`, `eidas`…) | [Policies](../policies/compatibility.md) |
+| `policy export` | Writes the default signing or validation policy as JSON, to edit (`--preset NAME` for `strict`, `minimal`, or an extension's: `eidas`, `icp-brasil`…) | [Policies](../policies/compatibility.md) |
 | `policy schema` | Writes the JSON Schema of the policy files, for an editor's completion and validation | `docs/schemas/` |
 | `audit verify` | Checks the hash chain of an audit trail written by `--audit-log` | |
 | `pkcs11 list`, `pkcs11 drivers` | The tokens and certificates of a PKCS#11 driver, or of every installed driver | [PKCS#11](pkcs11.md) |
@@ -396,11 +396,14 @@ simplesign policy schema validation --output validation.schema.json
 
 ## Extensions
 
-The CLI's own trust frameworks are ICP-Brasil, Gov.br, eIDAS and the Sandbox. Others are **extensions**, packages
-installed into the CLI that add commands, `--profile` names, policy presets and `--tsl-profile` names:
+The CLI knows the formats, the general policies and a running Sandbox. The trust frameworks are **extensions**,
+packages installed into the CLI that add commands, `--profile` names, policy presets, `--tsl-profile` names and what
+`validate` knows about their signatures:
 
 ```bash
-simplesign extension install SimpleSign.Peru.Iofe.Cli     # Peru (IOFE)
+simplesign extension install SimpleSign.Brazil.Cli         # ICP-Brasil, Gov.br, Lei 14.063
+simplesign extension install SimpleSign.Europe.Eidas.Cli   # EU (eIDAS)
+simplesign extension install SimpleSign.Peru.Iofe.Cli      # Peru (IOFE)
 simplesign extension list
 simplesign extension remove iofe
 ```
@@ -409,6 +412,35 @@ simplesign extension remove iofe
 puts the extension in `~/.simplesign/extensions` (`SIMPLESIGN_EXTENSIONS_DIR`). An extension is code that runs each
 time `simplesign` starts: install only packages you trust. [CLI extensions](cli-extensions.md) has the details and how
 to write one.
+
+A name that needs an extension that is not installed says which one: `--profile icp-brasil` answers with
+`simplesign extension install SimpleSign.Brazil.Cli`, and so does `sign --icp-policy …`, an option that is not
+`sign`'s (`sign` refuses an option it does not have; it does not drop it).
+
+### Brazil (ICP-Brasil, Gov.br)
+
+With `SimpleSign.Brazil.Cli` installed: `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, and
+
+- `simplesign brasil sign` (also `icp-brasil sign`): `simplesign sign`, every option of it, plus `--icp-policy
+  ad-rb|ad-rt|ad-rc|ad-ra` (the policy sets the level and the PBAD.PAdES sub-filter), `--aea --cpf …` (advanced
+  electronic signature of Lei 14.063, with the signer's manifest) and `--health-document … --registration …` (VALIDAR);
+- `simplesign brasil timestamp verify`: a `.tst` whose authority must be an ICP-Brasil ACT;
+- in `validate`, `validate-dir` and `inspect`: the ICP-Brasil and Gov.br chain validation and roots for every
+  signature, the Lei 14.063 level, the certificate's data and the manifest of an advanced signature, in the text and in
+  `--json` (`lei14063`, `brasil`, `manifest`).
+
+```bash
+simplesign brasil sign contrato.pdf --cert assinante.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+simplesign brasil sign recibo.pdf --cert assinante.pfx --aea --cpf 12345678909 --signer-name "Maria Silva"
+simplesign validate contrato_signed.pdf --profile icp-brasil --trust-profile gov-br
+```
+
+More in the [ICP-Brasil article](../../src/Extensions/Brazil/docs/icp-brasil.md).
+
+### eIDAS (EU)
+
+With `SimpleSign.Europe.Eidas.Cli` installed: `--profile eidas` (the EU LOTL and its lists; `validate` shows each
+signature's qualification) and the `eidas` policies. More in the [eIDAS article](../../src/Extensions/Europe/Eidas/docs/eidas.md).
 
 ### IOFE (Peru)
 

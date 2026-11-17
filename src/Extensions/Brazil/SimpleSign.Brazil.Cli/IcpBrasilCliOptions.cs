@@ -1,7 +1,6 @@
 using SimpleSign.Brazil.IcpBrasil;
-using SimpleSign.Brazil.Signing;
 
-namespace SimpleSign.Cli.Rendering;
+namespace SimpleSign.Brazil.Cli;
 
 /// <summary>Parses the ICP-Brasil options of <c>sign</c>: --icp-policy, --health-document, --registration.</summary>
 internal static class IcpBrasilCliOptions

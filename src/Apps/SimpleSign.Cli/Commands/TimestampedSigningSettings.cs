@@ -41,7 +41,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>The trust profile: its signing policy (unless --signing-policy) and its trust (unless --tsl).</summary>
     [CommandOption("--profile <NAME>")]
-    [Description("Trust profile: sandbox, eidas, icp-brasil (gov-br validates only), or one an extension adds. Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
+    [Description("Trust profile: sandbox, or one an extension adds (eidas, icp-brasil, iofe…). Sets the signing policy (unless --signing-policy) and the trust anchors (unless --tsl); see 'simplesign profiles'")]
     public string? Profile { get; init; }
 
     /// <summary>Profiles whose trust is added before signing (their policies are not used).</summary>
@@ -51,7 +51,7 @@ internal abstract class TimestampedSigningSettings : CommonSettings
 
     /// <summary>A running SimpleSign Sandbox (its origins are also allowed).</summary>
     [CommandOption("--sandbox <URL>")]
-    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (eidas, or an extension's) reads the Sandbox's instead of the real one")]
+    [Description("A running SimpleSign Sandbox: its origins, LDAP and HTTPS chain are allowed; --profile sandbox trusts it, and a profile of a trusted list (an extension's: eidas, iofe) reads the Sandbox's instead of the real one")]
     public string? Sandbox { get; init; }
 
     /// <summary>Trust anchor certificate files for the checks made before signing.</summary>

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.DependencyInjection;
-using SimpleSign.Brazil;
 using SimpleSign.CAdES;
 using SimpleSign.Cli;
 using SimpleSign.Cli.Commands;
@@ -8,8 +7,6 @@ using SimpleSign.PAdES.DependencyInjection;
 using SimpleSign.XAdES;
 using Spectre.Console;
 using Spectre.Console.Cli;
-using SimpleSign.Brazil.GovBr;
-using SimpleSign.Brazil.IcpBrasil;
 
 // --allow-origin, --allow-ldap and --tls-trust (any command) are read first: the HTTP provider is
 // registered before the command line is parsed.
@@ -24,32 +21,53 @@ catch (ArgumentException ex)
     return -1;
 }
 
-var services = new ServiceCollection();
-if (CliNetwork.IsConfigured)
-{
-    services.AddSimpleSign(configure: null, CliNetwork.Provider);
-}
-else
-{
-    services.AddSimpleSign();
-}
-
-services.AddSimpleSignIcpBrasil();
-services.AddSimpleSignGovBr();
-services.AddSimpleSignCades();
-services.AddSimpleSignXades();
-
-var registry = new SimpleSignServiceRegistry(services);
-var app = new CommandApp(registry);
-ConfigureApp(app, CliExtensions.LoadInstalled());
-return await app.RunAsync(commandArgs);
+return await RunWithAsync(CreateApp(CliExtensions.LoadInstalled()), commandArgs);
 
 internal static partial class Program
 {
-    /// <summary>Sets the command line up, with the commands, profiles and policies of <paramref name="extensions"/> (none when null).</summary>
+    /// <summary>
+    /// The command line with <paramref name="extensions"/> in use (none when null): their services in the container,
+    /// their commands, profiles and policies next to the CLI's own.
+    /// </summary>
+    internal static CommandApp CreateApp(IReadOnlyList<SimpleSign.Cli.Extensibility.ICliExtension>? extensions = null)
+    {
+        CliExtensions.Use(extensions ?? []);
+        var app = new CommandApp(CreateRegistrar());
+        ConfigureCommands(app);
+        return app;
+    }
+
+    /// <summary>The CLI's services, and those of the extensions in use (<see cref="CliExtensions.Use"/> comes first).</summary>
+    internal static SimpleSignServiceRegistry CreateRegistrar()
+    {
+        var services = new ServiceCollection();
+        if (CliNetwork.IsConfigured)
+        {
+            services.AddSimpleSign(configure: null, CliNetwork.Provider);
+        }
+        else
+        {
+            services.AddSimpleSign();
+        }
+
+        services.AddSimpleSignCades();
+        services.AddSimpleSignXades();
+        CliExtensions.ConfigureServices(services);
+        return new SimpleSignServiceRegistry(services);
+    }
+
+    /// <summary>
+    /// Sets the command line up on an app the caller created, with the commands, profiles and policies of
+    /// <paramref name="extensions"/> (none when null). The services of the extensions are the caller's to add:
+    /// <see cref="CreateApp"/> does both.
+    /// </summary>
     internal static void ConfigureApp(CommandApp app, IReadOnlyList<SimpleSign.Cli.Extensibility.ICliExtension>? extensions = null)
     {
         CliExtensions.Use(extensions ?? []);
+        ConfigureCommands(app);
+    }
+
+    private static void ConfigureCommands(CommandApp app) =>
         app.Configure(config =>
         {
             config.SetApplicationName("simplesign");
@@ -155,7 +173,7 @@ internal static partial class Program
                     .WithDescription("Remove an installed extension");
             });
 
-            // What the installed extensions add: their own branches (the Peruvian 'iofe', for one).
+            // What the installed extensions add: their own branches (the Peruvian 'iofe', the Brazilian 'brasil').
             CliExtensions.AddCommands(config);
 
             config.SetExceptionHandler((ex, _) =>
@@ -181,7 +199,6 @@ internal static partial class Program
                 return -1;
             });
         });
-    }
 
     /// <summary>What the user can do about a refusal of the signing policy.</summary>
     internal static string? SigningHint(SimpleSign.Core.Signing.SigningErrorReason reason) => reason switch
@@ -201,6 +218,8 @@ internal static partial class Program
     internal static async Task<int> RunWithAsync(CommandApp app, string[] args)
     {
         SignJson.Enabled = false;
-        return await app.RunAsync(args);
+
+        // A command of an extension that runs a standard one takes its own options anywhere on the line.
+        return await app.RunAsync(CliExtensions.Normalize(args));
     }
 }

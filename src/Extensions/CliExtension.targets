@@ -1,0 +1,48 @@
+<Project>
+  <!--
+    What makes a project a CLI extension (ADR 0030): imported at the end of its .csproj, which sets
+    CliExtensionName (the name in extension.json and in 'simplesign extension remove') and CliExtensionType (the
+    ICliExtension the CLI creates).
+  -->
+  <PropertyGroup>
+    <!-- An extension loads into the CLI, a net8.0 dotnet tool: one target framework, the CLI's. -->
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
+    <!-- Spectre.Console.Cli instantiates commands and settings via reflection. -->
+    <NoWarn>$(NoWarn);CA1812</NoWarn>
+    <!-- Every assembly the extension needs is next to it: the CLI loads from its folder what it does not have itself. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- The package is an extension, not a library to reference: its payload is the cli-extension/ folder. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoPackageAnalysis>true</NoPackageAnalysis>
+    <IncludeSymbols>false</IncludeSymbols>
+    <!-- The oldest CLI this extension runs in: raise it when the extension starts using something a newer CLI brought. -->
+    <CliExtensionMinCliVersion Condition="'$(CliExtensionMinCliVersion)' == ''">0.12.0</CliExtensionMinCliVersion>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackCliExtension</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <!--
+    The manifest the CLI reads (extension.json), written at build with the version of the package, so a release sets it
+    in one place. It travels with the assemblies, in the build output and in the package.
+  -->
+  <Target Name="GenerateCliExtensionManifest" BeforeTargets="AssignTargetPaths">
+    <PropertyGroup>
+      <_CliExtensionManifest>$(IntermediateOutputPath)extension.json</_CliExtensionManifest>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_CliExtensionManifest)" Overwrite="true" WriteOnlyWhenDifferent="true"
+                      Lines="{ &quot;name&quot;: &quot;$(CliExtensionName)&quot;, &quot;assembly&quot;: &quot;$(AssemblyName).dll&quot;, &quot;type&quot;: &quot;$(CliExtensionType)&quot;, &quot;contract&quot;: 1, &quot;minCliVersion&quot;: &quot;$(CliExtensionMinCliVersion)&quot;, &quot;version&quot;: &quot;$(Version)&quot;, &quot;package&quot;: &quot;$(PackageId)&quot; }" />
+    <ItemGroup>
+      <None Include="$(_CliExtensionManifest)" Link="extension.json" CopyToOutputDirectory="PreserveNewest" />
+      <FileWrites Include="$(_CliExtensionManifest)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The assemblies of the build output (the extension, the packages it brings, what they need) and the manifest, under cli-extension/. -->
+  <Target Name="PackCliExtension">
+    <ItemGroup>
+      <_CliExtensionFile Include="$(OutDir)*.dll;$(OutDir)extension.json" />
+      <TfmSpecificPackageFile Include="@(_CliExtensionFile)" PackagePath="cli-extension/" />
+    </ItemGroup>
+  </Target>
+</Project>

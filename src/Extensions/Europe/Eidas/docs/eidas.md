@@ -86,7 +86,11 @@ framework implements `ISignatureQualifier`; a country extension returns it in `S
 
 ## CLI
 
+eIDAS is an extension of the `simplesign` command line (`SimpleSign.Europe.Eidas.Cli`, in
+[`../SimpleSign.Europe.Eidas.Cli`](../SimpleSign.Europe.Eidas.Cli)): it adds the `eidas` profile and policies.
+
 ```bash
+simplesign extension install SimpleSign.Europe.Eidas.Cli
 simplesign sign contract.pdf --cert signer.pfx --profile eidas --tsa https://tsa.example.eu/
 simplesign validate contract-signed.pdf --profile eidas
 simplesign validate contract-signed.pdf --profile eidas --sandbox http://localhost:5300   # the Sandbox's LOTL, to test

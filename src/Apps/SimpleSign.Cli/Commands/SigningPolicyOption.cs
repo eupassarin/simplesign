@@ -7,7 +7,7 @@ internal static class SigningPolicyOption
 {
     /// <summary>The option's description.</summary>
     internal const string Description =
-        "Signing policy: a JSON file (root SigningConstraints) or a built-in name (default, strict, minimal, eidas, icp-brasil, or one an extension adds): the checks made before " +
+        "Signing policy: a JSON file (root SigningConstraints) or a built-in name (default, strict, minimal, or one an extension adds: eidas, icp-brasil, iofe…): the checks made before " +
         "signing. Default: chain validity, key usage, RSA >= 2048, SHA-2/SHA-3. Write one with 'simplesign policy export signing [[--preset NAME]]'";
 
     /// <summary>The policy in the file or of the built-in name, or the default policy when none is given.</summary>
@@ -21,6 +21,7 @@ internal static class SigningPolicyOption
 
     /// <summary>The error when <see cref="IsValid"/> is false.</summary>
     internal static string Error(string? path) =>
+        PolicyPresets.InstallHint(path) ??
         $"--signing-policy '{path}' is neither a file nor a built-in policy ({PolicyPresets.Names(PolicyPresets.Signing)}): " +
         "give a JSON signing policy (write one with 'simplesign policy export signing').";
 }

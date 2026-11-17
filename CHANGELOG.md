@@ -42,6 +42,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an extension is code that runs each time `simplesign` starts (ADR 0030, `docs/articles/cli-extensions.md`).
 - **`SimpleSign.Peru.Iofe.Cli`, the first extension**: `--profile iofe`, the `iofe` and `iofe-agent` policies,
   `--tsl-profile iofe` and `simplesign iofe sign|verify|view`.
+- **`SimpleSign.Brazil.Cli`, the extension of ICP-Brasil and Gov.br** (`simplesign extension install SimpleSign.Brazil.Cli`):
+  `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, and
+  - `simplesign brasil sign` (also `icp-brasil sign`): `simplesign sign`, every option of it, plus `--icp-policy`,
+    `--aea` (the old `--brasil`, still accepted) with `--cpf` and `--institution-cnpj`, and `--health-document` with
+    `--registration`. The Brazilian options go anywhere on the line.
+  - `simplesign brasil timestamp verify`: a `.tst` whose authority must be an ICP-Brasil ACT.
+  - In `validate`, `validate-dir` and `inspect`: the ICP-Brasil and Gov.br chain validation and roots, the Lei 14.063
+    level, the certificate's data and the manifest of an advanced signature (`lei14063`, `brasil`, `manifest` in `--json`).
+- **`SimpleSign.Europe.Eidas.Cli`, the extension of eIDAS**: `--profile eidas` and the `eidas` policies.
+- **What an extension can add grew** (`SimpleSign.Cli.Extensibility`, still contract 1: the new members have defaults):
+  - A command that runs the standard `sign` with options of its own: `CliExtensionContext.SignAsync(CliSignRequest)`
+    (`Validate`, `Configure`, `ConfigureAppearance` over the `PadesSignerBuilder` and what `sign` read,
+    `CliSignOptions`), and `ICliExtension.PassThroughCommands` so its options can be typed in any order.
+  - `ConfigureServices`, `CreateChainValidationProviders` and `Annotate` (`CliSignatureFacts` →
+    `CliSignatureAnnotation`): trust anchors and chain validation in every `validate`, a node in the tree and
+    properties in the JSON of `validate` and `inspect`.
+- **The CLI names the package to install** when a profile, a policy or an option belongs to an extension that is not
+  there: `--profile icp-brasil` → `simplesign extension install SimpleSign.Brazil.Cli`.
 - **`Pkcs11Signer.KeyProtection`** (`Pkcs11KeyProtection`): whether the driver reports the signing key as sensitive,
   extractable, generated on the token, and whether the slot is hardware; `IsConfinedToToken` to refuse a key that can
   leave its token. Also `TokenManufacturer`, `TokenModel` and `TokenSerialNumber`.
@@ -53,16 +71,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The CLI no longer comes with IOFE (Peru): it is an extension.**
   - *Before:* `--profile iofe`, `--signing-policy iofe`, `--policy iofe`, `policy export --preset iofe` and
     `--tsl-profile iofe` worked in every `simplesign`.
-  - *After:* they need `simplesign extension install SimpleSign.Peru.Iofe.Cli`; without it the CLI says the name is
-    unknown and how to get it. ICP-Brasil, Gov.br, eIDAS and the Sandbox are still built in. Scripts that use the
-    `iofe` names must install the extension first. The TestBench bundles it for the CLI it runs.
+  - *After:* they need `simplesign extension install SimpleSign.Peru.Iofe.Cli`; without it the CLI says how to get
+    it. Scripts that use the `iofe` names must install the extension first. The TestBench bundles it for the CLI it runs.
+- **The CLI no longer comes with ICP-Brasil, Gov.br or eIDAS either: `SimpleSign.Cli` references no trust framework.**
+  Its own profile is `sandbox`, its own policies `default`, `strict` and `minimal`.
+  - *Before:* `--profile icp-brasil|gov-br|eidas`, the `icp-brasil`, `govbr` and `eidas` policies,
+    `sign --icp-policy`, `sign --brasil --cpf …`, `sign --health-document … --registration …` and
+    `timestamp verify --icp` worked in every `simplesign`; `validate` applied the ICP-Brasil and Gov.br chain
+    validation and trusted their roots; its JSON always had `lei14063` and `brasil` (null for other signatures) and
+    `inspect`'s had `manifest`.
+  - *After:* install `SimpleSign.Brazil.Cli` and `SimpleSign.Europe.Eidas.Cli`. With the Brazilian extension the
+    profiles, the policies and everything `validate` and `inspect` did are back as they were; the signing options
+    moved to `simplesign brasil sign` (same options) and `timestamp verify --icp` to
+    `simplesign brasil timestamp verify`. In `--json`, `lei14063`, `brasil` and `manifest` are now present only for a
+    signature they apply to.
+  - *What to change:* `simplesign sign … --icp-policy ad-rt` → `simplesign brasil sign … --icp-policy ad-rt`.
+- **`sign` and `timestamp verify` refuse an option they do not have.** They used to drop it in silence
+  (Spectre.Console.Cli's default); now `sign --icp-policy ad-rt` without the extension, or a mistyped option, is an
+  error and nothing is signed.
+- `sign`: `--auth-method`, `--signer-email`, `--institution`, `--commitment`, `--policy-oid` and `--policy-uri` are
+  described as what they are (the signature's metadata), not as options of the Brazilian advanced signature.
+- `SimpleSign.Cli.Extensibility` references `SimpleSign.PAdES`. `SimpleSign.Brazil` and `SimpleSign.Brazil.IcpBrasil`
+  no longer open their internals to the CLI.
 - **Repository layout** (ADR 0030; package, assembly and namespace names are the same):
   - `src/TrustFrameworks` is now `src/Extensions` (and `tests/unit/TrustFrameworks`, `tests/unit/Extensions`).
   - Everything of Peru/IOFE is under `src/Extensions/Peru/Iofe`: the three packages, `docs/` (the article that was
     `docs/articles/iofe.md`, and `acreditacion/`), `playbooks/` (`indecopi-checklist.md`, `indecopi-guia-v4.json`,
     which were in `docs/playbooks/`) and `tools/indecopi.py` (which was in `tools/playbooks/`).
+  - Everything of Brazil is under `src/Extensions/Brazil`: the four packages, `docs/` (`icp-brasil.md` and
+    `icp-brasil-validar-check.md`, which were in `docs/articles/`), `playbooks/` (`icp-brasil-pades.json`,
+    `govbr-pades.json`, which were in `docs/playbooks/`) and `tools/update-icp-intermediates.sh` (which was in `scripts/`).
+  - Everything of eIDAS is under `src/Extensions/Europe/Eidas`: the two packages, `docs/eidas.md` (which was in
+    `docs/articles/`), `playbooks/` (`eidas-checklist.md`, `eidas-baseline.json`, which were in `docs/playbooks/`) and
+    `tools/eidas.py` (which was in `tools/playbooks/`).
+  - `src/Extensions/CliExtension.targets`: what makes a project a CLI extension, shared by the three.
   - The TestBench and the Sandbox, which are development tools, are under `src/Apps/Development` (and
-    `tests/unit/Apps/Development`): `dotnet run --project src/Apps/Development/SimpleSign.Sandbox`.
+    `tests/unit/Apps/Development`): `dotnet run --project src/Apps/Development/SimpleSign.Sandbox`. The TestBench
+    bundles the three extensions for the CLI it runs and writes `simplesign brasil sign` for an ICP-Brasil policy.
 
 ### Removed
 

@@ -1,4 +1,3 @@
-using SimpleSign.Brazil.Signing;
 using SimpleSign.PAdES.Signing;
 
 namespace SimpleSign.Cli.Rendering;
@@ -75,12 +74,6 @@ internal static class AppearanceBuilder
         }
 
         return appearance;
-    }
-
-    internal static SignatureAppearance AddAeaExtraLines(SignatureAppearance appearance, string signerName, string cpf)
-    {
-        var masked = AdvancedSignatureInfo.MaskCpf(cpf);
-        return appearance.WithExtraLines([.. appearance.ExtraLines ?? [], signerName, $"CPF: {masked}"]);
     }
 
     /// <summary>Parses a time zone ID (IANA or Windows) or a fixed UTC offset such as "-03:00".</summary>

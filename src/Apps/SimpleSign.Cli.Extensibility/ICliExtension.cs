@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Policies;
 using Spectre.Console.Cli;
 
@@ -53,4 +56,38 @@ public interface ICliExtension
 
     /// <summary>The ways of reading a trusted list added to <c>--tsl-profile</c>; empty for none.</summary>
     IReadOnlyList<CliTrustedListProfile> TrustedListProfiles { get; }
+
+    /// <summary>
+    /// The commands of the extension that run a standard command with options of their own in front
+    /// (<c>simplesign brasil sign --icp-policy ad-rt -- contract.pdf --cert …</c>): the CLI lets their options be typed in
+    /// any place of the line, as if they were the standard command's. None by default.
+    /// </summary>
+    IReadOnlyList<CliPassThroughCommand> PassThroughCommands => [];
+
+    /// <summary>
+    /// Adds services to the CLI's container before its commands are created: the trust anchors a framework's roots
+    /// give every validation, for one. Nothing by default.
+    /// </summary>
+    /// <param name="services">The CLI's services.</param>
+    void ConfigureServices(IServiceCollection services)
+    {
+    }
+
+    /// <summary>
+    /// The chain validation of the extension's trust framework, which the standard <c>validate</c> and
+    /// <c>validate-dir</c> apply to every signature (a framework recognizes its own chains and leaves the others).
+    /// None by default.
+    /// </summary>
+    /// <param name="httpClient">The CLI's HTTP client.</param>
+    /// <param name="logger">The command's logger; null when it logs nothing.</param>
+    /// <returns>The providers.</returns>
+    IReadOnlyList<IChainValidationProvider> CreateChainValidationProviders(HttpClient httpClient, ILogger? logger) => [];
+
+    /// <summary>
+    /// What the extension has to say about a signature that <c>validate</c> or <c>inspect</c> shows: a node in the
+    /// tree and properties in the JSON. Nothing by default.
+    /// </summary>
+    /// <param name="signature">The signature.</param>
+    /// <returns>The annotations, in the order they are shown.</returns>
+    IReadOnlyList<CliSignatureAnnotation> Annotate(CliSignatureFacts signature) => [];
 }

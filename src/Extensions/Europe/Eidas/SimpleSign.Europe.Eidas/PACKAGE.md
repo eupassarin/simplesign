@@ -13,10 +13,10 @@ the qualification of each signature (ETSI TS 119 615, TS 119 172-4) and eIDAS si
   certificate's issuance and at signing time, its Qualifications over the QC statements) and TS 119 172-4 (QESig,
   QESeal, AdESig-QC, AdESeal-QC, AdESig, AdESeal) — and of its time-stamps (QTSA when a granted TSA/QTST issued them).
 - `EidasPolicies.Signing` / `Validation` and `EidasProfile` (`eidas`): `WithProfile(eidas)` for signers,
-  `ValidationOptions.Profile = eidas` for validators; `simplesign … --profile eidas` in the CLI.
+  `ValidationOptions.Profile = eidas` for validators; `simplesign … --profile eidas` in the CLI (extension `SimpleSign.Europe.Eidas.Cli`).
 
-Documentation: [docs/articles/eidas.md](https://github.com/eupassarin/SimpleSign/blob/main/docs/articles/eidas.md); what each item shows in
-[docs/playbooks/eidas-checklist.md](https://github.com/eupassarin/SimpleSign/blob/main/docs/playbooks/eidas-checklist.md).
+Documentation: [src/Extensions/Europe/Eidas/docs/eidas.md](https://github.com/eupassarin/SimpleSign/blob/main/src/Extensions/Europe/Eidas/docs/eidas.md); what each item shows in
+[src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md](https://github.com/eupassarin/SimpleSign/blob/main/src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md).
 
 ## The bundled LOTL signers
 

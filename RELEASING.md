@@ -28,6 +28,8 @@ Update `<Version>` in all `.csproj` files:
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj` | IOFE accredited configuration |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj` | IOFE CLI extension (its `extension.json` takes the version from here) |
+| `src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj` | Brazil CLI extension (ICP-Brasil, Gov.br) |
+| `src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas.Cli/SimpleSign.Europe.Eidas.Cli.csproj` | eIDAS CLI extension |
 | `src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj` | eIDAS (EU) |
 | `src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj` | PKCS#11 tokens and HSMs |
 | `src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj` | Cloud certificates (PSC, CSC) |
@@ -53,6 +55,8 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj \
+  src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj \
+  src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas.Cli/SimpleSign.Europe.Eidas.Cli.csproj \
   src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj \
   src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj \
   src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj \
