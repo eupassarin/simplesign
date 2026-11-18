@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`IofeTrust.ListFile(path, trustedListSigners)`** (`SimpleSign.Peru.Iofe.Accredited`): a copy of the trusted list
+  kept as a file, read and checked when the agent or the viewer is created, not before.
+
+### Fixed
+
+- **`simplesign iofe sign --tsl FILE`: a list that is refused now leaves its audit record** (annex B, F-15). The
+  command read the file before there was an agent, so a list changed after it was signed, expired or signed by
+  another certificate failed the command with the right message and no record; a list downloaded from a URL already
+  left one. The file is now read by `IofeSigningAgent.OpenAsync` (`IofeTrust.ListFile`), which records
+  `AgentNotOpened` with the reason and throws the same exception. `iofe verify` and `iofe view` read the file the
+  same way; they have no record to write before there is a document, as before.
+
 ## [0.13.0] - 2026-11-17
 
 ### Added

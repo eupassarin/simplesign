@@ -170,6 +170,7 @@ the administration manual, section 8.
 |---|---|
 | `IofeTrust.IndecopiList()` (the default) | INDECOPI's list, verified and kept current. Takes `IofeExtensionOptions` (`CacheFile`, `TrustedListSigners`, `HttpClientProvider`) |
 | `IofeTrust.List(extension)` | A list the application has loaded (`IofeExtension.Load`, `LoadRefreshableAsync`) and keeps current itself |
+| `IofeTrust.ListFile(path, signers)` | A copy of the list kept as a file (`--tsl FILE` on the command line). It is read and checked when the agent is created, as the downloaded one is: a signing agent that does not open because the list was refused leaves that in the audit trail (`AgentNotOpened`). It is read once |
 | `IofeTrust.InstalledRoots(roots)` | Root certificates installed by the operator |
 
 ## Viewer (Req. 18, 28)

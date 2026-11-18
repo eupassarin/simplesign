@@ -223,6 +223,72 @@ public sealed class AnnexBTests : IClassFixture<IofeRemoteServiceFixture>, IDisp
         _audit.Events.ShouldHaveSingleItem().Message.ShouldNotBeNull().ShouldStartWith("AgentNotOpened: IofeAccreditationException");
     }
 
+    [Theory]
+    [Trait("AnnexB", "F-15")]
+    [InlineData("changed")]
+    [InlineData("expired")]
+    [InlineData("another signer")]
+    public async Task Open_ListGivenAsAFileIsRefused_IsRecordedAndThrownAsItWas(string refusedBecause)
+    {
+        using var list = new IofeListBuilder();
+        using var impostor = new IofeListBuilder("CN=Otro firmante, O=Nadie, C=PE");
+        (string Name, string Type, string Status, X509Certificate2 Certificate)[] services =
+            [("EC de pruebas", IofeListBuilder.CaQc, IofeListBuilder.UnderSupervision, _pki.Pki.RootCa)];
+        byte[] xml = refusedBecause switch
+        {
+            "changed" => System.Text.Encoding.UTF8.GetBytes(
+                System.Text.Encoding.UTF8.GetString(list.List(1, services)).Replace("EC de pruebas", "EC de otros", StringComparison.Ordinal)),
+            "expired" => list.List(1, services, nextUpdate: DateTimeOffset.UtcNow.AddDays(-1)),
+            _ => impostor.List(1, services),
+        };
+        using var file = new TemporaryListFile(xml);
+        var asLoaded = Should.Throw<Exception>(() => IofeExtension.Load(xml, [list.Operator]));
+
+        var ex = await Should.ThrowAsync<Exception>(() => IofeSigningAgent.OpenAsync(Options(trust: IofeTrust.ListFile(file.Path, [list.Operator]))));
+
+        ex.ShouldBeOfType(asLoaded.GetType());
+        ex.Message.ShouldBe(asLoaded.Message);
+        var record = _audit.Events.ShouldHaveSingleItem();
+        record.Signed.ShouldBeFalse();
+        record.Message.ShouldBe($"AgentNotOpened: {asLoaded.GetType().Name}: {asLoaded.Message}");
+        record.CertificateSubject.ShouldBeNull();
+        _service.HashesSigned.ShouldBe(0);
+    }
+
+    [Fact]
+    [Trait("AnnexB", "F-15")]
+    public async Task Open_ListFileThatDoesNotExist_IsRecorded()
+    {
+        string missing = Path.Combine(Path.GetTempPath(), $"simplesign-iofe-{Guid.NewGuid():N}.xml");
+
+        await Should.ThrowAsync<FileNotFoundException>(() => IofeSigningAgent.OpenAsync(Options(trust: IofeTrust.ListFile(missing))));
+
+        var record = _audit.Events.ShouldHaveSingleItem();
+        record.Signed.ShouldBeFalse();
+        record.Message.ShouldNotBeNull().ShouldStartWith("AgentNotOpened: FileNotFoundException");
+    }
+
+    [Fact]
+    [Trait("AnnexB", "F-1")]
+    [Trait("AnnexB", "F-3")]
+    public async Task Sign_ListGivenAsAFileWithTheRootListed_SignsAndIsAcceptedByAVerifierOverTheSameFile()
+    {
+        using var list = new IofeListBuilder();
+        using var file = new TemporaryListFile(list.List(1, [("EC de pruebas", IofeListBuilder.CaQc, IofeListBuilder.UnderSupervision, _pki.Pki.RootCa)]));
+        var trust = IofeTrust.ListFile(file.Path, [list.Operator]);
+        await using var agent = await IofeSigningAgent.OpenAsync(Options(trust: trust));
+
+        var signed = await agent.SignPdfAsync(TestPdfFactory.CreateMinimalPdf(), Invoice);
+
+        _audit.Events.ShouldHaveSingleItem().Signed.ShouldBeTrue();
+        await using var verifier = await VerifierAsync(trust);
+        var verified = await verifier.VerifyAsync(signed.Document, Sender);
+        verified.Accepted.ShouldBeTrue(string.Join("; ", verified.Reasons));
+    }
+
+    [Fact]
+    public void ListFile_NoPath_Throws() => Should.Throw<ArgumentException>(() => IofeTrust.ListFile(" "));
+
     [Fact]
     public async Task Open_RefusalOfTheServiceItself_IsRecordedOnce()
     {
@@ -396,5 +462,19 @@ public sealed class AnnexBTests : IClassFixture<IofeRemoteServiceFixture>, IDisp
         var ex = await RefusedAsync(Options() with { Timestamp = new IofeTimestampAuthority(new Uri(IofeTestPki.TsaUrl), _pki.Tsa) }, beforeTheKeyIsUsed: false);
 
         ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    /// <summary>A trusted list as the deployment keeps it: a file, deleted with the test.</summary>
+    private sealed class TemporaryListFile : IDisposable
+    {
+        public TemporaryListFile(byte[] xml)
+        {
+            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"simplesign-iofe-{Guid.NewGuid():N}.xml");
+            File.WriteAllBytes(Path, xml);
+        }
+
+        public string Path { get; }
+
+        public void Dispose() => File.Delete(Path);
     }
 }

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <NoWarn>$(NoWarn);CA1861</NoWarn>
+    <!-- CA1812: the linked IofeListBuilder.cs brings a clock (ManualClock) these tests do not use. -->
+    <NoWarn>$(NoWarn);CA1861;CA1812</NoWarn>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
@@ -29,5 +30,10 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Apps\SimpleSign.Cli\SimpleSign.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Extensions\Peru\Iofe\SimpleSign.Peru.Iofe.Cli\SimpleSign.Peru.Iofe.Cli.csproj" />
     <ProjectReference Include="..\..\..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The trusted-list builder of the IOFE tests: one list layout for the projects that need one. -->
+    <Compile Include="..\SimpleSign.Peru.Iofe.Tests\IofeListBuilder.cs" Link="Shared\IofeListBuilder.cs" />
   </ItemGroup>
 </Project>
