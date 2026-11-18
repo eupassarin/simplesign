@@ -1,6 +1,9 @@
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using Shouldly;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
+using SimpleSign.Peru.Iofe.Tests;
 using SimpleSign.TestHelpers;
 
 namespace SimpleSign.Peru.Iofe.Cli.Tests;
@@ -229,6 +232,116 @@ public sealed class IofeCommandTests : IDisposable
         Flat(output).ShouldContain($"Unknown option {option}");
         System.IO.File.Exists(File("verificacion.jsonl")).ShouldBeFalse();
         System.IO.File.Exists(File("visor.html")).ShouldBeFalse();
+    }
+
+    // ── A trusted list given as a file (--tsl FILE) ─────────────────────
+
+    [Theory]
+    [Trait("AnnexB", "F-15")]
+    [InlineData("changed")]
+    [InlineData("expired")]
+    [InlineData("another signer")]
+    public async Task Sign_ListFileIsRefused_FailsWithTheReasonAndLeavesAnAuditRecord(string refusedBecause)
+    {
+        using var list = new IofeListBuilder();
+        using var impostor = new IofeListBuilder("CN=Otro firmante, O=Nadie, C=PE");
+        (string Name, string Type, string Status, X509Certificate2 Certificate)[] services =
+            [("EC de pruebas", IofeListBuilder.CaQc, IofeListBuilder.UnderSupervision, _pki.RootCa)];
+        byte[] xml = refusedBecause switch
+        {
+            "changed" => System.Text.Encoding.UTF8.GetBytes(
+                System.Text.Encoding.UTF8.GetString(list.List(1, services)).Replace("EC de pruebas", "EC de otros", StringComparison.Ordinal)),
+            "expired" => list.List(1, services, nextUpdate: DateTimeOffset.UtcNow.AddDays(-1)),
+            _ => impostor.List(1, services),
+        };
+        var asLoaded = Should.Throw<Exception>(() => IofeExtension.Load(xml, [list.Operator]));
+        var args = RemoteSignArguments();
+        args.RemoveRange(args.IndexOf("--trust-root"), 2);
+        args.AddRange(["--tsl", ListFile(xml), "--tsl-signer", SignerFile(list)]);
+
+        var (exit, output) = await IofeCli.RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain(Flat(asLoaded.Message));
+        System.IO.File.Exists(File("firmado.pdf")).ShouldBeFalse();
+        string record = (await System.IO.File.ReadAllLinesAsync(File("auditoria.jsonl"))).ShouldHaveSingleItem();
+        using var json = JsonDocument.Parse(record);
+        json.RootElement.GetProperty("signed").GetBoolean().ShouldBeFalse();
+        json.RootElement.GetProperty("message").GetString().ShouldNotBeNull().ShouldStartWith($"AgentNotOpened: {asLoaded.GetType().Name}");
+        JsonLinesAuditSink.Verify(File("auditoria.jsonl")).ShouldBe(0);
+    }
+
+    [Fact]
+    [Trait("AnnexB", "F-15")]
+    public async Task Sign_ListFileThatDoesNotExist_FailsAndLeavesAnAuditRecord()
+    {
+        var args = RemoteSignArguments();
+        args.RemoveRange(args.IndexOf("--trust-root"), 2);
+        args.AddRange(["--tsl", File("no-existe.xml")]);
+
+        int exit = await RunAsync([.. args]);
+
+        exit.ShouldNotBe(0);
+        (await System.IO.File.ReadAllLinesAsync(File("auditoria.jsonl"))).ShouldHaveSingleItem().ShouldContain("AgentNotOpened: FileNotFoundException");
+    }
+
+    [Fact]
+    public async Task VerifyAndView_ListFileWithTheRootListed_TrustTheSigner()
+    {
+        using var list = new IofeListBuilder();
+        string tsl = ListFile(list.List(1, [("EC de pruebas", IofeListBuilder.CaQc, IofeListBuilder.UnderSupervision, _pki.RootCa)]));
+        string signer = SignerFile(list);
+        string input = await SignedPdfAsync();
+
+        // The synthetic PKI publishes no CRL or OCSP, so the verification runs under a declared contingency: what is
+        // left to accept the document is that its root is in the list.
+        var (verify, verifyOutput) = await IofeCli.RunAsync(
+            "iofe", "verify", input, "--sender", "20123456789",
+            "--audit-log", File("verificacion.jsonl"), "--notice", File("comunicado.txt"), "--tsl", tsl, "--tsl-signer", signer,
+            "--contingency", "PROC-AAC-07", "--contingency-until", DateTimeOffset.UtcNow.AddHours(1).ToString("O"));
+        var (view, viewOutput) = await IofeCli.RunAsync("iofe", "view", input, "--output", File("visor.html"), "--tsl", tsl, "--tsl-signer", signer);
+
+        verify.ShouldBe(0, verifyOutput);
+        (await System.IO.File.ReadAllLinesAsync(File("verificacion.jsonl"))).ShouldHaveSingleItem().ShouldContain("\"accepted\":true");
+        view.ShouldBe(0, viewOutput);
+        (await System.IO.File.ReadAllTextAsync(File("visor.html"))).ShouldContain("SimpleSign Synthetic Signer");
+    }
+
+    [Fact]
+    public async Task VerifyAndView_ListFileIsRefused_FailWithTheReason()
+    {
+        using var list = new IofeListBuilder();
+        byte[] expired = list.List(
+            1, [("EC de pruebas", IofeListBuilder.CaQc, IofeListBuilder.UnderSupervision, _pki.RootCa)], nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
+        var asLoaded = Should.Throw<Exception>(() => IofeExtension.Load(expired, [list.Operator]));
+        string tsl = ListFile(expired);
+        string signer = SignerFile(list);
+        string input = await SignedPdfAsync();
+
+        var (verify, verifyOutput) = await IofeCli.RunAsync(
+            "iofe", "verify", input, "--sender", "20123456789",
+            "--audit-log", File("verificacion.jsonl"), "--notice", File("comunicado.txt"), "--tsl", tsl, "--tsl-signer", signer);
+        var (view, viewOutput) = await IofeCli.RunAsync("iofe", "view", input, "--output", File("visor.html"), "--tsl", tsl, "--tsl-signer", signer);
+
+        verify.ShouldNotBe(0);
+        Flat(verifyOutput).ShouldContain(Flat(asLoaded.Message));
+        view.ShouldNotBe(0);
+        Flat(viewOutput).ShouldContain(Flat(asLoaded.Message));
+        System.IO.File.Exists(File("visor.html")).ShouldBeFalse();
+    }
+
+    private string ListFile(byte[] xml)
+    {
+        string path = File("tsl.xml");
+        System.IO.File.WriteAllBytes(path, xml);
+        return path;
+    }
+
+    private string SignerFile(IofeListBuilder list)
+    {
+        string path = File("tsl-signer.pem");
+        System.IO.File.WriteAllText(path, list.Operator.ExportCertificatePem());
+        return path;
     }
 
     /// <summary>A complete <c>iofe sign</c> line with the key in a remote service (which nothing listens at: only the line is checked).</summary>

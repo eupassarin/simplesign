@@ -32,8 +32,11 @@ internal abstract class IofeTrustSettings : CommandSettings
     [Description("The certificate --tsl is signed with (default: INDECOPI's, bundled)")]
     public string? TrustedListSigner { get; init; }
 
-    /// <summary>The trust these options ask for.</summary>
-    internal async Task<IofeTrust> TrustAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// The trust these options ask for. A trusted list, downloaded or given as a file, is read when the agent is
+    /// created, so a signing agent that does not open because of it leaves its record in the audit trail.
+    /// </summary>
+    internal IofeTrust Trust()
     {
         if (TrustRoots.Length > 0)
         {
@@ -56,8 +59,7 @@ internal abstract class IofeTrustSettings : CommandSettings
             });
         }
 
-        byte[] list = await File.ReadAllBytesAsync(TrustedList, cancellationToken);
-        return IofeTrust.List(IofeExtension.Load(list, signers.Count > 0 ? signers : IofeExtension.IndecopiSigners));
+        return IofeTrust.ListFile(TrustedList, signers);
     }
 
     /// <summary>The contingency of <c>--contingency</c>, in force from now, or null.</summary>
@@ -398,7 +400,7 @@ internal sealed class IofeSignCommand : AsyncCommand<IofeSignCommand.Settings>
                     ChainCertificates = chain,
                     Audit = audit,
                     Transactions = settings.Allowed,
-                    Trust = await settings.TrustAsync(cancellationToken),
+                    Trust = settings.Trust(),
                     Timestamp = tsaCertificate is null ? null : new IofeTimestampAuthority(new Uri(settings.Tsa!), tsaCertificate),
                     Contingency = IofeTrustSettings.Contingency(settings.ContingencyReference, settings.ContingencyUntil),
                     HttpClientProvider = IofeCliExtension.Context.HttpClientProvider,
@@ -547,7 +549,7 @@ internal sealed class IofeVerifyCommand : AsyncCommand<IofeVerifyCommand.Setting
                 {
                     Audit = audit,
                     Notifier = new FileNotifier(settings.Notice!),
-                    Trust = await settings.TrustAsync(cancellationToken),
+                    Trust = settings.Trust(),
                     Contingency = IofeTrustSettings.Contingency(settings.ContingencyReference, settings.ContingencyUntil),
                     HttpClientProvider = IofeCliExtension.Context.HttpClientProvider,
                 },
@@ -643,7 +645,7 @@ internal sealed class IofeViewCommand : AsyncCommand<IofeViewCommand.Settings>
 
         byte[] input = await File.ReadAllBytesAsync(settings.Input, cancellationToken);
         byte[]? detached = settings.Detached is null ? null : await File.ReadAllBytesAsync(settings.Detached, cancellationToken);
-        await using var viewer = await IofeViewer.CreateAsync(await settings.TrustAsync(cancellationToken), IofeCliExtension.Context.HttpClientProvider, cancellationToken);
+        await using var viewer = await IofeViewer.CreateAsync(settings.Trust(), IofeCliExtension.Context.HttpClientProvider, cancellationToken);
         await File.WriteAllTextAsync(settings.Output!, await viewer.RenderAsync(input, detached, cancellationToken), cancellationToken);
         AnsiConsole.MarkupLine($"[green]✓ Written:[/] {settings.Output!.EscapeMarkup()}");
         return 0;

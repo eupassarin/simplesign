@@ -15,12 +15,20 @@ public sealed class IofeTrust
     private readonly IofeExtensionOptions? _listOptions;
     private readonly IofeExtension? _extension;
     private readonly IReadOnlyList<X509Certificate2>? _roots;
+    private readonly string? _listFile;
+    private readonly IReadOnlyList<X509Certificate2>? _listFileSigners;
 
     private IofeTrust(IofeExtensionOptions? listOptions, IofeExtension? extension, IReadOnlyList<X509Certificate2>? roots)
     {
         _listOptions = listOptions;
         _extension = extension;
         _roots = roots;
+    }
+
+    private IofeTrust(string listFile, IReadOnlyList<X509Certificate2>? listFileSigners)
+    {
+        _listFile = listFile;
+        _listFileSigners = listFileSigners;
     }
 
     /// <summary>
@@ -38,6 +46,22 @@ public sealed class IofeTrust
     {
         ArgumentNullException.ThrowIfNull(extension);
         return new(null, extension, null);
+    }
+
+    /// <summary>
+    /// A copy of the trusted list the deployment keeps as a file. It is read when the agent or the viewer is created
+    /// — not here — and checked then as <see cref="IofeExtension.Load"/> checks it: its signature against the
+    /// certificate INDECOPI signs it with, and refused when it has expired. So a signing agent that does not open
+    /// because the file is missing or the list is refused records that, as it does for a list it could not download.
+    /// The file is read once; the deployment keeps it current.
+    /// </summary>
+    /// <param name="path">The file with the trusted list XML.</param>
+    /// <param name="trustedListSigners">The certificates the list is signed with; null or empty for <see cref="IofeExtension.IndecopiSigners"/>.</param>
+    /// <returns>The trust.</returns>
+    public static IofeTrust ListFile(string path, IReadOnlyList<X509Certificate2>? trustedListSigners = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return new(path, trustedListSigners);
     }
 
     /// <summary>
@@ -68,6 +92,13 @@ public sealed class IofeTrust
         if (_extension is not null)
         {
             return (IofeProfile.Create(_extension) with { SigningPolicy = signing, ValidationPolicy = validation }, null);
+        }
+
+        if (_listFile is not null)
+        {
+            byte[] xml = await File.ReadAllBytesAsync(_listFile, cancellationToken).ConfigureAwait(false);
+            var fromFile = IofeExtension.Load(xml, _listFileSigners is { Count: > 0 } ? _listFileSigners : IofeExtension.IndecopiSigners);
+            return (IofeProfile.Create(fromFile) with { SigningPolicy = signing, ValidationPolicy = validation }, null);
         }
 
         var extension = await IofeExtension.LoadRefreshableAsync(_listOptions!, cancellationToken).ConfigureAwait(false);
