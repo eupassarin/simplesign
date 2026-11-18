@@ -202,6 +202,30 @@ public sealed class IofeTrustedListSourceTests(IofeTrustedListSourceFixture fixt
     }
 
     [Fact]
+    public async Task LoadAsync_ListOnThisMachineNotAllowed_SaysThePolicyRefusedIt()
+    {
+        _served = List(25, EcA, Tsa);
+        var options = Options() with { TrustedListUrl = new Uri("http://localhost:5300/tl/tl.xml"), CacheFile = null };
+
+        var refused = await Should.ThrowAsync<HttpRequestException>(() => IofeTrustedListSource.LoadAsync(options));
+
+        refused.Message.ShouldContain("http://localhost:5300 is this machine");
+        refused.Message.ShouldContain("LoopbackOrigins");
+        _downloads.ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("https://198.51.100.7/TSL/tsl-pe.xml", null)]
+    [InlineData("http://localhost:5300/tl/tl.xml", "http://localhost:5300")]
+    [InlineData("http://127.0.0.1:5300/tl/tl.xml", "http://127.0.0.1:5300")]
+    public void RefusedLoopback_UrlAllowedOrNotOnThisMachine_IsNull(string url, string? allowed)
+    {
+        var policy = allowed is null ? OutboundHttpPolicy.Default : new OutboundHttpPolicy { LoopbackOrigins = [new Uri(allowed)] };
+
+        IofeTrustedListSource.RefusedLoopback(new Uri(url), policy).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Anchors_AfterNextUpdate_AreNoneUntilAGoodCopyIsRead()
     {
         var clock = new ManualClock(DateTimeOffset.UtcNow);
