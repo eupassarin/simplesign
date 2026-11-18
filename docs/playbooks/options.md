@@ -69,6 +69,11 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `signerName` | text |  | Signer name: The name shown for the signer (/Name). Empty: the certificate's subject. |
 | `documentInfo` | keyValues |  | Document information: Entries of the PDF Info dictionary (Title, Author, custom keys), written in the signed revision. |
 | `appearance.visible` | toggle |  | Visible stamp: Draws a stamp on the page; invisible signatures only show in the signature panel. |
+| `appearance.anchorText` | text |  | Anchor text: Places the stamp relative to this text of the document (its last match), on the text's page, instead of page, X and Y. |
+| `appearance.anchorOffsetX` | number |  | Anchor offset X: From the start of the text to the stamp's left edge, in points: right is positive, left negative. |
+| `appearance.anchorOffsetY` | number |  | Anchor offset Y: From the baseline of the text to the stamp's bottom edge, in points: up is positive, down negative. |
+| `appearance.anchorOccurrence` | number |  | Anchor occurrence: Which match of the text: 1 the first, 2 the second, -1 the last (default), -2 the one before. |
+| `appearance.anchorIgnoreCase` | toggle |  | Anchor ignores case: Case does not matter when finding the text. |
 | `appearance.autoPosition` | toggle |  | Place automatically: Puts the stamp at the bottom of the page, left to right after the stamps already there. |
 | `appearance.page` | number |  | Page: The page of the stamp (1 is the first). |
 | `appearance.x` | number |  | X: Distance from the left edge, in points. |
@@ -98,8 +103,9 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `appearance.backgroundColor` | color |  | Background color: Empty: transparent. |
 | `appearance.borderColor` | color |  | Border color: Empty: no border. |
 | `appearance.borderWidth` | number |  | Border width: In points. |
-| `appearance.imageUploadId` | upload |  | Background image: A PNG or JPEG drawn behind the text. |
+| `appearance.imageUploadId` | upload |  | Background image: A PNG or JPEG drawn behind or beside the text. |
 | `appearance.imageFit` | choice | `Contain`, `Cover`, `Stretch` | Image fit: How the image fills the rectangle. |
+| `appearance.imagePosition` | choice | `Behind`, `Left`, `Right`, `Top`, `Bottom` | Image position: Behind the text, or beside it so it does not cover it. The QR code stays first. |
 | `appearance.verificationUrl` | text |  | QR code: A QR code with a verification URL. |
 | `mode` | choice | `Sign`, `Deferred`, `Batch` | How to call the library: One call, two phases with the key elsewhere, or many documents at once. |
 | `batchCopies` | number |  | Documents in the batch: How many copies of the document are signed. |

@@ -330,7 +330,17 @@ internal static class CodeGenerator
         static string N(float v) => v.ToString("0.##", CultureInfo.InvariantCulture);
         line.Add("--visible");
         bool existing = o.FieldMode == FieldMode.Existing;
-        if (!existing && !a.AutoPosition)
+        if (!existing && a.Anchored)
+        {
+            line.Add("--anchor", a.AnchorText!.Trim())
+                .AddIf("--anchor-offset", a.AnchorOffsetX == 0 && a.AnchorOffsetY == 0 ? null : $"{N(a.AnchorOffsetX)},{N(a.AnchorOffsetY)}")
+                .AddIf("--anchor-occurrence", a.AnchorOccurrence == -1 ? null : a.AnchorOccurrence.ToString(CultureInfo.InvariantCulture));
+            if (a.AnchorIgnoreCase)
+            {
+                line.Add("--anchor-ignore-case");
+            }
+        }
+        else if (!existing && !a.AutoPosition)
         {
             line.Add("--page", a.Page.ToString(CultureInfo.InvariantCulture)).Add("--pos-x", N(a.X)).Add("--pos-y", N(a.Y));
         }
@@ -390,6 +400,10 @@ internal static class CodeGenerator
         if (!string.IsNullOrEmpty(a.ImageUploadId))
         {
             line.Add("--background-image", StampImageFile).Add("--image-fit", a.ImageFit.ToLowerInvariant());
+            if (a.ImagePosition != "Behind")
+            {
+                line.Add("--image-position", a.ImagePosition.ToLowerInvariant());
+            }
         }
     }
 

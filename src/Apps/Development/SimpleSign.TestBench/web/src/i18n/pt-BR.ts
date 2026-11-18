@@ -179,6 +179,7 @@ export const ptBR: Messages = {
     existing: "Desenhado no retângulo do campo existente",
     drag: "Arraste para mover · canto para redimensionar · clique para posicionar",
     auto: "Posicionado automaticamente: o retângulo mostra onde a biblioteca o colocou",
+    anchor: "Ancorado em \"{text}\": arraste para ajustar o deslocamento · canto para redimensionar",
     off: "Sem carimbo: a assinatura é invisível. Ligue \"Carimbo visível\" para desenhá-lo.",
     rendered: "desenhado pela biblioteca em {ms} ms",
     rendering: "Desenhando o carimbo…",

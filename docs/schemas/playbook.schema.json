@@ -322,7 +322,8 @@
             "TimestampCertificateRevoked",
             "TimestampRevocationStatusUnknown",
             "CertificateNotQualified",
-            "TimestampInvalid"
+            "TimestampInvalid",
+            "AnchorNotFound"
           ]
         },
         "indication": {

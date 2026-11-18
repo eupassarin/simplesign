@@ -101,4 +101,10 @@ public enum SigningErrorReason
     /// (<see cref="NetworkFailure"/>): the authority answered, and what it answered is not a timestamp to accept.
     /// </summary>
     TimestampInvalid = 27,
+
+    /// <summary>
+    /// The text a visible signature is anchored to (PAdES <c>SignatureAppearance.Anchor</c>) is not in the document,
+    /// or not as many times as the anchor's occurrence asks: the stamp would have no place, so nothing is signed.
+    /// </summary>
+    AnchorNotFound = 28,
 }

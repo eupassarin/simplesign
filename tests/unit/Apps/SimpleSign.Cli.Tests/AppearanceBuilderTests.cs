@@ -233,6 +233,52 @@ public sealed class AppearanceBuilderTests
     public void ParseImageFit_Unknown_ReturnsNull() =>
         AppearanceBuilder.ParseImageFit("tile").ShouldBeNull();
 
+    [Theory]
+    [InlineData("behind", PAdES.Signing.SignatureImagePosition.Behind)]
+    [InlineData("Left", PAdES.Signing.SignatureImagePosition.Left)]
+    [InlineData(" RIGHT ", PAdES.Signing.SignatureImagePosition.Right)]
+    [InlineData("top", PAdES.Signing.SignatureImagePosition.Top)]
+    [InlineData("bottom", PAdES.Signing.SignatureImagePosition.Bottom)]
+    public void ParseImagePosition_KnownPlaces_AreParsed(string value, PAdES.Signing.SignatureImagePosition expected) =>
+        AppearanceBuilder.ParseImagePosition(value).ShouldBe(expected);
+
+    [Fact]
+    public void ParseImagePosition_Unknown_ReturnsNull() =>
+        AppearanceBuilder.ParseImagePosition("center").ShouldBeNull();
+
+    [Theory]
+    [InlineData("0,30", 0f, 30f)]
+    [InlineData(" -10.5 , -20 ", -10.5f, -20f)]
+    public void ParseOffset_XY_IsParsed(string value, float x, float y) =>
+        AppearanceBuilder.ParseOffset(value).ShouldBe((x, y));
+
+    [Theory]
+    [InlineData("30")]
+    [InlineData("a,b")]
+    [InlineData("1,2,3")]
+    [InlineData("")]
+    public void ParseOffset_Invalid_ReturnsNull(string value) =>
+        AppearanceBuilder.ParseOffset(value).ShouldBeNull();
+
+    [Fact]
+    public void Build_Anchor_IsSet()
+    {
+        var anchor = AppearanceBuilder.Build(true, null, null, null, null, null, false, false,
+            anchor: new AnchorOptions("Contratante", "0,30", 1, true)).Anchor.ShouldNotBeNull();
+
+        anchor.ShouldBe(new PAdES.Signing.SignatureAnchor("Contratante") { OffsetY = 30, Occurrence = 1, IgnoreCase = true });
+    }
+
+    [Fact]
+    public void Build_AnchorDefaults_LastMatchNoOffset() =>
+        AppearanceBuilder.Build(true, null, null, null, null, null, false, false, anchor: new AnchorOptions("Contratante", null, null, false))
+            .Anchor.ShouldBe(new PAdES.Signing.SignatureAnchor("Contratante"));
+
+    [Fact]
+    public void Build_ImagePosition_IsSet() =>
+        AppearanceBuilder.Build(true, null, null, null, null, null, false, false, imagePosition: "left")
+            .BackgroundImagePosition.ShouldBe(PAdES.Signing.SignatureImagePosition.Left);
+
     [Fact]
     public void Build_WithLayoutOptions_SetsSizeAndAlignment()
     {

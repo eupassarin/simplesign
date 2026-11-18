@@ -120,6 +120,15 @@ public sealed class PdfSignatureWriter
         // Step 3: Locate the target page object for the widget annotation.
         bool hasAppearance = options.Appearance != null;
         int targetPage = options.Appearance?.Page ?? 1;
+
+        // An anchored stamp goes on the page of its text, at the start of the text plus the offsets.
+        (float X, float Y)? anchoredAt = null;
+        if (options.Appearance?.Anchor is { } anchor)
+        {
+            var placement = anchor.Locate(inputMem.ToArray());
+            targetPage = placement.Page;
+            anchoredAt = (placement.X, placement.Y);
+        }
         int pageObjNum;
         int pageObjDictStart;
         int pageObjDictEnd;
@@ -202,7 +211,11 @@ public sealed class PdfSignatureWriter
             string? pageDict = pageObjNum <= 0 ? null
                 : pageObjDictStart >= 0 ? Encoding.Latin1.GetString(inputMem.Span.Slice(pageObjDictStart, pageObjDictEnd - pageObjDictStart))
                 : PdfStructureParser.ExtractObjectFromObjStm(inputMem.Span, pageObjNum);
-            if (a.AutoPosition && pageDict is not null)
+            if (anchoredAt is { } anchored)
+            {
+                (appX, appY) = anchored;
+            }
+            else if (a.AutoPosition && pageDict is not null)
             {
                 float pageWidth = PdfStructureParser.ParseMediaBoxWidth(inputMem.Span, pageDict);
                 int rotation = PdfStructureParser.ParsePageRotation(inputMem.Span, pageDict);

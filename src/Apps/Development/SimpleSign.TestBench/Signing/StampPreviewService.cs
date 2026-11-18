@@ -79,7 +79,9 @@ internal sealed class StampPreviewService(SandboxEnvironment sandbox, DocumentSt
         }
 
         var a = preview.Appearance;
-        int? page = preview.FieldMode == FieldMode.Existing ? null : a.Page;
+        int? page = preview.FieldMode == FieldMode.Existing ? null
+            : plan.Field.Appearance?.Anchor is { } anchor ? anchor.Locate(document.Content).Page
+            : a.Page;
         return new StampPreview(id, page, Rect(signed, preview.FieldMode == FieldMode.Existing ? preview.ExistingFieldName : preview.FieldName), ms);
     }
 

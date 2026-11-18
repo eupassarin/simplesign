@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A visible signature can be placed relative to a text of the document**: `SignatureAppearance.Anchor =
+  new SignatureAnchor("Contratante") { OffsetY = 30 }` puts the stamp's lower-left corner 30pt above the start of
+  "Contratante" (the left edge of its first letter, on its baseline), on the page where the text is, wherever it ends
+  up. Offsets are positive right and up. When the text appears more than once, the last match is used; `Occurrence`
+  picks another one (1 the first, -2 the one before the last), and `IgnoreCase` ignores case. When the text is not
+  there, signing is refused with `SigningErrorReason.AnchorNotFound`. `SignatureAnchor.Locate(pdf)` gives where the
+  stamp goes before signing. The library reads the page text itself: simple fonts (WinAnsi, MacRoman, Standard,
+  `/Differences`, ToUnicode) and composite fonts with a ToUnicode map, text split across operators, form XObjects.
+  CLI: `--anchor`, `--anchor-offset X,Y`, `--anchor-occurrence`, `--anchor-ignore-case`. TestBench: the anchor options
+  on the Stamp page; dragging an anchored stamp changes its offsets.
+
+- **The stamp's image can go beside the text instead of behind it**: `SignatureAppearance.BackgroundImagePosition`
+  (`SignatureImagePosition`: `Behind`, the default and what it did until now, or `Left`, `Right`, `Top`, `Bottom`),
+  so a seal or a handwritten signature does not cover the text. Beside the text the image keeps its aspect ratio and
+  is as tall as the stamp; above or below it, as tall as the text. The QR code stays first, on the left. A computed
+  stamp grows to hold the image. CLI: `--image-position`; TestBench: "Image position".
+
+### Changed
+
+- **The text beside a stamp's QR code keeps the proportion it has without one.** The QR code makes the stamp at
+  least 80pt tall, and the text stayed at 7pt/6pt in its top corner. It is now enlarged to the stamp's height, as the
+  text of a stamp without a QR code fills it (the computed width grows to match). In a fixed `Width` the text grows
+  only as far as the width allows, and the QR code gets smaller (down to 40pt, placed as `VerticalAlignment` says)
+  before the text is shrunk.
+
 ## [0.13.0] - 2026-11-17
 
 ### Added

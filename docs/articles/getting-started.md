@@ -169,6 +169,8 @@ var appearance = new SignatureAppearance { ShowReason = true, ShowLocation = tru
 | `MaxTextLength` | `40` | Characters per line before `...`; `0` disables |
 | `BackgroundColor` | none | Stamp fill color |
 | `BackgroundImageFit` | `Stretch` | `Stretch`, `Contain` (keep ratio) or `Cover` (fill and crop) |
+| `Anchor` | none | `new SignatureAnchor("Contratante") { OffsetY = 30 }`: the stamp goes 30pt above the start of that text, on its page (last match; `Occurrence`, `IgnoreCase`) |
+| `BackgroundImagePosition` | `Behind` | `Behind` the text, or `Left`, `Right`, `Top`, `Bottom` of it (keeps its ratio); the QR code stays first |
 
 PNG backgrounds may have transparency (RGBA, gray+alpha, or palette with `tRNS`), which is kept
 through a soft mask. PDF/A-1 forbids transparency, so use an opaque PNG or a JPEG there.
