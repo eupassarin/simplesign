@@ -25,7 +25,7 @@ public sealed partial class AnnexBCoverageTests
         ["V-11"] = "a document signed with an expired certificate needs a signer that expires meanwhile: the scenario v-expirado",
         ["V-28"] = "the scenario v-clave-debil; the constraint is the validation policy's, tested in SimpleSign.Core.Tests",
         ["S-4"] = "the test PKI has no expired time-stamp authority: the scenario tsa-expirada",
-        ["F-32"] = "the manuals are documents: src/Extensions/Peru/Iofe/docs/acreditacion",
+        ["F-32"] = "the manuals are documents: src/Extensions/Peru/Iofe/docs/accreditation",
         ["V-32"] = "as F-32",
         ["V-31"] = "the verification agent does not sign what it receives",
     };

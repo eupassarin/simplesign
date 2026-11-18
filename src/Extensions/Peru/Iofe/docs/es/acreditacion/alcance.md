@@ -1,6 +1,7 @@
 # Alcance de la acreditación
 
 Datos que el Anexo B de la Guía pide registrar en el informe de auditoría.
+(Traducción al español de [`scope.md`](../../accreditation/scope.md), que es el texto principal. Esta versión es la que se entrega al INDECOPI.)
 
 | | Dato | Valor |
 |---|---|---|
@@ -13,7 +14,7 @@ Datos que el Anexo B de la Guía pide registrar en el informe de auditoría.
 | g | ¿Realiza funciones de módulo criptográfico? | No. La operación con la clave privada se realiza en el módulo criptográfico del operador, a través de PKCS#11, o en el de un servicio de firma remota declarado (Cloud Signature Consortium API v2). La librería calcula el resumen (SHA-256 o superior) con `System.Security.Cryptography` y es lo único que envía |
 | h | ¿Genera copias de la clave privada? | No. La librería no lee, exporta ni almacena la clave, rechaza una clave que el módulo declare extraíble y no acepta archivos PKCS#12 (PFX) |
 | i | Formato de documento a firmar | PDF; XML; cualquier archivo, para una firma CMS |
-| j | Herramientas del entorno de pruebas | SimpleSign Sandbox (PKI de pruebas con CRL, OCSP, TSA, TSL y un servicio de firma remota); el guion `tools/auditoria/auditoria.py`, que ejecuta `simplesign iofe` en cada ítem del Anexo B y conserva las evidencias ([guion de la auditoría](../guion-de-auditoria.md)); SoftHSM2 como módulo PKCS#11 de pruebas. El SimpleSign TestBench (playbook `indecopi-guia-v4`) usa los firmadores generales y es material complementario |
+| j | Herramientas del entorno de pruebas | SimpleSign Sandbox (PKI de pruebas con CRL, OCSP, TSA, TSL y un servicio de firma remota); el guion `tools/auditoria/auditoria.py`, que ejecuta `simplesign iofe` en cada ítem del Anexo B y conserva las evidencias ([guion de la auditoría](../guion-de-auditoria.md)), contra el Sandbox o, con `--entorno`, en el entorno real: el HSM del operador, la TSL del INDECOPI y la EC real; SoftHSM2 como módulo PKCS#11 de pruebas. El SimpleSign TestBench (playbook `indecopi-guia-v4`) usa los firmadores generales y es material complementario |
 | k | ¿Realiza consultas de sello de tiempo? | Sí, opcionalmente (RFC 3161), con las verificaciones de la sección 4.4 |
 
 ## Tipos de aplicación

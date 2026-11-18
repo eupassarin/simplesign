@@ -198,7 +198,7 @@ IofeVerification result = await verifier.VerifyAsync(received, new IofeSender("2
 | A notice to the sender of an invalid document (§4.3) | `IofeRejectionNotice` handed to an `IIofeSenderNotifier`; a notice not delivered fails the verification |
 | The checks of each time-stamp (§4.4) | `IofeTimestampAuthority` carries the authority's certificate: a token of any other is refused |
 | A viewer (Req. 18, 28) | `IofeViewer`, in Spanish |
-| Manuals (Req. 20, 30) | [`src/Extensions/Peru/Iofe/docs/acreditacion/`](acreditacion/README.md), in Spanish |
+| Manuals (Req. 20, 30) | [`src/Extensions/Peru/Iofe/docs/accreditation/`](accreditation/README.md); in Spanish, [`es/acreditacion/`](es/acreditacion/README.md) |
 
 The same from the command line, with the extension installed: `simplesign iofe sign`, `simplesign iofe verify`,
 `simplesign iofe view`.

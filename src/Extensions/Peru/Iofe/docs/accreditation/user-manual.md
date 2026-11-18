@@ -2,8 +2,7 @@
 
 For whoever runs the `simplesign iofe` command line and reads its results. The `iofe` commands come with the
 extension `SimpleSign.Peru.Iofe.Cli` (`simplesign extension install SimpleSign.Peru.Iofe.Cli`; see the administration
-manual). (English translation of [`manual-de-usuario.md`](../manual-de-usuario.md); the Spanish text is the one handed
-to INDECOPI.)
+manual). (In Spanish, the version handed to INDECOPI: [`manual-de-usuario.md`](../es/acreditacion/manual-de-usuario.md).)
 
 ## Signing as an automated agent
 

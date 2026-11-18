@@ -3,6 +3,7 @@
 Para quien opera la línea de comandos `simplesign iofe` y lee sus resultados. Los comandos `iofe` los aporta la
 extensión `SimpleSign.Peru.Iofe.Cli` (`simplesign extension install SimpleSign.Peru.Iofe.Cli`; ver el manual de
 administración).
+(Traducción al español de [`user-manual.md`](../../accreditation/user-manual.md), que es el texto principal. Esta versión es la que se entrega al INDECOPI.)
 
 ## Firmar como agente automatizado
 

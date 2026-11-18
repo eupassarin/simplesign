@@ -1,8 +1,8 @@
 # Security configuration (section 5 of the guide)
 
 The configuration that must be in place for the application to meet every requirement. The users of the application
-are responsible for applying it and keeping it up to date. (English translation of
-[`configuracion-de-seguridad.md`](../configuracion-de-seguridad.md); the Spanish text is the one handed to INDECOPI.)
+are responsible for applying it and keeping it up to date. (In Spanish, the version handed to INDECOPI:
+[`configuracion-de-seguridad.md`](../es/acreditacion/configuracion-de-seguridad.md).)
 
 Most requirements **do not depend on configuration**: the policy that checks the certificate is fixed and the library
 offers no parameter to switch it off. What follows is what does depend on whoever installs it.
