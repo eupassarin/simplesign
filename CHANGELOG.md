@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is as tall as the stamp; above or below it, as tall as the text. The QR code stays first, on the left. A computed
   stamp grows to hold the image. CLI: `--image-position`; TestBench: "Image position".
 
+- **`IofeTrust.ListFile(path, trustedListSigners)`** (`SimpleSign.Peru.Iofe.Accredited`): a copy of the trusted list
+  kept as a file, read and checked when the agent or the viewer is created, not before.
+
 ### Changed
 
 - **The text beside a stamp's QR code keeps the proportion it has without one.** The QR code makes the stamp at
@@ -35,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before the text is shrunk.
 
 ### Fixed
+
+- **`simplesign iofe sign --tsl FILE`: a list that is refused now leaves its audit record** (annex B, F-15). The
+  command read the file before there was an agent, so a list changed after it was signed, expired or signed by
+  another certificate failed the command with the right message and no record; a list downloaded from a URL already
+  left one. The file is now read by `IofeSigningAgent.OpenAsync` (`IofeTrust.ListFile`), which records
+  `AgentNotOpened` with the reason and throws the same exception. `iofe verify` and `iofe view` read the file the
+  same way; they have no record to write before there is a document, as before.
 
 - **A PDF signature whose SubFilter is not `ETSI.CAdES.detached` is no longer reported as PAdES baseline.** EN 319
   142-1 allows only that SubFilter in a baseline signature; the ETSI Signatures Conformance Checker failed an

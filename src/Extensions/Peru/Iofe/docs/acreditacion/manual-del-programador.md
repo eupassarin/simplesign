@@ -168,6 +168,7 @@ están en el manual de administración, sección 8.
 |---|---|
 | `IofeTrust.IndecopiList()` (por defecto) | La TSL del INDECOPI, verificada y mantenida al día. Acepta `IofeExtensionOptions` (`CacheFile`, `TrustedListSigners`, `HttpClientProvider`) |
 | `IofeTrust.List(extension)` | Una lista que la aplicación ya cargó (`IofeExtension.Load`, `LoadRefreshableAsync`) y mantiene ella misma |
+| `IofeTrust.ListFile(ruta, firmantes)` | Una copia de la lista guardada como archivo (`--tsl ARCHIVO` en la línea de comandos). Se lee y se verifica al crear el agente, igual que la descargada: un agente de firma que no abre porque la lista fue rechazada lo deja en el registro de auditoría (`AgentNotOpened`). Se lee una sola vez |
 | `IofeTrust.InstalledRoots(raíces)` | Certificados raíz instalados por el operador |
 
 ## Visor (Req. 18, 28)
