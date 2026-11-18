@@ -100,6 +100,18 @@ public sealed class IofeCommandTests : IDisposable
         page.ShouldContain("BEGIN PUBLIC KEY");
     }
 
+    [Fact]
+    public async Task View_TslOnThisMachineWithoutAllowOrigin_SaysWhichOptionAllowsIt()
+    {
+        string input = await SignedPdfAsync();
+
+        var (exit, output) = await IofeCli.RunAsync("iofe", "view", input, "--output", File("visor.html"), "--tsl", "http://localhost:5300/tl/tl.xml");
+
+        exit.ShouldNotBe(0);
+        Flat(output).ShouldContain("--allow-origin http://localhost:5300");
+        System.IO.File.Exists(File("visor.html")).ShouldBeFalse();
+    }
+
     [Theory]
     [InlineData("--audit-log")]
     [InlineData("--module-certificate")]

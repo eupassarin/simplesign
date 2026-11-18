@@ -51,6 +51,17 @@ internal abstract class IofeTrustSettings : CommandSettings
 
         if (Uri.TryCreate(TrustedList, UriKind.Absolute, out var url) && url.Scheme is "http" or "https")
         {
+            // The CLI refuses local addresses unless told otherwise: say so before a download that would only fail.
+            string origin = url.GetLeftPart(UriPartial.Authority);
+            bool loopback = string.Equals(url.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+                || (System.Net.IPAddress.TryParse(url.IdnHost.Trim('[', ']'), out var address) && System.Net.IPAddress.IsLoopback(address));
+            if (loopback && !IofeCliExtension.Context.HttpClientProvider.OutboundPolicy.LoopbackOrigins.Any(o =>
+                string.Equals(o.GetLeftPart(UriPartial.Authority), origin, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new ArgumentException(
+                    $"--tsl {url} is on this machine, which the CLI does not reach unless allowed: add --allow-origin {origin} (or --sandbox {origin} for a SimpleSign Sandbox).");
+            }
+
             return IofeTrust.IndecopiList(new IofeExtensionOptions
             {
                 TrustedListUrl = url,

@@ -361,7 +361,7 @@ public sealed class IofeTrustedListSource : ITimedTrustAnchorProvider, ITrustedL
         byte[]? xml = await ResilientHttp.GetBytesAsync(http.GetClient(), options.TrustedListUrl, http.OutboundPolicy, null, cancellationToken).ConfigureAwait(false);
         if (xml is null)
         {
-            return (null, "the list could not be downloaded", null);
+            return (null, RefusedLoopback(options.TrustedListUrl, http.OutboundPolicy) ?? "the list could not be downloaded", null);
         }
 
         try
@@ -373,6 +373,24 @@ public sealed class IofeTrustedListSource : ITimedTrustAnchorProvider, ITrustedL
         {
             return (null, $"the list was refused: {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Why <paramref name="url"/> was never requested: it is on this machine and <paramref name="policy"/> does not list
+    /// its origin in <see cref="OutboundHttpPolicy.LoopbackOrigins"/>; null for any other URL.
+    /// </summary>
+    internal static string? RefusedLoopback(Uri url, OutboundHttpPolicy policy)
+    {
+        bool loopback = string.Equals(url.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (System.Net.IPAddress.TryParse(url.IdnHost.Trim('[', ']'), out var address) && System.Net.IPAddress.IsLoopback(address));
+        if (!loopback || policy.LoopbackOrigins.Any(o => string.Equals(o.Scheme, url.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(o.IdnHost, url.IdnHost, StringComparison.OrdinalIgnoreCase) && o.Port == url.Port))
+        {
+            return null;
+        }
+
+        return $"{url.GetLeftPart(UriPartial.Authority)} is this machine, which the outbound policy refuses unless "
+            + $"{nameof(OutboundHttpPolicy)}.{nameof(OutboundHttpPolicy.LoopbackOrigins)} lists it";
     }
 
     private static async Task WriteCacheAsync(string? cacheFile, (IofeTrustedListSnapshot Snapshot, byte[] Xml) read, CancellationToken cancellationToken)
