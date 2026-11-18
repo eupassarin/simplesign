@@ -55,23 +55,33 @@ internal static class SignatureAppearanceRenderer
             Line(stream, $"0 0 {F(width)} {F(height)} re f");
         }
 
+        var arrangement = appearance.Arrange(options.SignerName, options.Reason, options.Location, sigTime, width, height);
         if (image is not null)
         {
-            AppendImage(stream, image, appearance.BackgroundImageFit, width, height);
+            if (arrangement.Image is { } box)
+            {
+                Line(stream, "q");
+                Line(stream, $"{F(box.Width)} 0 0 {F(box.Height)} {F(box.X)} {F(box.Y)} cm");
+                Line(stream, "/Img0 Do");
+                Line(stream, "Q");
+            }
+            else
+            {
+                AppendImage(stream, image, appearance.BackgroundImageFit, width, height);
+            }
         }
 
         // QR code (rendered as filled rectangles on the left side)
-        if (!string.IsNullOrEmpty(appearance.VerificationUrl))
+        if (arrangement.Qr is { } qr)
         {
             using var qrGenerator = new QRCodeGenerator();
-            var qrCodeData = qrGenerator.CreateQrCode(appearance.VerificationUrl, QRCodeGenerator.ECCLevel.M);
+            var qrCodeData = qrGenerator.CreateQrCode(appearance.VerificationUrl!, QRCodeGenerator.ECCLevel.M);
             int modules = qrCodeData.ModuleMatrix.Count;
-            float qrSize = SignatureAppearance.QrSize(height);
-            float moduleSize = qrSize / modules;
+            float moduleSize = qr.Width / modules;
 
             // White background for QR code (ensures quiet zone contrast)
             Line(stream, "1 1 1 rg");
-            Line(stream, $"{F(2)} {F(2)} {F(qrSize)} {F(qrSize)} re f");
+            Line(stream, $"{F(qr.X)} {F(qr.Y)} {F(qr.Width)} {F(qr.Height)} re f");
 
             // Dark modules
             Line(stream, "0 0 0 rg");
@@ -81,15 +91,15 @@ internal static class SignatureAppearanceRenderer
                 {
                     if (qrCodeData.ModuleMatrix[r][c])
                     {
-                        float x = 2 + (c * moduleSize);
-                        float y = height - 2 - ((r + 1) * moduleSize);
+                        float x = qr.X + (c * moduleSize);
+                        float y = qr.Y + qr.Height - ((r + 1) * moduleSize);
                         Line(stream, $"{F(x)} {F(y)} {F(moduleSize)} {F(moduleSize)} re f");
                     }
                 }
             }
         }
 
-        stream.Append(BuildTextLines(options, appearance, sigTime, width, height));
+        stream.Append(BuildTextLines(appearance, arrangement.Lines));
 
         // Border last, so the background image and QR code do not cover it.
         if (appearance.BorderColor is { } border)
@@ -164,7 +174,7 @@ internal static class SignatureAppearanceRenderer
     /// <summary>
     /// Generates the BT/ET text block for the visual signature stamp.
     /// </summary>
-    private static string BuildTextLines(SignatureFieldOptions options, SignatureAppearance appearance, DateTime sigTime, float width, float height)
+    private static string BuildTextLines(SignatureAppearance appearance, List<PositionedLine> lines)
     {
         var sb = new StringBuilder();
 
@@ -181,7 +191,7 @@ internal static class SignatureAppearanceRenderer
         Line(sb, "BT");
 
         float? currentSize = null;
-        foreach (var line in appearance.Layout(options.SignerName, options.Reason, options.Location, sigTime, width, height))
+        foreach (var line in lines)
         {
             if (currentSize != line.FontSize)
             {

@@ -391,6 +391,15 @@ internal sealed class SigningPlan
             Width = a.Width,
             Height = a.Height,
             AutoPosition = a.AutoPosition && !existing,
+            Anchor = a.Anchored && !existing
+                ? new SignatureAnchor(a.AnchorText!.Trim())
+                {
+                    OffsetX = a.AnchorOffsetX,
+                    OffsetY = a.AnchorOffsetY,
+                    Occurrence = a.AnchorOccurrence,
+                    IgnoreCase = a.AnchorIgnoreCase,
+                }
+                : null,
             TextAlignment = Enum.Parse<SignatureTextAlignment>(a.TextAlignment),
             VerticalAlignment = Enum.Parse<SignatureVerticalAlignment>(a.VerticalAlignment),
             ShrinkToFit = a.ShrinkToFit,
@@ -418,6 +427,7 @@ internal sealed class SigningPlan
             BackgroundImagePng = isPng ? image : null,
             BackgroundImageJpeg = image is not null && !isPng ? image : null,
             BackgroundImageFit = Enum.Parse<SignatureImageFit>(a.ImageFit),
+            BackgroundImagePosition = Enum.Parse<SignatureImagePosition>(a.ImagePosition),
         };
     }
 
@@ -468,7 +478,34 @@ internal sealed class SigningPlan
         var sb = new StringBuilder("new SignatureAppearance\n    {\n");
         if (!existing)
         {
-            if (a.AutoPosition)
+            if (a.Anchored)
+            {
+                var anchor = new List<string>();
+                if (a.AnchorOffsetX != 0)
+                {
+                    anchor.Add(string.Create(CultureInfo.InvariantCulture, $"OffsetX = {a.AnchorOffsetX:0.##}f"));
+                }
+
+                if (a.AnchorOffsetY != 0)
+                {
+                    anchor.Add(string.Create(CultureInfo.InvariantCulture, $"OffsetY = {a.AnchorOffsetY:0.##}f"));
+                }
+
+                if (a.AnchorOccurrence != -1)
+                {
+                    anchor.Add(string.Create(CultureInfo.InvariantCulture, $"Occurrence = {a.AnchorOccurrence}"));
+                }
+
+                if (a.AnchorIgnoreCase)
+                {
+                    anchor.Add("IgnoreCase = true");
+                }
+
+                string text = a.AnchorText!.Trim().Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+                sb.Append(CultureInfo.InvariantCulture, $"        Anchor = new SignatureAnchor(\"{text}\"){(anchor.Count > 0 ? " { " + string.Join(", ", anchor) + " }" : "")},\n");
+                sb.Append(CultureInfo.InvariantCulture, $"        Width = {a.Width:0.##}f, Height = {a.Height:0.##}f,\n");
+            }
+            else if (a.AutoPosition)
             {
                 sb.Append("        AutoPosition = true,\n");
             }
@@ -567,10 +604,13 @@ internal sealed class SigningPlan
         {
             sb.Append("        BackgroundImagePng = File.ReadAllBytes(\"stamp.png\"), // or BackgroundImageJpeg\n");
             Enum("ImageFit", a.ImageFit, "Stretch");
+            Enum("ImagePosition", a.ImagePosition, "Behind");
         }
 
         sb.Append("    }");
-        return sb.ToString().Replace("SignatureImageFit = SignatureImageFit", "BackgroundImageFit = SignatureImageFit", StringComparison.Ordinal);
+        return sb.ToString()
+            .Replace("ImageFit = SignatureImageFit", "BackgroundImageFit = SignatureImageFit", StringComparison.Ordinal)
+            .Replace("ImagePosition = SignatureImagePosition", "BackgroundImagePosition = SignatureImagePosition", StringComparison.Ordinal);
     }
 
     internal static HashAlgorithmName ToHash(HashChoice hash) => hash switch

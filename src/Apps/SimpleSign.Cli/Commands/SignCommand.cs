@@ -249,6 +249,31 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("How the background image is scaled: stretch (default), contain, cover")]
         public string? ImageFit { get; init; }
 
+        /// <summary>Where the background image goes: behind the text (default), left, right, top or bottom of it.</summary>
+        [CommandOption("--image-position <WHERE>")]
+        [Description("Where the background image goes: behind the text (default), left, right, top, bottom; the QR code stays first")]
+        public string? ImagePosition { get; init; }
+
+        /// <summary>Places the stamp relative to a text of the document instead of --page/--pos-x/--pos-y.</summary>
+        [CommandOption("--anchor <TEXT>")]
+        [Description("Place the stamp relative to this text of the document (its last match), e.g. Contratante; the page is the text's")]
+        public string? Anchor { get; init; }
+
+        /// <summary>Offset of the stamp from the start of the anchor text, "X,Y" in points.</summary>
+        [CommandOption("--anchor-offset <X,Y>")]
+        [Description("Stamp's lower-left corner from the start of the --anchor text, in points: right and up positive, e.g. 0,30")]
+        public string? AnchorOffset { get; init; }
+
+        /// <summary>Which match of the anchor text: 1 the first, -1 (default) the last.</summary>
+        [CommandOption("--anchor-occurrence <N>")]
+        [Description("Which match of the --anchor text: 1 the first, 2 the second, -1 the last (default), -2 the one before")]
+        public int? AnchorOccurrence { get; init; }
+
+        /// <summary>Case does not matter when finding the anchor text.</summary>
+        [CommandOption("--anchor-ignore-case")]
+        [Description("Case does not matter when finding the --anchor text")]
+        public bool AnchorIgnoreCase { get; init; }
+
         /// <summary>Fixed stamp width in points (text shrinks to fit).</summary>
         [CommandOption("--stamp-width <PT>")]
         [Description("Fixed stamp width in points (text shrinks to fit)")]
@@ -586,6 +611,39 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 return ValidationResult.Error("--image-fit must be stretch, contain or cover.");
             }
 
+            if (ImagePosition is not null && AppearanceBuilder.ParseImagePosition(ImagePosition) is null)
+            {
+                return ValidationResult.Error("--image-position must be behind, left, right, top or bottom.");
+            }
+
+            if (Anchor is null && (AnchorOffset is not null || AnchorOccurrence.HasValue || AnchorIgnoreCase))
+            {
+                return ValidationResult.Error("--anchor-offset, --anchor-occurrence and --anchor-ignore-case require --anchor.");
+            }
+
+            if (Anchor is not null)
+            {
+                if (string.IsNullOrWhiteSpace(Anchor))
+                {
+                    return ValidationResult.Error("--anchor needs a text to find.");
+                }
+
+                if (Page.HasValue || X.HasValue || Y.HasValue)
+                {
+                    return ValidationResult.Error("--anchor places the stamp: it cannot go with --page, --pos-x or --pos-y.");
+                }
+
+                if (AnchorOffset is not null && AppearanceBuilder.ParseOffset(AnchorOffset) is null)
+                {
+                    return ValidationResult.Error("--anchor-offset must be X,Y in points, e.g. 0,30.");
+                }
+
+                if (AnchorOccurrence == 0)
+                {
+                    return ValidationResult.Error("--anchor-occurrence is 1 or more (from the first) or -1 or less (from the last), not 0.");
+                }
+            }
+
             if (StampWidth is <= 0 || StampHeight is <= 0)
             {
                 return ValidationResult.Error("--stamp-width and --stamp-height must be greater than 0.");
@@ -620,7 +678,7 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 || Font is not null || BorderColor is not null || BorderWidth.HasValue || NoDate
                 || SignedByLabel is not null || ReasonLabel is not null || LocationLabel is not null
                 || DateLabel is not null || DateFormat is not null || TimeZone is not null
-                || BackgroundColor is not null || ImageFit is not null
+                || BackgroundColor is not null || ImageFit is not null || ImagePosition is not null || Anchor is not null
                 || StampWidth.HasValue || StampHeight.HasValue || TextAlign is not null)
             {
                 if (!Visible)
@@ -880,7 +938,10 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
                 imageFit: settings.ImageFit,
                 layout: new AppearanceLayoutOptions(settings.StampWidth, settings.StampHeight, settings.TextAlign),
                 extra: new AppearanceExtraOptions(settings.VerticalAlign, settings.NoShrinkToFit, settings.MaxTextLength, settings.DateCulture,
-                    settings.SignerDisplayName, settings.ExtraLines, settings.HideReason, settings.HideLocation));
+                    settings.SignerDisplayName, settings.ExtraLines, settings.HideReason, settings.HideLocation),
+                imagePosition: settings.ImagePosition,
+                anchor: settings.Anchor is null ? null
+                    : new AnchorOptions(settings.Anchor, settings.AnchorOffset, settings.AnchorOccurrence, settings.AnchorIgnoreCase));
 
             if (extension?.ConfigureAppearance is { } configureAppearance)
             {

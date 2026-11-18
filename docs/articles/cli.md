@@ -79,6 +79,8 @@ bottom of the page. Everything else is optional:
 | `--font`, `--font-size`, `--label-font-size` | A PDF standard font and its sizes |
 | `--text-color`, `--background-color`, `--border-color` (`R,G,B` from 0 to 1), `--border-width` | Colors and border |
 | `--background-image <PNG\|JPEG>`, `--image-fit stretch\|contain\|cover` | An image behind the text |
+| `--anchor <TEXT>`, `--anchor-offset X,Y`, `--anchor-occurrence N`, `--anchor-ignore-case` | Place the stamp relative to a text of the document (its last match; right and up are positive) instead of `--page`/`--pos-x`/`--pos-y` |
+| `--image-position behind\|left\|right\|top\|bottom` | The image beside the text instead (the QR code stays first) |
 | `--qr-url <URL>` | A QR code with a verification URL |
 
 ```bash

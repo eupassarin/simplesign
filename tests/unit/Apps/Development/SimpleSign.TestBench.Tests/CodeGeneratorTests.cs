@@ -91,6 +91,24 @@ public sealed class CodeGeneratorTests(TestBenchFixture fixture)
     }
 
     [SkippableFact]
+    public async Task Generate_AnchoredStamp_PrintsTheAnchorInBothSnippets()
+    {
+        var options = fixture.Options() with
+        {
+            Appearance = new AppearanceChoice { Visible = true, AnchorText = "Contratante", AnchorOffsetY = 30, AnchorOccurrence = 1 },
+        };
+
+        var result = await fixture.Runner.RunAsync(options, default);
+
+        result.Success.ShouldBeTrue(result.Error);
+        result.Code.CSharp.ShouldContain("Anchor = new SignatureAnchor(\"Contratante\") { OffsetY = 30f, Occurrence = 1 }", Case.Sensitive, result.Code.CSharp);
+        result.Code.CSharp.ShouldNotContain("X = 72f", Case.Sensitive, result.Code.CSharp);
+        string cli = string.Join(' ', result.Code.CliCommands.SelectMany(c => c.Args));
+        cli.ShouldContain("--visible --anchor Contratante --anchor-offset 0,30 --anchor-occurrence 1", Case.Sensitive, cli);
+        cli.ShouldNotContain("--pos-x", Case.Sensitive, cli);
+    }
+
+    [SkippableFact]
     public async Task Generate_Deferred_PrintsThreePhases()
     {
         var result = await fixture.Runner.RunAsync(fixture.Options() with { Mode = RunMode.Deferred }, default);

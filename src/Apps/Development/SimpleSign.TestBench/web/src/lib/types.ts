@@ -33,6 +33,11 @@ export interface AppearanceChoice {
   y: number
   width: number | null
   height: number | null
+  anchorText?: string | null
+  anchorOffsetX: number
+  anchorOffsetY: number
+  anchorOccurrence: number
+  anchorIgnoreCase: boolean
   textAlignment: "Left" | "Center" | "Right"
   verticalAlignment: "Top" | "Middle" | "Bottom"
   shrinkToFit: boolean
@@ -59,6 +64,7 @@ export interface AppearanceChoice {
   verificationUrl?: string | null
   imageUploadId?: string | null
   imageFit: "Stretch" | "Contain" | "Cover"
+  imagePosition: "Behind" | "Left" | "Right" | "Top" | "Bottom"
 }
 
 export interface MetadataChoice {

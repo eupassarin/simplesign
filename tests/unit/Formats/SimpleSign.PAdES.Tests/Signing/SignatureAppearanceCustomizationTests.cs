@@ -108,6 +108,7 @@ public sealed class SignatureAppearanceCustomizationTests
             Height = 60,
             BackgroundColor = (1f, 1f, 0.9f),
             BackgroundImageFit = SignatureImageFit.Contain,
+            BackgroundImagePosition = SignatureImagePosition.Top,
         };
 
         var clone = app.WithExtraLines(["CPF: ***"]);
@@ -124,6 +125,7 @@ public sealed class SignatureAppearanceCustomizationTests
         clone.Height.ShouldBe(60);
         clone.BackgroundColor.ShouldBe((1f, 1f, 0.9f));
         clone.BackgroundImageFit.ShouldBe(SignatureImageFit.Contain);
+        clone.BackgroundImagePosition.ShouldBe(SignatureImagePosition.Top);
         clone.ExtraLines.ShouldBe(["CPF: ***"]);
     }
 
@@ -289,6 +291,103 @@ public sealed class SignatureAppearanceCustomizationTests
 
         content.ShouldContain(expectedMatrix);
         content.Contains("re W n", StringComparison.Ordinal).ShouldBe(clipped);
+    }
+
+    [Fact(DisplayName = "By default the image stays behind the text")]
+    public void Arrange_DefaultPosition_ImageBehindText()
+    {
+        var app = new SignatureAppearance { BackgroundImagePng = TestPng.Rgb(4, 2) };
+        float width = app.ComputeWidth("Maria", null, null, SampleTime);
+
+        var arrangement = app.Arrange("Maria", null, null, SampleTime, width, app.ComputeHeight(false, false));
+
+        arrangement.Image.ShouldBeNull();
+        width.ShouldBe(new SignatureAppearance().ComputeWidth("Maria", null, null, SampleTime));
+    }
+
+    [Theory(DisplayName = "An image before or after the text sits beside it, as tall as the stamp, and widens it")]
+    [InlineData(SignatureImagePosition.Left)]
+    [InlineData(SignatureImagePosition.Right)]
+    public void Arrange_ImageBesideText_DoesNotOverlap(SignatureImagePosition position)
+    {
+        var app = new SignatureAppearance { BackgroundImagePng = TestPng.Rgb(4, 2), BackgroundImagePosition = position };
+        float height = app.ComputeHeight(false, false);
+        float width = app.ComputeWidth("Maria", null, null, SampleTime);
+
+        var arrangement = app.Arrange("Maria", null, null, SampleTime, width, height);
+
+        var image = arrangement.Image.ShouldNotBeNull();
+        image.Height.ShouldBe(height - 4, 0.01f);
+        image.Width.ShouldBe(image.Height * 2, 0.01f);
+        width.ShouldBe(new SignatureAppearance().ComputeWidth("Maria", null, null, SampleTime) + image.Width + 6, 0.01f);
+        foreach (var line in arrangement.Lines)
+        {
+            float right = line.X + AppearanceText.Measure(line.Text, "Helvetica", line.FontSize);
+            (position == SignatureImagePosition.Left ? line.X > image.X + image.Width : right < image.X).ShouldBeTrue();
+        }
+
+        arrangement.Lines.Select(l => l.FontSize).ShouldBe([6f, 7f, 6f]);
+    }
+
+    [Fact(DisplayName = "The QR code comes before an image on the left")]
+    public void Arrange_QrAndImageLeft_QrFirst()
+    {
+        var app = new SignatureAppearance
+        {
+            BackgroundImagePng = TestPng.Rgb(4, 2),
+            BackgroundImagePosition = SignatureImagePosition.Left,
+            VerificationUrl = "https://example.com/v",
+        };
+        float height = app.ComputeHeight(false, false);
+        float width = app.ComputeWidth("Maria", null, null, SampleTime);
+
+        var arrangement = app.Arrange("Maria", null, null, SampleTime, width, height);
+
+        var qr = arrangement.Qr.ShouldNotBeNull();
+        var image = arrangement.Image.ShouldNotBeNull();
+        qr.Width.ShouldBe(SignatureAppearance.QrSize(height), 0.01f);
+        image.X.ShouldBeGreaterThan(qr.X + qr.Width);
+        arrangement.Lines.ShouldAllBe(l => l.X > image.X + image.Width);
+        arrangement.Lines.ShouldAllBe(l => l.X + AppearanceText.Measure(l.Text, "Helvetica", l.FontSize) <= width - 4.99f);
+    }
+
+    [Theory(DisplayName = "An image above or below the text is as tall as the text and does not overlap it")]
+    [InlineData(SignatureImagePosition.Top)]
+    [InlineData(SignatureImagePosition.Bottom)]
+    public void Arrange_ImageStacked_DoesNotOverlap(SignatureImagePosition position)
+    {
+        var app = new SignatureAppearance { BackgroundImagePng = TestPng.Rgb(4, 2), BackgroundImagePosition = position };
+        float plainHeight = new SignatureAppearance().ComputeHeight(false, false);
+        float height = app.ComputeHeight(false, false);
+        float width = app.ComputeWidth("Maria", null, null, SampleTime);
+
+        var arrangement = app.Arrange("Maria", null, null, SampleTime, width, height);
+
+        var image = arrangement.Image.ShouldNotBeNull();
+        height.ShouldBe((plainHeight * 2) - 4 + 4, 0.01f); // the text block twice, 4pt padding, 2pt gap, 2pt margin
+        image.Height.ShouldBe(plainHeight - 4, 0.01f);
+        image.Width.ShouldBe(image.Height * 2, 0.01f);
+        arrangement.Lines.Select(l => l.FontSize).ShouldBe([6f, 7f, 6f]);
+        if (position == SignatureImagePosition.Top)
+        {
+            image.Y.ShouldBeGreaterThan(arrangement.Lines[0].Y + 7);
+            (image.Y + image.Height).ShouldBeLessThanOrEqualTo(height);
+        }
+        else
+        {
+            image.Y.ShouldBeGreaterThanOrEqualTo(0f);
+            (image.Y + image.Height).ShouldBeLessThan(arrangement.Lines[^1].Y);
+        }
+    }
+
+    [Fact(DisplayName = "An image beside the text is drawn at its place, keeping its aspect ratio")]
+    public void Render_ImageLeft_DrawsAtItsPlace()
+    {
+        var app = new SignatureAppearance { Width = 200, Height = 50, BackgroundImagePng = TestPng.Rgb(4, 2), BackgroundImagePosition = SignatureImagePosition.Left };
+
+        string content = Render(app, imageObjNum: 11);
+
+        content.ShouldContain("92.00 0 0 46.00 2.00 2.00 cm");
     }
 
     [Fact(DisplayName = "RGBA PNG is embedded with a soft mask holding the alpha channel")]
@@ -537,6 +636,83 @@ public sealed class SignatureAppearanceCustomizationTests
 
         float qrRight = SignatureAppearance.QrSize(height) + 2;
         lines.ShouldAllBe(l => l.X > qrRight);
+    }
+
+    [Fact(DisplayName = "Beside a QR code the text fills the stamp's height, as it does without one")]
+    public void Layout_ComputedSizeWithQr_TextFillsHeight()
+    {
+        var plain = new SignatureAppearance();
+        var withQr = new SignatureAppearance { VerificationUrl = "https://example.com/v" };
+        float plainHeight = plain.ComputeHeight(false, false);
+        float height = withQr.ComputeHeight(false, false);
+        float width = withQr.ComputeWidth("ANDRE ALMEIDA", null, null, SampleTime);
+
+        var expected = plain.Layout("ANDRE ALMEIDA", null, null, SampleTime, plain.ComputeWidth("ANDRE ALMEIDA", null, null, SampleTime), plainHeight);
+        var lines = withQr.Layout("ANDRE ALMEIDA", null, null, SampleTime, width, height);
+
+        float scale = (height - 4) / (plainHeight - 4);
+        scale.ShouldBeGreaterThan(2f);
+        lines.Select(l => l.FontSize).ShouldBe(expected.Select(l => l.FontSize * scale), 0.01f);
+        lines[^1].Y.ShouldBe(expected[^1].Y, 0.01f);
+        lines.ShouldAllBe(l => l.X >= SignatureAppearance.QrSize(height) + 2);
+        lines.ShouldAllBe(l => l.X + AppearanceText.Measure(l.Text, "Helvetica", l.FontSize) <= width - 4.99f);
+    }
+
+    [Fact(DisplayName = "In a fixed width the text beside a QR code grows only as far as the width allows")]
+    public void Layout_FixedWidthWithQr_GrowsToWidth()
+    {
+        var app = new SignatureAppearance { Width = 150, Height = 78, VerificationUrl = "https://example.com/v" };
+
+        var lines = app.Layout("ANDRE ALMEIDA", null, null, SampleTime, 150, 78);
+
+        float qrSide = SignatureAppearance.QrSide(150, 78, app.MeasureTextWidth("ANDRE ALMEIDA", null, null, SampleTime));
+        lines.Single(l => l.Text == "ANDRE ALMEIDA").FontSize.ShouldBeGreaterThan(7f);
+        lines.ShouldAllBe(l => l.X >= qrSide + 2);
+        lines.Max(l => l.X + AppearanceText.Measure(l.Text, "Helvetica", l.FontSize)).ShouldBe(145f, 0.01f);
+    }
+
+    [Fact(DisplayName = "A QR code in a narrow stamp gets smaller before the text is shrunk")]
+    public void Layout_NarrowStampWithQr_KeepsFontSizes()
+    {
+        // Room for the text at its own size and a 50pt QR code: 4pt padding each side and the 6pt gap.
+        var probe = new SignatureAppearance { VerificationUrl = "https://example.com/v" };
+        float width = probe.MeasureTextWidth("ANDRE ALMEIDA", null, null, SampleTime) + 64;
+        var app = new SignatureAppearance { Width = width, Height = 78, VerificationUrl = "https://example.com/v" };
+
+        var lines = app.Layout("ANDRE ALMEIDA", null, null, SampleTime, width, 78);
+
+        SignatureAppearance.QrSide(width, 78, app.MeasureTextWidth("ANDRE ALMEIDA", null, null, SampleTime)).ShouldBe(50f, 0.01f);
+        lines.Select(l => l.FontSize).ShouldBe([6f, 7f, 6f], 0.01f);
+    }
+
+    [Fact(DisplayName = "The QR code does not get smaller than 40pt to make room for the text")]
+    public void QrSide_NarrowStamp_StopsAtMinimum()
+    {
+        SignatureAppearance.QrSide(100, 78, 200).ShouldBe(40f);
+        SignatureAppearance.QrSide(100, 30, 200).ShouldBe(SignatureAppearance.QrSize(30));
+        SignatureAppearance.QrSide(300, 78, 50).ShouldBe(SignatureAppearance.QrSize(78));
+    }
+
+    [Theory(DisplayName = "A smaller QR code follows the vertical alignment")]
+    [InlineData(SignatureVerticalAlignment.Top, 28f)]
+    [InlineData(SignatureVerticalAlignment.Middle, 15f)]
+    [InlineData(SignatureVerticalAlignment.Bottom, 2f)]
+    public void QrOrigin_VerticalAlignment_PlacesQr(SignatureVerticalAlignment alignment, float y)
+    {
+        var app = new SignatureAppearance { VerticalAlignment = alignment };
+
+        app.QrOrigin(80, 50).ShouldBe((2f, y));
+    }
+
+    [Fact(DisplayName = "The QR code is drawn at the size that leaves the text room")]
+    public void Render_FixedSizeWithQr_DrawsSmallerQr()
+    {
+        var app = new SignatureAppearance { Width = 150, Height = 78, VerificationUrl = "https://example.com/v" };
+        float qrSide = SignatureAppearance.QrSide(150, 78, app.MeasureTextWidth("Maria Silva", null, null, SampleTime));
+
+        string content = Render(app);
+
+        content.ShouldContain($"2.00 {SignatureAppearanceRenderer.F(76 - qrSide)} {SignatureAppearanceRenderer.F(qrSide)} {SignatureAppearanceRenderer.F(qrSide)} re f");
     }
 
     [Fact(DisplayName = "ShrinkToFit scales long text down to a fixed width")]

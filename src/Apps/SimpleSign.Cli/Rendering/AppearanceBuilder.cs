@@ -16,7 +16,9 @@ internal static class AppearanceBuilder
         string? backgroundColor = null,
         string? imageFit = null,
         AppearanceLayoutOptions? layout = null,
-        AppearanceExtraOptions? extra = null)
+        AppearanceExtraOptions? extra = null,
+        string? imagePosition = null,
+        AnchorOptions? anchor = null)
     {
         if (!visible)
         {
@@ -43,6 +45,14 @@ internal static class AppearanceBuilder
             BorderWidth = borderWidth ?? 0.5f,
             BackgroundColor = ParseColor(backgroundColor),
             BackgroundImageFit = ParseImageFit(imageFit) ?? SignatureImageFit.Stretch,
+            BackgroundImagePosition = ParseImagePosition(imagePosition) ?? SignatureImagePosition.Behind,
+            Anchor = anchor is null ? null : new SignatureAnchor(anchor.Text)
+            {
+                OffsetX = ParseOffset(anchor.Offset)?.X ?? 0f,
+                OffsetY = ParseOffset(anchor.Offset)?.Y ?? 0f,
+                Occurrence = anchor.Occurrence ?? -1,
+                IgnoreCase = anchor.IgnoreCase,
+            },
             Width = layout?.Width,
             Height = layout?.Height,
             TextAlignment = ParseTextAlignment(layout?.TextAlign) ?? SignatureTextAlignment.Left,
@@ -119,6 +129,30 @@ internal static class AppearanceBuilder
             "stretch" => SignatureImageFit.Stretch,
             "contain" => SignatureImageFit.Contain,
             "cover" => SignatureImageFit.Cover,
+            _ => null,
+        };
+
+    /// <summary>Parses an anchor offset "X,Y" in points (e.g. "0,30" or "-10.5,-20"); null when it is not one.</summary>
+    internal static (float X, float Y)? ParseOffset(string? value)
+    {
+        string[] parts = (value ?? "").Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 2
+            && float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float x)
+            && float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float y)
+            && float.IsFinite(x) && float.IsFinite(y)
+            ? (x, y)
+            : null;
+    }
+
+    /// <summary>Parses where the image goes (behind, left, right, top, bottom).</summary>
+    internal static SignatureImagePosition? ParseImagePosition(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "behind" => SignatureImagePosition.Behind,
+            "left" => SignatureImagePosition.Left,
+            "right" => SignatureImagePosition.Right,
+            "top" => SignatureImagePosition.Top,
+            "bottom" => SignatureImagePosition.Bottom,
             _ => null,
         };
 
@@ -208,6 +242,13 @@ internal sealed record AppearanceTextOptions(
 /// <param name="Height">Fixed stamp height in points.</param>
 /// <param name="TextAlign">Text alignment name.</param>
 internal sealed record AppearanceLayoutOptions(float? Width, float? Height, string? TextAlign);
+
+/// <summary>A stamp anchored to a text of the document.</summary>
+/// <param name="Text">The text to find.</param>
+/// <param name="Offset">"X,Y" in points from the start of the text (right and up are positive); null is 0,0.</param>
+/// <param name="Occurrence">Which match: 1 the first, -1 (null) the last.</param>
+/// <param name="IgnoreCase">Whether case does not matter.</param>
+internal sealed record AnchorOptions(string Text, string? Offset, int? Occurrence, bool IgnoreCase);
 
 /// <summary>More stamp options: vertical alignment, fitting, the name and extra lines, the date culture, what to hide.</summary>
 /// <param name="VerticalAlign">Vertical alignment name (top, middle, bottom).</param>
