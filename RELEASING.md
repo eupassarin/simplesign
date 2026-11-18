@@ -43,7 +43,7 @@ Update `<Version>` in all `.csproj` files:
 
 ```bash
 VERSION="X.Y.Z"
-OLD="0.12.0"
+OLD="0.13.0"
 sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   Directory.Build.props \
   src/Formats/SimpleSign/SimpleSign.csproj \
@@ -73,8 +73,8 @@ These files contain version strings that do NOT come from `<Version>` and must b
 
 | File | Location | What to update |
 |------|----------|----------------|
-| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.12.0]` | Example version |
-| `RELEASING.md` | `OLD="0.12.0"` and `Current version: \`0.12.0\`` | Update both—this file |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | `- SimpleSign Version: [e.g. 0.13.0]` | Example version |
+| `RELEASING.md` | `OLD="0.13.0"` and `Current version: \`0.13.0\`` | Update both—this file |
 | `docs/conformance.md` | the `vX.Y.Z` sentences about EdDSA (the status table and footnote ²) | Both read as "the current version" |
 | `docs/articles/agent.md` | the `scripts/package-agent.sh osx-arm64 X.Y.Z` example | Example version |
 
@@ -191,4 +191,4 @@ breaking change in a minor bump:
 - **MAJOR** (x.0.0): reserved for 1.0, which is when the public API becomes stable; after that,
   breaking changes move to MAJOR
 
-Current version: `0.12.0`
+Current version: `0.13.0`

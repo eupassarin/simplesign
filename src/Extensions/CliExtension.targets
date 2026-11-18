@@ -18,7 +18,7 @@
     <NoPackageAnalysis>true</NoPackageAnalysis>
     <IncludeSymbols>false</IncludeSymbols>
     <!-- The oldest CLI this extension runs in: raise it when the extension starts using something a newer CLI brought. -->
-    <CliExtensionMinCliVersion Condition="'$(CliExtensionMinCliVersion)' == ''">0.12.0</CliExtensionMinCliVersion>
+    <CliExtensionMinCliVersion Condition="'$(CliExtensionMinCliVersion)' == ''">0.13.0</CliExtensionMinCliVersion>
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackCliExtension</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
