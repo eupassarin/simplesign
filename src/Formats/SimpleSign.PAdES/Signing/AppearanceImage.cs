@@ -54,6 +54,30 @@ internal sealed class AppearanceImage
     }
 
     /// <summary>
+    /// Reads the image's size in pixels from its header alone (the PNG IHDR chunk, the JPEG SOF segment), for the
+    /// layout of the stamp; null when there is no image or a PNG does not start with its IHDR chunk.
+    /// </summary>
+    public static (int Width, int Height)? ReadPixelSize(SignatureAppearance appearance)
+    {
+        if (appearance.BackgroundImagePng is { Length: > 0 } png)
+        {
+            // Signature (8 bytes), chunk length (4), "IHDR" (4), then width and height.
+            ReadOnlySpan<byte> bytes = png.Span;
+            return bytes.Length >= 24 && bytes[12..16].SequenceEqual("IHDR"u8)
+                ? (BinaryPrimitives.ReadInt32BigEndian(bytes[16..]), BinaryPrimitives.ReadInt32BigEndian(bytes[20..]))
+                : null;
+        }
+
+        if (appearance.BackgroundImageJpeg is { Length: > 0 } jpeg)
+        {
+            var info = ReadJpegInfo(jpeg.Span);
+            return (info.Width, info.Height);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Returns true when PNG data has an alpha channel or a transparency chunk.
     /// Malformed data returns true, so callers treat it conservatively.
     /// </summary>

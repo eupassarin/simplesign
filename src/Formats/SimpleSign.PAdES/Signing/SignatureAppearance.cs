@@ -14,6 +14,10 @@ public sealed class SignatureAppearance
     private const int DefaultMaxTextLength = 40;
     private const float Margin = 8f;
     private const float MinQrHeight = 80f;
+    private const float MinQrSide = 40f;
+    private const float QrMargin = 2f;
+    private const float QrGap = 6f;
+    private const float StackGap = 2f;
     private const string DefaultDateFormat = "dd/MM/yyyy HH:mm";
     private const float ShrinkTolerance = 0.999f;
     private const float MinShrinkScale = 0.1f;
@@ -59,6 +63,17 @@ public sealed class SignatureAppearance
     /// left-to-right, wrapping to a new row above when the current row is full.
     /// </summary>
     public bool AutoPosition { get; init; }
+
+    /// <summary>
+    /// Places the stamp relative to a text of the document (for example the "Contratante" under a signing line) instead
+    /// of at <see cref="Page"/>, <see cref="X"/> and <see cref="Y"/>: the page is the one where the text is, and the
+    /// stamp's lower-left corner is the start of the text (the left edge of its first letter, on its baseline) moved
+    /// by <see cref="SignatureAnchor.OffsetX"/> and <see cref="SignatureAnchor.OffsetY"/>. Takes precedence over
+    /// <see cref="AutoPosition"/>. When the text is not in the document, signing fails with
+    /// <see cref="SimpleSign.Core.Signing.SigningErrorReason.AnchorNotFound"/>.
+    /// </summary>
+    /// <example><c>new SignatureAppearance { Anchor = new SignatureAnchor("Contratante") { OffsetY = 30 } }</c></example>
+    public SignatureAnchor? Anchor { get; init; }
 
     /// <summary>Whether to display the signing date/time. Default true.</summary>
     public bool ShowDate { get; init; } = true;
@@ -125,8 +140,24 @@ public sealed class SignatureAppearance
     /// </summary>
     public ReadOnlyMemory<byte>? BackgroundImagePng { get; init; }
 
-    /// <summary>How the background image is scaled into the stamp. Default: <see cref="SignatureImageFit.Stretch"/>.</summary>
+    /// <summary>
+    /// How the background image is scaled into the stamp. Default: <see cref="SignatureImageFit.Stretch"/>.
+    /// Only for an image behind the text: beside, above or below it (<see cref="BackgroundImagePosition"/>), the image
+    /// keeps its aspect ratio.
+    /// </summary>
     public SignatureImageFit BackgroundImageFit { get; init; } = SignatureImageFit.Stretch;
+
+    /// <summary>
+    /// Where the image goes: behind the text (<see cref="SignatureImagePosition.Behind"/>, the default), or before it
+    /// (left), after it (right), above or below it, so it does not cover the text. The QR code of
+    /// <see cref="VerificationUrl"/> always comes first, on the left.
+    /// </summary>
+    /// <remarks>
+    /// A computed stamp grows to hold the image: beside the text it is as tall as the stamp, above or below it as tall
+    /// as the text. In a fixed size, an image beside the text takes at most what the text leaves (and at least half the
+    /// width), and one above or below it takes half the height.
+    /// </remarks>
+    public SignatureImagePosition BackgroundImagePosition { get; init; } = SignatureImagePosition.Behind;
 
     /// <summary>Fill color of the stamp as RGB triplet (0.0–1.0 each). When null (default), the stamp is transparent.</summary>
     public (float R, float G, float B)? BackgroundColor { get; init; }
@@ -156,6 +187,12 @@ public sealed class SignatureAppearance
     /// URL for a verification endpoint. When set, a QR code encoding this URL
     /// is rendered on the left side of the visual signature stamp.
     /// </summary>
+    /// <remarks>
+    /// The QR code is as tall as the stamp (at least 80pt when the size is computed), and the text beside it is
+    /// enlarged to the same height, so it keeps the proportion it has in a stamp without a QR code; the font sizes
+    /// are then a minimum. In a fixed <see cref="Width"/> the text grows only as far as the width allows, and the
+    /// QR code gets smaller (down to 40pt, placed as <see cref="VerticalAlignment"/> says) before the text is shrunk.
+    /// </remarks>
     public string? VerificationUrl { get; init; }
 
     /// <summary>
@@ -184,6 +221,7 @@ public sealed class SignatureAppearance
         VerticalAlignment = source.VerticalAlignment;
         ShrinkToFit = source.ShrinkToFit;
         AutoPosition = source.AutoPosition;
+        Anchor = source.Anchor;
         ShowDate = source.ShowDate;
         ShowReason = source.ShowReason;
         ShowLocation = source.ShowLocation;
@@ -199,6 +237,7 @@ public sealed class SignatureAppearance
         BackgroundImageJpeg = source.BackgroundImageJpeg is { } jpeg ? jpeg.ToArray() : null;
         BackgroundImagePng = source.BackgroundImagePng is { } png ? png.ToArray() : null;
         BackgroundImageFit = source.BackgroundImageFit;
+        BackgroundImagePosition = source.BackgroundImagePosition;
         BackgroundColor = source.BackgroundColor;
         CustomFontSize = source.CustomFontSize;
         CustomLabelFontSize = source.CustomLabelFontSize;
@@ -355,17 +394,20 @@ public sealed class SignatureAppearance
 
     /// <summary>
     /// Positions the text lines inside a stamp of the given size: applies <see cref="ShrinkToFit"/>,
-    /// <see cref="TextAlignment"/> and <see cref="VerticalAlignment"/>, and leaves room for the QR code.
+    /// <see cref="TextAlignment"/> and <see cref="VerticalAlignment"/>, and leaves room for the QR code and the image.
     /// </summary>
-    internal List<PositionedLine> Layout(string? signerName, string? reason, string? location, DateTime sigTime, float width, float height)
+    internal List<PositionedLine> Layout(string? signerName, string? reason, string? location, DateTime sigTime, float width, float height) =>
+        Arrange(signerName, reason, location, sigTime, width, height).Lines;
+
+    /// <summary>
+    /// Lays out a stamp of the given size, left to right: the QR code, the image when it is not behind the text, and the
+    /// text (above or below which the image may go instead). Beside a QR code the text grows to the height of its area
+    /// (<see cref="TextFill"/>) as far as the width allows; otherwise <see cref="ShrinkToFit"/> only shrinks it.
+    /// </summary>
+    internal StampArrangement Arrange(string? signerName, string? reason, string? location, DateTime sigTime, float width, float height)
     {
         var lines = BuildLines(signerName, reason, location, sigTime);
         string font = GetBaseFontName();
-        float qrOffset = string.IsNullOrEmpty(VerificationUrl) ? 0f : QrSize(height) + 6;
-        float areaLeft = TextLeft + qrOffset;
-        float areaRight = width - ((Padding * 2) - TextLeft);
-        float areaWidth = Math.Max(0f, areaRight - areaLeft);
-        float areaHeight = Math.Max(0f, height - Padding);
 
         float[] widths = new float[lines.Count];
         float maxWidth = 0f;
@@ -377,8 +419,81 @@ public sealed class SignatureAppearance
             blockHeight += LineHeightFor(lines[i].FontSize);
         }
 
+        float aspect = ImageAspect();
+        SignatureImagePosition position = PlacedImagePosition(aspect);
+        bool beside = position is SignatureImagePosition.Left or SignatureImagePosition.Right;
+        float besideHeight = Math.Max(0f, height - (QrMargin * 2));
+
+        float contentLeft = 0f;
+        float contentRight = width;
+        StampBox? qr = null;
+        if (!string.IsNullOrEmpty(VerificationUrl))
+        {
+            float besideNeed = beside ? (besideHeight * aspect) + QrGap : 0f;
+            float side = QrSide(width, height, maxWidth + besideNeed);
+            (float qrX, float qrY) = QrOrigin(height, side);
+            qr = new StampBox(qrX, qrY, side, side);
+            contentLeft = side + QrGap;
+        }
+
+        StampBox? image = null;
+        if (beside)
+        {
+            float contentWidth = Math.Max(0f, contentRight - contentLeft);
+            float leftForImage = contentWidth - maxWidth - (Padding * 2) - QrGap;
+            float imageWidth = Math.Max(0f, Math.Min(besideHeight * aspect, Math.Max(leftForImage, contentWidth / 2)));
+            float imageHeight = imageWidth / aspect;
+            float imageY = (height - imageHeight) / 2;
+            if (position == SignatureImagePosition.Left)
+            {
+                image = new StampBox(contentLeft + QrMargin, imageY, imageWidth, imageHeight);
+                contentLeft += imageWidth + QrGap;
+            }
+            else
+            {
+                image = new StampBox(contentRight - imageWidth - Padding, imageY, imageWidth, imageHeight);
+                contentRight -= imageWidth + QrGap;
+            }
+        }
+
+        float areaLeft = contentLeft + TextLeft;
+        float areaRight = contentRight - ((Padding * 2) - TextLeft);
+        float areaWidth = Math.Max(0f, areaRight - areaLeft);
+        float areaBottom = Padding;
+        float areaTop = height;
+        if (position is SignatureImagePosition.Top or SignatureImagePosition.Bottom)
+        {
+            float slot = StackedImageHeight(height);
+            float imageWidth = Math.Min(areaWidth, slot * aspect);
+            float imageHeight = imageWidth / aspect;
+            float imageX = TextAlignment switch
+            {
+                SignatureTextAlignment.Center => areaLeft + ((areaWidth - imageWidth) / 2),
+                SignatureTextAlignment.Right => areaRight - imageWidth,
+                _ => areaLeft,
+            };
+
+            // The image keeps to the side of its slot next to the text.
+            if (position == SignatureImagePosition.Top)
+            {
+                image = new StampBox(imageX, height - QrMargin - slot, imageWidth, imageHeight);
+                areaTop = height - QrMargin - slot - StackGap;
+            }
+            else
+            {
+                image = new StampBox(imageX, QrMargin + slot - imageHeight, imageWidth, imageHeight);
+                areaBottom = QrMargin + slot + StackGap;
+            }
+        }
+
+        float areaHeight = Math.Max(0f, areaTop - areaBottom);
         float scale = 1f;
-        if (ShrinkToFit)
+        float grow = maxWidth > 0f ? Math.Min(TextFill(areaHeight, blockHeight), areaWidth / maxWidth) : 1f;
+        if (grow > 1f)
+        {
+            scale = grow;
+        }
+        else if (ShrinkToFit)
         {
             if (maxWidth > 0f && areaWidth < maxWidth * ShrinkTolerance)
             {
@@ -396,11 +511,11 @@ public sealed class SignatureAppearance
         blockHeight *= scale;
         float top = VerticalAlignment switch
         {
-            SignatureVerticalAlignment.Middle => Padding + ((areaHeight + blockHeight) / 2),
-            SignatureVerticalAlignment.Bottom => Padding + blockHeight,
-            _ => height,
+            SignatureVerticalAlignment.Middle => areaBottom + ((areaHeight + blockHeight) / 2),
+            SignatureVerticalAlignment.Bottom => areaBottom + blockHeight,
+            _ => areaTop,
         };
-        top = Math.Min(top, height);
+        top = Math.Min(top, areaTop);
 
         var positioned = new List<PositionedLine>(lines.Count);
         float y = top;
@@ -418,7 +533,7 @@ public sealed class SignatureAppearance
             positioned.Add(new PositionedLine(lines[i].Text, size, Math.Max(areaLeft, x), y));
         }
 
-        return positioned;
+        return new StampArrangement(positioned, qr, image);
     }
 
     /// <summary>Auto-computed height based on visible lines.</summary>
@@ -429,17 +544,20 @@ public sealed class SignatureAppearance
             return fixedHeight;
         }
 
-        float textHeight = Padding;
-        foreach (float size in LineFontSizes(hasReason, hasLocation))
+        float blockHeight = LineFontSizes(hasReason, hasLocation).Sum(LineHeightFor);
+        float textHeight = Padding + blockHeight;
+
+        // An image above or below the text is as tall as the text.
+        if (PlacedImagePosition(ImageAspect()) is SignatureImagePosition.Top or SignatureImagePosition.Bottom)
         {
-            textHeight += LineHeightFor(size);
+            textHeight += StackGap + blockHeight + QrMargin;
         }
 
         // QR codes need minimum height to be scannable (~2.5pt per module)
         return !string.IsNullOrEmpty(VerificationUrl) ? Math.Max(textHeight, MinQrHeight) : textHeight;
     }
 
-    /// <summary>Auto-computed width based on the longest text line, plus optional QR code space.</summary>
+    /// <summary>Auto-computed width based on the longest text line, plus the QR code and the image beside the text.</summary>
     internal float ComputeWidth(string signerName, string? reason, string? location, DateTime sigTime)
     {
         if (Width is > 0f and var fixedWidth)
@@ -447,6 +565,38 @@ public sealed class SignatureAppearance
             return fixedWidth;
         }
 
+        float maxWidth = MeasureTextWidth(signerName, reason, location, sigTime);
+        float stampHeight = ComputeHeight(!string.IsNullOrEmpty(reason), !string.IsNullOrEmpty(location));
+        float blockHeight = BuildLines(signerName, reason, location, sigTime).Sum(l => LineHeightFor(l.FontSize));
+        float aspect = ImageAspect();
+        SignatureImagePosition position = PlacedImagePosition(aspect);
+        bool stacked = position is SignatureImagePosition.Top or SignatureImagePosition.Bottom;
+
+        // The text, enlarged beside a QR code to the height of its area; an image above or below it as wide as it needs.
+        float areaHeight = stacked ? StackedImageHeight(stampHeight) : stampHeight - Padding;
+        float contentWidth = maxWidth * TextFill(areaHeight, blockHeight);
+        if (stacked)
+        {
+            contentWidth = Math.Max(contentWidth, StackedImageHeight(stampHeight) * aspect);
+        }
+
+        float width = contentWidth + (Padding * 2);
+        if (!string.IsNullOrEmpty(VerificationUrl))
+        {
+            width += QrSize(stampHeight) + QrGap;
+        }
+
+        if (position is SignatureImagePosition.Left or SignatureImagePosition.Right)
+        {
+            width += (Math.Max(0f, stampHeight - (QrMargin * 2)) * aspect) + QrGap;
+        }
+
+        return width;
+    }
+
+    /// <summary>Width of the longest text line at its font size, before any scaling.</summary>
+    internal float MeasureTextWidth(string? signerName, string? reason, string? location, DateTime sigTime)
+    {
         string font = GetBaseFontName();
         float maxWidth = 0f;
         foreach (var line in BuildLines(signerName, reason, location, sigTime))
@@ -454,20 +604,54 @@ public sealed class SignatureAppearance
             maxWidth = Math.Max(maxWidth, AppearanceText.Measure(line.Text, font, line.FontSize));
         }
 
-        float textWidth = maxWidth + (Padding * 2);
-
-        // Reserve space for QR code on the left side
-        if (!string.IsNullOrEmpty(VerificationUrl))
-        {
-            float stampHeight = ComputeHeight(!string.IsNullOrEmpty(reason), !string.IsNullOrEmpty(location));
-            textWidth += QrSize(stampHeight) + 6; // QR area + gap
-        }
-
-        return textWidth;
+        return maxWidth;
     }
 
-    /// <summary>Side of the QR code for a stamp of the given height.</summary>
-    internal static float QrSize(float stampHeight) => Math.Max(0f, stampHeight - 4); // 2pt margin each side
+    /// <summary>
+    /// How much the text beside a QR code is enlarged so the block fills the height of its area, as the text of a
+    /// computed stamp without a QR code fills the stamp; 1 without a QR code or when the text is already as tall.
+    /// </summary>
+    internal float TextFill(float areaHeight, float blockHeight) =>
+        string.IsNullOrEmpty(VerificationUrl) || blockHeight <= 0f ? 1f : Math.Max(1f, areaHeight / blockHeight);
+
+    /// <summary>Height of the slot of an image above or below the text: half of what the stamp has for both.</summary>
+    private static float StackedImageHeight(float stampHeight) =>
+        Math.Max(0f, (stampHeight - Padding - StackGap - QrMargin) / 2);
+
+    /// <summary>Width over height of the image, read from its header; 0 when there is no image or it cannot be read.</summary>
+    private float ImageAspect() =>
+        AppearanceImage.ReadPixelSize(this) is (int w, int h) && w > 0 && h > 0 ? (float)w / h : 0f;
+
+    /// <summary>Where the image goes in the layout: <see cref="SignatureImagePosition.Behind"/> when there is none to place.</summary>
+    private SignatureImagePosition PlacedImagePosition(float aspect) =>
+        aspect > 0f ? BackgroundImagePosition : SignatureImagePosition.Behind;
+
+    /// <summary>Largest QR code a stamp of the given height holds.</summary>
+    internal static float QrSize(float stampHeight) => Math.Max(0f, stampHeight - (QrMargin * 2));
+
+    /// <summary>
+    /// Side of the QR code in a stamp of the given size: <see cref="QrSize"/>, made smaller (not below
+    /// <see cref="MinQrSide"/>) when what goes beside it (<paramref name="contentWidth"/>: the text at its own font size,
+    /// and an image beside the text) would not otherwise fit, so adding a QR code to a fixed-size stamp does not shrink
+    /// the text.
+    /// </summary>
+    internal static float QrSide(float width, float height, float contentWidth)
+    {
+        float full = QrSize(height);
+        float room = width - (Padding * 2) - QrGap - contentWidth;
+        return Math.Max(Math.Min(full, room), Math.Min(full, MinQrSide));
+    }
+
+    /// <summary>
+    /// Lower-left corner of a QR code of the given side: at the left margin, and at the top, middle or bottom of
+    /// the stamp as <see cref="VerticalAlignment"/> says.
+    /// </summary>
+    internal (float X, float Y) QrOrigin(float height, float side) => (QrMargin, VerticalAlignment switch
+    {
+        SignatureVerticalAlignment.Middle => (height - side) / 2,
+        SignatureVerticalAlignment.Bottom => QrMargin,
+        _ => height - QrMargin - side,
+    });
 
     /// <summary>Truncates text to the default max display length (40 characters).</summary>
     internal static string Truncate(string text) => Truncate(text, DefaultMaxTextLength);
@@ -559,6 +743,100 @@ public enum SignatureImageFit
     Cover,
 }
 
+/// <summary>
+/// A text of the document that a visible signature is placed relative to (<see cref="SignatureAppearance.Anchor"/>).
+/// </summary>
+/// <param name="Text">
+/// The text to find, as it reads on the page; runs of white space match any white space, and a text split across lines
+/// matches with a space where the line breaks.
+/// </param>
+public sealed record SignatureAnchor(string Text)
+{
+    /// <summary>Points from the start of the text to the stamp's left edge: positive to the right, negative to the left.</summary>
+    public float OffsetX { get; init; }
+
+    /// <summary>Points from the baseline of the text to the stamp's bottom edge: positive up, negative down.</summary>
+    public float OffsetY { get; init; }
+
+    /// <summary>
+    /// Which match to use when the text is in the document more than once, in reading order (pages in order, then
+    /// the order the page draws its text): 1 is the first, 2 the second; -1 (the default) is the last, -2 the one
+    /// before it. 0 is not valid.
+    /// </summary>
+    public int Occurrence { get; init; } = -1;
+
+    /// <summary>When true, case does not matter. Default: false, so "CONTRATANTE" in a clause is not "Contratante".</summary>
+    public bool IgnoreCase { get; init; }
+
+    /// <summary>
+    /// Where a stamp with this anchor goes in <paramref name="pdf"/>: the page of the chosen match, and the stamp's
+    /// lower-left corner (the start of the text plus the offsets). Signing places it there; this shows where before
+    /// signing, for a preview.
+    /// </summary>
+    /// <param name="pdf">The document.</param>
+    /// <exception cref="InvalidOperationException"><see cref="Text"/> is blank, or <see cref="Occurrence"/> is 0.</exception>
+    /// <exception cref="SimpleSign.Core.Signing.SigningException">
+    /// The text is not in the document as many times as <see cref="Occurrence"/> asks
+    /// (<see cref="SimpleSign.Core.Signing.SigningErrorReason.AnchorNotFound"/>).
+    /// </exception>
+    public SignatureAnchorPlacement Locate(byte[] pdf)
+    {
+        ArgumentNullException.ThrowIfNull(pdf);
+        if (string.IsNullOrWhiteSpace(Text))
+        {
+            throw new InvalidOperationException("The anchor of the signature stamp has no text.");
+        }
+
+        if (Occurrence == 0)
+        {
+            throw new InvalidOperationException("The anchor's occurrence is 1 or more (from the first) or -1 or less (from the last), not 0.");
+        }
+
+        var matches = SimpleSign.PAdES.Pdf.PdfTextLocator.Find(pdf, Text, IgnoreCase);
+        int index = Occurrence > 0 ? Occurrence - 1 : matches.Count + Occurrence;
+        if (index < 0 || index >= matches.Count)
+        {
+            string found = matches.Count switch
+            {
+                0 => "it is not in the document",
+                1 => "it is in the document once",
+                _ => $"it is in the document {matches.Count} times",
+            };
+            throw new SimpleSign.Core.Signing.SigningException(
+                $"The signature stamp is anchored to \"{Text}\" (occurrence {Occurrence}), but {found}.",
+                SimpleSign.Core.Signing.SigningErrorReason.AnchorNotFound);
+        }
+
+        var match = matches[index];
+        return new SignatureAnchorPlacement(match.Page, match.X + OffsetX, match.Y + OffsetY);
+    }
+}
+
+/// <summary>Where an anchored stamp goes (<see cref="SignatureAnchor.Locate"/>).</summary>
+/// <param name="Page">The page (1 is the first).</param>
+/// <param name="X">The stamp's left edge, in points.</param>
+/// <param name="Y">The stamp's bottom edge, in points.</param>
+public readonly record struct SignatureAnchorPlacement(int Page, float X, float Y);
+
+/// <summary>Where the image of a signature stamp goes, relative to the text.</summary>
+public enum SignatureImagePosition
+{
+    /// <summary>Behind the text, over the whole stamp, scaled by <see cref="SignatureAppearance.BackgroundImageFit"/> (default).</summary>
+    Behind,
+
+    /// <summary>Before the text, on its left (after the QR code, when there is one).</summary>
+    Left,
+
+    /// <summary>After the text, on its right.</summary>
+    Right,
+
+    /// <summary>Above the text.</summary>
+    Top,
+
+    /// <summary>Below the text.</summary>
+    Bottom,
+}
+
 /// <summary>Horizontal alignment of the text in a signature stamp.</summary>
 public enum SignatureTextAlignment
 {
@@ -591,6 +869,19 @@ public enum SignatureVerticalAlignment
 /// <param name="X">Left edge of the line in stamp coordinates.</param>
 /// <param name="Y">Baseline of the line in stamp coordinates.</param>
 internal readonly record struct PositionedLine(string Text, float FontSize, float X, float Y);
+
+/// <summary>A rectangle in stamp coordinates.</summary>
+/// <param name="X">Left edge.</param>
+/// <param name="Y">Bottom edge.</param>
+/// <param name="Width">Width in points.</param>
+/// <param name="Height">Height in points.</param>
+internal readonly record struct StampBox(float X, float Y, float Width, float Height);
+
+/// <summary>What goes where in a stamp.</summary>
+/// <param name="Lines">The text lines.</param>
+/// <param name="Qr">The QR code; null without one.</param>
+/// <param name="Image">The image when it is not behind the text; null otherwise.</param>
+internal sealed record StampArrangement(List<PositionedLine> Lines, StampBox? Qr, StampBox? Image);
 
 /// <summary>One text line of the signature stamp.</summary>
 /// <param name="Text">Text, truncated and restricted to characters the stamp font can render.</param>

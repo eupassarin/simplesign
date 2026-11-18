@@ -34,16 +34,26 @@ export function StampPage({ onClose }: { onClose?: () => void }) {
   const preview = usePreview(format === "pades" && a?.visible ? o : null)
 
   const [viewPage, setViewPage] = useState(1)
-  const fixed = !!a && !existing && !a.autoPosition && !!a.width && !!a.height
+  // Anchored to a text: the library finds the page and the place; the rectangle shows where it put the stamp.
+  const anchored = !!a && !existing && !!a.anchorText?.trim()
+  const fixed = !!a && !existing && !anchored && !a.autoPosition && !!a.width && !!a.height
   const page = fixed ? a.page : preview.result?.page ?? viewPage
-  const box: StampBox | null = fixed
-    ? { x: a.x, y: a.y, width: a.width!, height: a.height! }
-    : preview.result?.rect ? { x: preview.result.rect[0], y: preview.result.rect[1], width: preview.result.rect[2], height: preview.result.rect[3] } : null
+  const rendered: StampBox | null = preview.result?.rect
+    ? { x: preview.result.rect[0], y: preview.result.rect[1], width: preview.result.rect[2], height: preview.result.rect[3] }
+    : null
+  const box: StampBox | null = fixed ? { x: a.x, y: a.y, width: a.width!, height: a.height! } : rendered
 
-  const place = (b: StampBox) => patch({
-    "appearance.autoPosition": false, "appearance.page": page,
-    "appearance.x": b.x, "appearance.y": b.y, "appearance.width": b.width, "appearance.height": b.height,
-  })
+  // Dragging an anchored stamp moves it from the text: its offsets change by how far it moved.
+  const place = (b: StampBox) => anchored && rendered
+    ? patch({
+      "appearance.anchorOffsetX": Math.round(((a.anchorOffsetX ?? 0) + b.x - rendered.x) * 100) / 100,
+      "appearance.anchorOffsetY": Math.round(((a.anchorOffsetY ?? 0) + b.y - rendered.y) * 100) / 100,
+      "appearance.width": b.width, "appearance.height": b.height,
+    })
+    : patch({
+      "appearance.autoPosition": false, "appearance.page": page,
+      "appearance.x": b.x, "appearance.y": b.y, "appearance.width": b.width, "appearance.height": b.height,
+    })
   const url = a?.visible ? (preview.result ? api.fileUrl(preview.result.fileId) : null) : o.documentId ? api.fileUrl(asText(o.documentId)) : null
 
   return (
@@ -62,7 +72,7 @@ export function StampPage({ onClose }: { onClose?: () => void }) {
       <div className="min-h-0 space-y-3 overflow-y-auto p-4">
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {a?.visible
-            ? <Pill tone="info">{t(existing ? "stamp.existing" : fixed ? "stamp.drag" : "stamp.auto")}</Pill>
+            ? <Pill tone="info">{anchored ? t("stamp.anchor", { text: a!.anchorText!.trim() }) : t(existing ? "stamp.existing" : fixed ? "stamp.drag" : "stamp.auto")}</Pill>
             : <Pill>{t("stamp.off")}</Pill>}
           {preview.result && a?.visible && <span className="text-muted-foreground ml-auto tabular-nums">{t("stamp.rendered", { ms: preview.result.ms })}</span>}
         </div>

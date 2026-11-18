@@ -257,6 +257,15 @@ public static class Compatibility
 
         Set("appearance", OptionState.Shown);
         Set("appearance.placement", existing ? new OptionState(false, Note: L.T("The stamp is drawn in the existing field's rectangle.")) : OptionState.Shown);
+        Set("appearance.anchor", existing ? new OptionState(false, Note: L.T("The stamp is drawn in the existing field's rectangle.")) : OptionState.Shown);
+        Set("appearance.position",
+            existing ? new OptionState(false, Note: L.T("The stamp is drawn in the existing field's rectangle."))
+            : o.Appearance.Anchored ? new OptionState(false, Note: L.T("The anchor text places the stamp."))
+            : OptionState.Shown);
+        if (o.Appearance.Visible && !existing && o.Appearance.Anchored && o.Appearance.AnchorOccurrence == 0)
+        {
+            Error(StepField, L.T("The anchor occurrence is 1 or more (from the first) or -1 or less (from the last), not 0."));
+        }
         Set("appearance.image", OptionState.Shown);
         if (o.Appearance.Visible && !existing && !o.Appearance.AutoPosition && (o.Appearance.Width is <= 0 || o.Appearance.Height is <= 0))
         {

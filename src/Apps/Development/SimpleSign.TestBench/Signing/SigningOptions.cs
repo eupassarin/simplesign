@@ -167,6 +167,20 @@ public sealed record AppearanceChoice
 
     public float? Height { get; init; } = 70;
 
+    public string? AnchorText { get; init; }
+
+    public float AnchorOffsetX { get; init; }
+
+    public float AnchorOffsetY { get; init; }
+
+    public int AnchorOccurrence { get; init; } = -1;
+
+    public bool AnchorIgnoreCase { get; init; }
+
+    /// <summary>True when the stamp is placed relative to a text of the document.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool Anchored => !string.IsNullOrWhiteSpace(AnchorText);
+
     public string TextAlignment { get; init; } = "Left";
 
     public string VerticalAlignment { get; init; } = "Top";
@@ -218,6 +232,8 @@ public sealed record AppearanceChoice
     public string? ImageUploadId { get; init; }
 
     public string ImageFit { get; init; } = "Contain";
+
+    public string ImagePosition { get; init; } = "Behind";
 }
 
 public sealed record MetadataChoice

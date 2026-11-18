@@ -60,6 +60,19 @@ await PadesSigner
     .SignAsync(output);
 ```
 
+The stamp can also be placed relative to a text of the document, such as the name under a signing line. It goes on
+the page where the text is, with its lower-left corner at the start of the text (left edge, baseline) plus the offsets
+(right and up are positive). The last match is used unless `Occurrence` says otherwise, and signing is refused with
+`SigningErrorReason.AnchorNotFound` when the text is not there:
+
+```csharp
+var appearance = new SignatureAppearance
+{
+    Anchor = new SignatureAnchor("Contratante") { OffsetY = 30 },   // 30pt above "Contratante"
+};
+var placement = appearance.Anchor.Locate(pdfBytes);              // where it will go: Page, X, Y
+```
+
 Every text in the stamp can be changed, and the date can be shown in a local time zone:
 
 ```csharp
@@ -68,6 +81,8 @@ var appearance = new SignatureAppearance
     ShowReason = true,
     BackgroundImagePng = handwrittenSignaturePng,   // transparency is kept
     BackgroundImageFit = SignatureImageFit.Contain,  // keep the aspect ratio
+    // or beside the text instead of behind it: Left, Right, Top or Bottom (the QR code stays first)
+    // BackgroundImagePosition = SignatureImagePosition.Left,
     BackgroundColor = (1f, 1f, 1f),
     BorderColor = (0.2f, 0.2f, 0.2f),
 }

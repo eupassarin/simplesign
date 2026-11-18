@@ -12,7 +12,7 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 136 | 135 | 1 |
+| PAdES | 142 | 141 | 1 |
 | CAdES | 86 | 85 | 1 |
 | XAdES | 88 | 84 | 4 |
 
@@ -105,6 +105,11 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | PDF signature field | Signer name | ISO 32000-1 · §12.8.1 Table 252 /Name | `SignatureFieldOptions.SignerName` | yes |
 | PDF signature field | Document information | ISO 32000-1 · §14.3.3 Document information dictionary | `WithDocumentInfo(key, value)` | yes |
 | Visible stamp | Visible stamp | ISO 32000-1 · §12.7.4.5 Signature fields<br>ISO 32000-1 · §12.5.5 Appearance streams<br>ETSI EN 319 142-1 · §5.2 General syntax | `WithAppearance(new SignatureAppearance { … })` | yes |
+| Visible stamp | Anchor text | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Anchor` | yes |
+| Visible stamp | Anchor offset X | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAnchor.OffsetX` | yes |
+| Visible stamp | Anchor offset Y | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAnchor.OffsetY` | yes |
+| Visible stamp | Anchor occurrence | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAnchor.Occurrence` | yes |
+| Visible stamp | Anchor ignores case | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAnchor.IgnoreCase` | yes |
 | Visible stamp | Place automatically | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Auto()` | yes |
 | Visible stamp | Page | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.Page` | yes |
 | Visible stamp | X | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.X` | yes |
@@ -136,6 +141,7 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Visible stamp | Border width | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BorderWidth` | yes |
 | Visible stamp | Background image | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.WithBackgroundImagePng(…) / WithBackgroundImageJpeg(…)` | yes |
 | Visible stamp | Image fit | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BackgroundImageFit` | yes |
+| Visible stamp | Image position | ISO 32000-1 · §12.5.5 Appearance streams | `SignatureAppearance.BackgroundImagePosition` | yes |
 | Visible stamp | QR code | ISO/IEC 18004 · QR Code | `SignatureAppearance.VerificationUrl; ValidarItiQrEndpoint.BuildQrCodeUrl(endpoint, "prescricao")` | yes |
 | Run and validation | How to call the library |  |  | yes |
 | Run and validation | How to call the library: Sign now |  | `SignWithDetailsAsync()` | yes |
@@ -577,6 +583,11 @@ Each clause and the options that implement it.
 | Clause | Option | Formats | Implemented |
 |---|---|---|---|
 | §12.5.5 Appearance streams | "Signed by" label | PAdES | yes |
+| §12.5.5 Appearance streams | Anchor ignores case | PAdES | yes |
+| §12.5.5 Appearance streams | Anchor occurrence | PAdES | yes |
+| §12.5.5 Appearance streams | Anchor offset X | PAdES | yes |
+| §12.5.5 Appearance streams | Anchor offset Y | PAdES | yes |
+| §12.5.5 Appearance streams | Anchor text | PAdES | yes |
 | §12.5.5 Appearance streams | Background color | PAdES | yes |
 | §12.5.5 Appearance streams | Background image | PAdES | yes |
 | §12.5.5 Appearance streams | Border color | PAdES | yes |
@@ -589,6 +600,7 @@ Each clause and the options that implement it.
 | §12.5.5 Appearance streams | Font size | PAdES | yes |
 | §12.5.5 Appearance streams | Height | PAdES | yes |
 | §12.5.5 Appearance streams | Image fit | PAdES | yes |
+| §12.5.5 Appearance streams | Image position | PAdES | yes |
 | §12.5.5 Appearance streams | Label font size | PAdES | yes |
 | §12.5.5 Appearance streams | Location label | PAdES | yes |
 | §12.5.5 Appearance streams | Maximum text length | PAdES | yes |

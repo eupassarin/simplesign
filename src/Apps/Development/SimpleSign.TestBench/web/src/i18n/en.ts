@@ -181,6 +181,7 @@ export const en = {
     existing: "Drawn in the existing field's rectangle",
     drag: "Drag to move · corner to resize · click to place",
     auto: "Placed automatically: the rectangle shows where the library put it",
+    anchor: "Anchored to \"{text}\": drag to adjust the offset · corner to resize",
     off: "No stamp: the signature is invisible. Turn on \"Visible stamp\" to design it.",
     rendered: "drawn by the library in {ms} ms",
     rendering: "Drawing the stamp…",

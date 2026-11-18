@@ -30,6 +30,24 @@ const explain = (o: SchemaOption | SchemaValue): Explanation =>
  */
 export const OptionScope = createContext<{ options: Options; set: (path: string, value: unknown) => void } | null>(null)
 
+/** The non-empty lines of a text, without trailing spaces. */
+const toLines = (text: string) => text.split("\n").map((l) => l.trimEnd()).filter((l) => l !== "")
+
+/**
+ * Lines of text, one per line. What is typed is kept as typed (a space or an empty line at the end is where the
+ * next word or line goes); the option gets only the lines with text, without trailing spaces.
+ */
+function Lines({ value, locked, onChange }: { value: string[]; locked: boolean; onChange: (v: string[]) => void }) {
+  const [draft, setDraft] = useState(() => value.join("\n"))
+  const joined = value.join("\n")
+  // Changed from elsewhere (a playbook, a reset): show it.
+  useEffect(() => {
+    setDraft((d) => (toLines(d).join("\n") === joined ? d : joined))
+  }, [joined])
+  return <Textarea rows={3} value={draft} disabled={locked}
+    onChange={(e) => { setDraft(e.target.value); onChange(toLines(e.target.value)) }} />
+}
+
 /** One option of the schema, with the editor its kind asks for. */
 export function OptionField({ option }: { option: SchemaOption }) {
   const workbench = useWorkbench()
@@ -80,8 +98,7 @@ export function OptionField({ option }: { option: SchemaOption }) {
       return <OptionRow {...row}><Input type="datetime-local" className="max-w-64" value={typeof value === "string" ? value.slice(0, 16) : ""} disabled={locked}
         onChange={(e) => set(path, e.target.value ? new Date(e.target.value).toISOString() : null)} /></OptionRow>
     case "lines":
-      return <OptionRow {...row}><Textarea rows={3} value={Array.isArray(value) ? value.join("\n") : ""} disabled={locked}
-        onChange={(e) => set(path, e.target.value.split("\n").map((l) => l.trimEnd()).filter((l, i, all) => l !== "" || i < all.length - 1))} /></OptionRow>
+      return <OptionRow {...row}><Lines value={Array.isArray(value) ? (value as string[]) : []} locked={locked} onChange={(v) => set(path, v)} /></OptionRow>
     case "color":
       return (
         <OptionRow {...row}>
