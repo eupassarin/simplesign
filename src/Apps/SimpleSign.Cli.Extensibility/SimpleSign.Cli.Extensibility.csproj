@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Cli.Extensibility</PackageId>
     <Description>The contract of the extensions of the SimpleSign CLI: what a package adds to 'simplesign' after it is installed with 'simplesign extension install' — commands, trust profiles, policy presets and trusted-list profiles.</Description>
     <PackageTags>simplesign;cli;extension;plugin;digital-signature</PackageTags>
-    <Version>0.12.0</Version>
+    <Version>0.13.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 

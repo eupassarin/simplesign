@@ -86,7 +86,7 @@ dotnet pack src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli -c Release -o ./nu
 ```
 
 ```bash
-dotnet tool install --global SimpleSign.Cli --add-source ./nupkgs --version 0.12.0
+dotnet tool install --global SimpleSign.Cli --add-source ./nupkgs --version 0.13.0
 ```
 
 ```bash

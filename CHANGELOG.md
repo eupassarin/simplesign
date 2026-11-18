@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-17
+
 ### Added
 
 - **`SimpleSign.Peru.Iofe.Accredited`: the configuration INDECOPI's accreditation guide asks for, with nothing to
@@ -92,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`IofePolicies.AgentSigning` and `IofePolicies.AgentValidation`**: the IOFE policies of an automated agent
   (nonRepudiation required), until now a one-line adjustment in the documentation.
 
-### Changed
+### Changed (Breaking)
 
 - **The CLI no longer comes with IOFE (Peru): it is an extension.**
   - *Before:* `--profile iofe`, `--signing-policy iofe`, `--policy iofe`, `policy export --preset iofe` and

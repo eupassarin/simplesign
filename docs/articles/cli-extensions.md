@@ -179,7 +179,7 @@ The package carries the extension in a `cli-extension/` folder: the assemblies a
 
 ```json
 { "name": "my-framework", "assembly": "My.Extension.dll", "type": "My.Extension.MyExtension",
-  "contract": 1, "minCliVersion": "0.12.0", "version": "1.0.0", "package": "My.Extension" }
+  "contract": 1, "minCliVersion": "0.13.0", "version": "1.0.0", "package": "My.Extension" }
 ```
 
 | Field | |
