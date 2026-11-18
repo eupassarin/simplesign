@@ -138,7 +138,8 @@ public sealed class IofeCliExtensionTests : IDisposable
             "--tsl", tsl, "--tsl-signer", signer, "--profile", "iofe", "--json");
 
         exit.ShouldBe(1, output);
-        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        // The profile still downloads INDECOPI's list; when it cannot (no network), its "TSL:" warning follows the JSON.
+        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..(output.LastIndexOf('}') + 1)]);
         json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
     }
 
