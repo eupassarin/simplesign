@@ -552,6 +552,7 @@ public sealed class EtsiEn319142ComplianceTests
         return new SignatureFieldInfo
         {
             FieldName = "Sig",
+            SubFilter = "ETSI.CAdES.detached",
             HasSigningCertificateV2 = hasSigningCertV2,
             Timestamp = hasTimestamp
                 ? new TimestampInfo { GenerationTime = DateTimeOffset.UtcNow }

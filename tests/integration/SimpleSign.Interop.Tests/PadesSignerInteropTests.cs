@@ -2,6 +2,7 @@ using System.Text;
 using Shouldly;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.TestHelpers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -14,7 +15,7 @@ namespace SimpleSign.Interop.Tests;
 /// second signature, a certification and an ECDSA key, on a classic cross-reference table and a cross-reference stream.
 /// </summary>
 [Trait("Category", "Interop")]
-public sealed class PadesSignerInteropTests(InteropPki pki, ITestOutputHelper output) : IClassFixture<InteropPki>
+public sealed class PadesSignerInteropTests(OfflinePki pki, ITestOutputHelper output) : IClassFixture<OfflinePki>
 {
     /// <summary>Every source document with every way of signing it.</summary>
     public static TheoryData<string, string> Cases

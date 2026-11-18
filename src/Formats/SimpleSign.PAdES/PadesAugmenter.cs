@@ -157,7 +157,10 @@ public sealed class PadesAugmenter
         return new PadesAugmentationResult(pdf, initial, await LevelOfAsync(pdf, cancellationToken).ConfigureAwait(false));
     }
 
-    /// <summary>The level of a document: the weakest of its signatures (document time-stamps aside).</summary>
+    /// <summary>
+    /// The level of a document: what the weakest of its signatures holds (document time-stamps aside). For a
+    /// SubFilter other than ETSI.CAdES.detached it is not a PAdES baseline level (<see cref="ConformanceDetector.Detect"/>).
+    /// </summary>
     private static async Task<AdesBaselineLevel> LevelOfAsync(byte[] pdf, CancellationToken cancellationToken)
     {
         using var stream = new MemoryStream(pdf, writable: false);
@@ -167,7 +170,7 @@ public sealed class PadesAugmenter
             throw new ArgumentException("The PDF has no signature to augment.", nameof(pdf));
         }
 
-        return ConformanceDetector.DetectHighest(inspection) switch
+        return ConformanceDetector.DetectStructureOfDocument(inspection) switch
         {
             PAdESConformanceLevel.BaselineLTA => AdesBaselineLevel.Archive,
             PAdESConformanceLevel.BaselineLT => AdesBaselineLevel.LongTerm,

@@ -21,7 +21,7 @@ public sealed class FormattingTests
 
     [Theory]
     [InlineData(PAdESConformanceLevel.Unknown, "Unknown")]
-    [InlineData(PAdESConformanceLevel.CmsOnly, "CMS (no PAdES attributes)")]
+    [InlineData(PAdESConformanceLevel.CmsOnly, "CMS (not PAdES baseline)")]
     [InlineData(PAdESConformanceLevel.BaselineB, "PAdES B-B")]
     [InlineData(PAdESConformanceLevel.BaselineT, "PAdES B-T")]
     [InlineData(PAdESConformanceLevel.BaselineLT, "PAdES B-LT")]

@@ -2,6 +2,7 @@ using System.Text;
 using Shouldly;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Validation;
+using SimpleSign.TestHelpers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -9,7 +10,7 @@ namespace SimpleSign.Interop.Tests;
 
 /// <summary>The other way round: CAdES that OpenSSL 3 writes (<c>openssl cms -sign -cades</c>), validated by <see cref="CadesSignatureValidator"/>.</summary>
 [Trait("Category", "Interop")]
-public sealed class CadesSignatureValidatorInteropTests(InteropPki pki, ITestOutputHelper output) : IClassFixture<InteropPki>
+public sealed class CadesSignatureValidatorInteropTests(OfflinePki pki, ITestOutputHelper output) : IClassFixture<OfflinePki>
 {
     private static readonly byte[] Content = Encoding.UTF8.GetBytes("SimpleSign interop: CAdES content\n");
 

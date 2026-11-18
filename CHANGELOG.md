@@ -34,6 +34,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only as far as the width allows, and the QR code gets smaller (down to 40pt, placed as `VerticalAlignment` says)
   before the text is shrunk.
 
+### Fixed
+
+- **A PDF signature whose SubFilter is not `ETSI.CAdES.detached` is no longer reported as PAdES baseline.** EN 319
+  142-1 allows only that SubFilter in a baseline signature; the ETSI Signatures Conformance Checker failed an
+  `adbe.pkcs7.detached` signature that SimpleSign called B-T. `ConformanceDetector` (and so `simplesign inspect` and
+  `validate`) now reports `CmsOnly` for `adbe.pkcs7.detached` and `PBAD.PAdES`, shown as "CMS (not PAdES baseline)".
+  Signing with such a SubFilter adds the warning `SigningWarningCode.SubFilterNotBaseline`; `AchievedLevel` still
+  tells what the signature holds, and `PadesAugmenter` still raises such a signature.
+
+### Tests
+
+- **The structure of SimpleSign's signatures is checked by ETSI's own conformance checker.**
+  `SimpleSign.EtsiChecker.Tests` signs 32 PAdES, CAdES and XAdES samples offline: every baseline level, other keys
+  and paddings, a counter-signature, an augmentation, an archive renewal and a two-phase signature. It sends each one
+  to the [ETSI Signatures Conformance Checker](https://signatures-conformance-checker.etsi.org), which checks it
+  against EN 319 142-1, EN 319 122-1 or EN 319 132-1. The checker needs an account, so the test runs by hand, not in
+  CI. The reports are kept in `docs/conformance/etsi-checker`.
+
 ## [0.13.0] - 2026-11-17
 
 ### Added

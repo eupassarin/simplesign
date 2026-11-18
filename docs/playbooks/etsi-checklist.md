@@ -34,7 +34,7 @@ The same matrix applies to each format: four levels × the attributes each level
 | PA-8 | DocMDP certification P=1/2/3 and the changes it allows | P (certification options) |
 | PA-9 | Optional: signature policy (signature-policy-identifier), commitment type, signer location / reason (/Reason, /Location) | P |
 | PA-10 | PDF/A preserved when asked | P (`preservePdfA`) + U |
-| PA-11 | `adbe.pkcs7.detached` is accepted for reading, flagged as non-PAdES | P |
+| PA-11 | `adbe.pkcs7.detached` is accepted for reading, flagged as non-PAdES (inspection `CmsOnly`; signing warns `SubFilterNotBaseline`) | P + U; the ETSI checker fails it as expected ([conformance/etsi-checker](../conformance/etsi-checker/README.md)) |
 
 ### EN 319 122-1 (CAdES baseline)
 

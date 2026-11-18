@@ -1,0 +1,9 @@
+[
+  {
+    "sample": "pades-b-t-adbe",
+    "check": "CheckIfValueIsOneOfDefined",
+    "messageContains": "Found value: 'adbe.pkcs7.detached'",
+    "reason": "Expected: EN 319 142-1 allows only ETSI.CAdES.detached in a baseline signature. SimpleSign writes adbe.pkcs7.detached on request (PDF/A-1, older validators) and reports it as not baseline (ConformanceDetector: CmsOnly; signing warning SubFilterNotBaseline); the checker must agree.",
+    "link": "../../../docs/conformance.md#subfilter-support"
+  }
+]
