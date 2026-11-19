@@ -70,7 +70,8 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
-| `Recognition`, `Signature`, `NotExpired`, `RevocationDataAvailable`, `RevocationFreshness`, `CA`, `KeyUsage`, `ExtendedKeyUsage`, `NotRevoked`, `SelfSigned`, `NotSelfSigned`, `PolicyIds`, `QcCompliance`, `QcSSCD` | same | evaluated |  |
+| `Recognition`, `Signature`, `NotExpired`, `RevocationDataAvailable`, `CA`, `KeyUsage`, `ExtendedKeyUsage`, `NotRevoked`, `SelfSigned`, `NotSelfSigned`, `PolicyIds`, `QcCompliance`, `QcSSCD` | same | evaluated |  |
+| `RevocationFreshness` | same | evaluated | A maximum age of the revocation data, checked on top of what SimpleSign always does: revocation data whose nextUpdate has passed is not used (EN 319 102-1 §5.2.5.4 takes nextUpdate − thisUpdate as the maximum age when none is given). At `IGNORE`, DSS checks no freshness and accepts such data. |
 | `MaxPathLength`, `NameConstraints`, `PolicyTree`, `SupportedCriticalExtensions`, `IssuerName` | same | evaluated | The status of the X509Chain. |
 | AuthorityInfoAccessPresent, RevocationInfoAccessPresent, AuthorityKeyIdentifierPresent, SubjectKeyIdentifierPresent, ForbiddenExtensions, SerialNumberPresent, NoRevAvail, RevocationDataSkip (CertificateExtensions, CertificatePolicies) | same | evaluated | RFC 5280 extensions and attributes; `ocsp-nocheck`. |
 | `NotOnHold` | same | evaluated | From the reason code of the CRLs and OCSP responses the signature carries. |

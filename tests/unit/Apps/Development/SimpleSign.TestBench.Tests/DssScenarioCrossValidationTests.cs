@@ -49,6 +49,15 @@ public sealed class DssScenarioCrossValidationTests(TestBenchFixture fixture, IT
         // revoked), the more specific sub-indication of the two. Seen in a run with DSS on 2026-11-16; before, DSS stopped
         // at the revocation data (CERTIFICATE_CHAIN_GENERAL_FAILURE) while the responder answered "unknown".
         ["sample:expired"] = "SimpleSign reports OUT_OF_BOUNDS_NO_POE; DSS, with a good OCSP answer, OUT_OF_BOUNDS_NOT_REVOKED",
+
+        // The OCSP responses and the CRL say good, but expired a day ago (thisUpdate 8 days back, nextUpdate 1 day back), and a
+        // B-B is validated at the current time. EN 319 102-1 §5.2.6.4 1a) runs the revocation freshness checker on every
+        // certificate of the chain, and §5.2.5.4 takes nextUpdate − thisUpdate as the maximum age when the constraints give none:
+        // data whose nextUpdate has passed is not fresh, so INDETERMINATE (TRY_LATER). SimpleSign never uses revocation data
+        // past its nextUpdate, whatever the policy, and so finds none: INDETERMINATE/CERTIFICATE_CHAIN_GENERAL_FAILURE. DSS 6.3
+        // accepts the OCSP responses and skips its freshness check ("Is the revocation information fresh?" IGNORED), because the
+        // policy's RevocationFreshness is at IGNORE, and gives TOTAL_PASSED. Seen in a run with DSS on 2026-11-19.
+        ["fault:ocsp-expired+crl-expired"] = "SimpleSign refuses revocation data past its nextUpdate; DSS, with RevocationFreshness at IGNORE, accepts it",
     };
 
     private static readonly string[] Signers =
