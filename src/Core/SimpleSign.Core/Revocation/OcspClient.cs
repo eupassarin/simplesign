@@ -144,8 +144,22 @@ public sealed class OcspClient : IOcspClient
         X509Certificate2 cert,
         X509Certificate2? issuerCert,
         byte[] ocspResponseBytes,
-        DateTimeOffset? signingTime = null)
+        DateTimeOffset? signingTime = null) =>
+        CheckEmbeddedOcspResponse(cert, issuerCert, ocspResponseBytes, signingTime, out _);
+
+    /// <summary>
+    /// <see cref="CheckEmbeddedOcspResponse(X509Certificate2, X509Certificate2?, byte[], DateTimeOffset?)"/>, and the
+    /// nextUpdate of a response that applies to the certificate but had expired at <paramref name="signingTime"/>
+    /// (null is then returned: expired data never counts).
+    /// </summary>
+    internal bool? CheckEmbeddedOcspResponse(
+        X509Certificate2 cert,
+        X509Certificate2? issuerCert,
+        byte[] ocspResponseBytes,
+        DateTimeOffset? signingTime,
+        out DateTimeOffset? expiredNextUpdate)
     {
+        expiredNextUpdate = null;
         if (issuerCert is null)
         {
             return null;
@@ -171,7 +185,8 @@ public sealed class OcspClient : IOcspClient
         }
         catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or AsnContentException or CryptographicException)
         {
-            // Response doesn't apply to this cert or is malformed
+            // Response doesn't apply to this cert, is malformed, or applies but is not fresh (it does not count then either).
+            expiredNextUpdate = ExpiredOcspResponse.NextUpdateOf(ex);
             return null;
         }
     }
@@ -539,9 +554,9 @@ public sealed class OcspClient : IOcspClient
                         .ReadGeneralizedTime();
                     if (nextUpdate < validationTime.Value - clockSkewTolerance)
                     {
-                        throw new InvalidDataException(
+                        throw ExpiredOcspResponse.Exception(
                             $"OCSP response expired before the validation time (nextUpdate {nextUpdate:O}, " +
-                            $"validation time {validationTime.Value:O}, clock skew tolerance {clockSkewTolerance}).");
+                            $"validation time {validationTime.Value:O}, clock skew tolerance {clockSkewTolerance}).", nextUpdate);
                     }
                 }
 

@@ -2,6 +2,7 @@ using System.Net;
 using Shouldly;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Revocation;
+using SimpleSign.Core.Tests.TestHelpers;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -13,6 +14,7 @@ public sealed class ChainRevocationCheckerTests
 {
     private const string LeafCrlUrl = "http://198.51.100.1/leaf.crl";
     private const string IntermediateCrlUrl = "http://198.51.100.1/intermediate.crl";
+    private const string OcspUrl = "http://198.51.100.1/ocsp";
 
     [Fact]
     public async Task CheckAsync_OnlineCrlsGood_ReturnsGood()
@@ -24,7 +26,126 @@ public sealed class ChainRevocationCheckerTests
 
         result.Status.ShouldBe(ChainRevocationStatus.Good);
         result.Messages.ShouldBeEmpty();
+        result.ExpiredDataNextUpdate.ShouldBeNull();
     }
+
+    [Fact]
+    public async Task CheckAsync_OnlyExpiredOnlineCrl_UnknownWithItsNextUpdate()
+    {
+        using var pki = NewPki();
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+        byte[] expired = pki.BuildLeafCrl(thisUpdate, nextUpdate);
+        using var http = CrlServer(expired, pki.BuildIntermediateCrl());
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        // Expired data never counts as good: the leaf stays unknown, and the CRL is not among the data used.
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBe(nextUpdate);
+        result.Crls.Any(crl => crl.SequenceEqual(expired)).ShouldBeFalse();
+        result.Messages.ShouldHaveSingleItem().ShouldContain("expired");
+    }
+
+    [Fact]
+    public async Task CheckAsync_ExpiredCrlAndCertificateWithoutData_NoExpiredDataReported()
+    {
+        // The leaf has an expired CRL, the intermediate none at all: not only a freshness problem.
+        using var pki = NewPki();
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+        using var http = new HttpClient(new MockHttpHandler(request => Task.FromResult(request.RequestUri!.AbsoluteUri == LeafCrlUrl
+            ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(pki.BuildLeafCrl(thisUpdate, nextUpdate)) }
+            : new HttpResponseMessage(HttpStatusCode.NotFound))));
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task CheckAsync_ExpiredCrlFromAnotherIssuer_NoExpiredDataReported()
+    {
+        // An expired CRL that does not apply to the leaf (signed by the root) says nothing about it.
+        using var pki = NewPki();
+        using var http = MockHttpHandler.Failing();
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(
+            pki.Chain(), DateTimeOffset.UtcNow, [ExpiredCrlOfRoot(pki, thisUpdate, nextUpdate), pki.BuildIntermediateCrl()], [], false, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task CheckAsync_OnlyExpiredEmbeddedOcspOffline_UnknownWithItsNextUpdate()
+    {
+        using var pki = NewPki();
+        using var http = MockHttpHandler.Failing();
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+        byte[] ocsp = OcspResponseFactory.Build(pki.Leaf, pki.IntermediateCa, pki.IntermediateCa, thisUpdate, nextUpdate);
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(
+            pki.Chain(), DateTimeOffset.UtcNow, [pki.BuildIntermediateCrl()], [ocsp], false, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBe(nextUpdate);
+        result.Ocsps.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CheckAsync_ExpiredOnlineOcspAndExpiredCrl_UnknownWithTheLatestNextUpdate()
+    {
+        // The Sandbox's ocsp-expired+crl-expired: both sources answer, both expired.
+        using var pki = new SyntheticPki(crlDistributionPoint: LeafCrlUrl, ocspResponder: OcspUrl, intermediateCrlDistributionPoint: IntermediateCrlUrl);
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+        byte[] ocsp = OcspResponseFactory.Build(pki.Leaf, pki.IntermediateCa, pki.IntermediateCa, thisUpdate, nextUpdate.AddHours(1));
+        byte[] leafCrl = pki.BuildLeafCrl(thisUpdate, nextUpdate);
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        using var http = new HttpClient(new MockHttpHandler(request =>
+        {
+            byte[] body = request.RequestUri!.AbsoluteUri switch
+            {
+                OcspUrl => ocsp,
+                LeafCrlUrl => leafCrl,
+                _ => intermediateCrl,
+            };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) });
+        }));
+
+        var result = await new ChainRevocationChecker(http).CheckAsync(pki.Chain(), DateTimeOffset.UtcNow, [], [], true, default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBe(nextUpdate.AddHours(1));
+        result.Ocsps.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CheckCurrentAsync_OnlyExpiredCrl_UnknownWithItsNextUpdate()
+    {
+        using var pki = NewPki();
+        var (thisUpdate, nextUpdate) = ExpiredWindow();
+        using var http = CrlServer(pki.BuildLeafCrl(thisUpdate, nextUpdate), pki.BuildIntermediateCrl());
+
+        var result = await new ChainRevocationChecker(http).CheckCurrentAsync(pki.Chain(), default);
+
+        result.Status.ShouldBe(ChainRevocationStatus.Unknown);
+        result.ExpiredDataNextUpdate.ShouldBe(nextUpdate);
+    }
+
+    /// <summary>A window that ended a day ago, in whole seconds (the encodings keep no fractions).</summary>
+    private static (DateTimeOffset ThisUpdate, DateTimeOffset NextUpdate) ExpiredWindow()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var nextUpdate = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, TimeSpan.Zero).AddDays(-1);
+        return (nextUpdate.AddDays(-7), nextUpdate);
+    }
+
+    /// <summary>A CRL signed by the root, expired: it does not apply to the leaf.</summary>
+    private static byte[] ExpiredCrlOfRoot(SyntheticPki pki, DateTimeOffset thisUpdate, DateTimeOffset nextUpdate) =>
+        new System.Security.Cryptography.X509Certificates.CertificateRevocationListBuilder().Build(
+            pki.RootCa, 1, nextUpdate, System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1, thisUpdate);
 
     [Fact]
     public async Task CheckAsync_OnlineCrlsServedAsPem_ReadsThemAsDer()

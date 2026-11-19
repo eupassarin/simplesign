@@ -34,8 +34,19 @@ public static class CrlEvaluator
     /// <param name="logger">Optional logger.</param>
     /// <returns>The status of the certificate according to this CRL.</returns>
     public static CrlStatus Evaluate(
-        X509Certificate2 certificate, byte[] crlBytes, X509Certificate2 issuer, DateTimeOffset time, ILogger? logger = null)
+        X509Certificate2 certificate, byte[] crlBytes, X509Certificate2 issuer, DateTimeOffset time, ILogger? logger = null) =>
+        Evaluate(certificate, crlBytes, issuer, time, logger, out _);
+
+    /// <summary>
+    /// <see cref="Evaluate(X509Certificate2, byte[], X509Certificate2, DateTimeOffset, ILogger?)"/>, and the nextUpdate of
+    /// a CRL of the certificate's issuer, its signature verified, that had expired at <paramref name="time"/>: such a CRL
+    /// is <see cref="CrlStatus.NotApplicable"/> (expired data never counts), but newer data may settle the status.
+    /// </summary>
+    internal static CrlStatus Evaluate(
+        X509Certificate2 certificate, byte[] crlBytes, X509Certificate2 issuer, DateTimeOffset time, ILogger? logger,
+        out DateTimeOffset? expiredNextUpdate)
     {
+        expiredNextUpdate = null;
         try
         {
             var crl = new AsnReader(crlBytes, AsnEncodingRules.BER).ReadSequence();
@@ -63,8 +74,9 @@ public static class CrlEvaluator
             DateTimeOffset? nextUpdate = tbs.HasData && IsTime(tbs.PeekTag()) ? ReadTime(tbs) : null;
 
             // Current at the time, or issued after it (a later CRL still lists earlier revocations).
-            if (thisUpdate < time && nextUpdate < time)
+            if (thisUpdate < time && nextUpdate is { } expired && expired < time)
             {
+                expiredNextUpdate = expired;
                 return CrlStatus.NotApplicable;
             }
 

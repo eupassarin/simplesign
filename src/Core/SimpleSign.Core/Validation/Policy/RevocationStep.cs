@@ -67,6 +67,7 @@ internal static class RevocationStep
                     EmbeddedCrls = [.. (facts.EmbeddedCrls ?? []).Concat(result.Crls).DistinctBy(Convert.ToBase64String)],
                     EmbeddedOcsps = [.. (facts.EmbeddedOcsps ?? []).Concat(result.Ocsps).DistinctBy(Convert.ToBase64String)],
                     RevocationIssuedAt = result.IssuedAt,
+                    RevocationExpiredNextUpdate = result.Status == ChainRevocationStatus.Unknown ? result.ExpiredDataNextUpdate : null,
                     IsNotRevoked = result.Status == ChainRevocationStatus.Good,
                     RevocationSource = result.Status switch
                     {
