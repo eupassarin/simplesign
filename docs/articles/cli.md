@@ -449,14 +449,6 @@ signature's qualification) and the `eidas` policies. More in the [eIDAS article]
 With `SimpleSign.Peru.Iofe.Cli` installed: `--profile iofe`, the `iofe` and `iofe-agent` policies and
 `--tsl-profile iofe`. More in the [IOFE article](../../src/Extensions/Peru/Iofe/docs/iofe.md).
 
-The configuration of INDECOPI's accreditation guide (sections 4.2 to 4.4), where the options the guide leaves no
-choice about are not options, is `simplesign iofe sign|verify|view`: it comes with its own extension,
-`SimpleSign.Peru.Iofe.Accredited.Cli`, from [the accredited package's repository](https://github.com/eupassarin/simplesign-iofe-accredited), which has its manuals.
-
-```bash
-simplesign extension install SimpleSign.Peru.Iofe.Accredited.Cli
-```
-
 ## Network
 
 The library refuses requests to `localhost` and private addresses (the SSRF guard). To use a local test

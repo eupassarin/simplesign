@@ -117,8 +117,8 @@ while IFS=$'\t' read -r id subject; do
       --write-object "$WORK/$id.${object#*:}" --type "${object%%:*}" --id "$key_id" --label "$id" >/dev/null
   done
   if [[ "$id" == "$EXTRACTABLE_OF" ]]; then
-    # The same key once more, imported as extractable: what a signer that requires the key to stay in the module
-    # (the IOFE signing agent) must refuse.
+    # The same key once more, imported as extractable: what a signer that requires the key to stay in the module must
+    # refuse.
     pkcs11-tool --module "$MODULE" --token-label "$TOKEN_LABEL" --login --pin "$PIN" --extractable \
       --write-object "$WORK/$id.key.der" --type privkey --id e0 --label "$EXTRACTABLE_LABEL" >/dev/null
     pkcs11-tool --module "$MODULE" --token-label "$TOKEN_LABEL" --login --pin "$PIN" \
@@ -129,7 +129,7 @@ while IFS=$'\t' read -r id subject; do
 done < <(jq -r '.certificates[] | [.id, .subject] | @tsv' <<<"$pki")
 
 # The certificates of the issuing CAs, without keys, as an HSM holds the chain of its signing certificates: a signer
-# that takes the chain from the module (the IOFE signing agent) finds the issuer of each certificate there.
+# that takes the chain from the module finds the issuer of each certificate there.
 cas=0
 while IFS= read -r id; do
   cas=$((cas + 1))

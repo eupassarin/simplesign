@@ -28,19 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.15.0] - 2026-11-19
 
-### Removed
-
-- **The IOFE accredited configuration moved to [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited)**, with its history:
-  `SimpleSign.Peru.Iofe.Accredited` (same package ID, now versioned there, starting at 1.0.0 on SimpleSign 0.14), its
-  tests, the manuals the guide asks for (English and Spanish), the audit walk-through and the script that runs annex B.
-  SimpleSign no longer packs it.
-- **`simplesign iofe sign|verify|view` are no longer in `SimpleSign.Peru.Iofe.Cli`**: they come with
-  `SimpleSign.Peru.Iofe.Accredited.Cli`, from that repository (`simplesign extension install
-  SimpleSign.Peru.Iofe.Accredited.Cli`), with the same options. `SimpleSign.Peru.Iofe.Cli` keeps `--profile iofe`, the
-  `iofe` and `iofe-agent` policy presets and `--tsl-profile iofe`, and with this release the two extensions go
-  together; with an older one the CLI lists the `iofe` group twice. **Breaking** for whoever runs those commands with
-  `SimpleSign.Peru.Iofe.Cli` alone: install `SimpleSign.Peru.Iofe.Accredited.Cli` (1.0.0 is on nuget.org).
-
 ### Fixed
 
 - **Revocation data past its nextUpdate gives INDETERMINATE/TRY_LATER**, as EN 319 102-1 §5.2.5.4 and §5.2.6.4 1a)
@@ -72,28 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is as tall as the stamp; above or below it, as tall as the text. The QR code stays first, on the left. A computed
   stamp grows to hold the image. CLI: `--image-position`; TestBench: "Image position".
 
-- **`IofeTrust.ListFile(path, trustedListSigners)`** (`SimpleSign.Peru.Iofe.Accredited`): a copy of the trusted list
-  kept as a file, read and checked when the agent or the viewer is created, not before.
-
-- **The IOFE audit script runs in a real environment** (`src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py
-  --entorno file`): the operator's HSM, INDECOPI's own list and the certificates of a real CA instead of a Sandbox,
-  described by a file (`entorno.ejemplo.json`; the PIN stays in an environment variable). The same 70 scenarios and
-  checks; each is first gone through without running a command, so what the environment cannot show — a failure of a
-  CA or a TSA, a certificate nobody issued — is reported as not run there, with the reason, and nothing is signed for
-  a scenario that would stop halfway. `--list` shows that beforehand; `--ensayo folder` names, for those scenarios,
-  the result of a Sandbox run, as a rehearsal. A wrong trusted list is shown with INDECOPI's own: another signer
-  certificate, or a copy changed after it was signed. The evidence gains `00-entorno/` (tool, extensions, the module
-  and its certificates, the certificate that signed) and `MANIFIESTO.sha256`. With the signing certificate alone 24
-  scenarios run; with test certificates from the CA, 37. The audit walk-through has the steps.
-
 ### Changed
-
-- **IOFE documentation: English is the main text, Spanish its translation, and there is none in Portuguese.** Under
-  `src/Extensions/Peru/Iofe/docs/` the accreditation manuals are now `accreditation/` (English) and
-  `es/acreditacion/` (Spanish, the version handed to INDECOPI), and the audit walk-through is `audit-walkthrough.md`
-  and `es/guion-de-auditoria.md`; the Portuguese walk-through is gone. The audit script writes its report in English
-  and Spanish (`informe.en.*`, `informe.es.*`), prints in English unless `--lang es`, and its catalog
-  (`escenarios.json`) carries the titles in those two languages.
 
 - **The text beside a stamp's QR code keeps the proportion it has without one.** The QR code makes the stamp at
   least 80pt tall, and the text stayed at 7pt/6pt in its top corner. It is now enlarged to the stamp's height, as the
@@ -109,13 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--profile eidas`) were printed on stdout, after the JSON of `validate`, `inspect` or `sign --json`, which then
   no longer parsed. The text is the same; only the stream changed. The TestBench's CLI engine reads the JSON from
   stdout alone and still shows both streams in the run.
-
-- **`simplesign iofe sign --tsl FILE`: a list that is refused now leaves its audit record** (annex B, F-15). The
-  command read the file before there was an agent, so a list changed after it was signed, expired or signed by
-  another certificate failed the command with the right message and no record; a list downloaded from a URL already
-  left one. The file is now read by `IofeSigningAgent.OpenAsync` (`IofeTrust.ListFile`), which records
-  `AgentNotOpened` with the reason and throws the same exception. `iofe verify` and `iofe view` read the file the
-  same way; they have no record to write before there is a document, as before.
 
 - **A PDF signature whose SubFilter is not `ETSI.CAdES.detached` is no longer reported as PAdES baseline.** EN 319
   142-1 allows only that SubFilter in a baseline signature; the ETSI Signatures Conformance Checker failed an
@@ -137,51 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`SimpleSign.Peru.Iofe.Accredited`: the configuration INDECOPI's accreditation guide asks for, with nothing to
-  relax** (*Guía de Acreditación de Aplicaciones de Software* v4.0, sections 4.2, 4.3 and 4.4). What the checklist
-  left to "the accredited product" is now what the API guarantees:
-  - `IofeSigningAgent` (section 4.2) signs PDF, CMS and XML for a transaction. Its key is in a cryptographic module,
-    one of two ways and no other: a PKCS#11 module, which must be the one the operator declares
-    (`IofeModuleDeclaration`) and whose key the driver reports as sensitive and not extractable; or a remote signing
-    service (`IofeRemoteService`, Cloud Signature Consortium API v2: the agent sends the hash), which must be the one
-    the operator declares (`IofeRemoteServiceDeclaration`) — it is asked what it is before a secret is sent to it —
-    and whose credential needs no person to authorize it. A PKCS#12 (PFX) file is not a key source: it contradicts
-    Req. 15, and signing with one under the IOFE profile stays with the general signers, outside the accreditation.
-    It takes no policy (`IofePolicies.AgentSigning`), does not open without an
-    audit sink, and refuses a kind of transaction it was not set up for. Refusals of its own are
-    `IofeAccreditationException` with an `IofeRefusal`; those of the policy stay `SigningException`.
-  - `IofeVerificationAgent` (section 4.3) checks every signature of a received document under
-    `IofePolicies.AgentValidation`, rejects the document when any is not valid, hands an `IofeRejectionNotice` (in
-    Spanish) to the `IIofeSenderNotifier`, and records each verification (`IVerificationAuditSink`,
-    `JsonLinesVerificationAuditSink`: the hash chain `simplesign audit verify` reads).
-  - `IofeTimestampAuthority` (section 4.4): the authority with its certificate, so a token of any other is refused,
-    besides the checks of its signature and of the authority's certificate.
-  - `IofeContingency`: the one exception the guide allows (a procedure INDECOPI approved, with its validity), written
-    to every audit record made under it; a revoked certificate is still refused.
-  - `IofeViewer` (Req. 18, 28), and `IofeTrust`: INDECOPI's trusted list (default), a list already loaded, or roots
-    the operator installed.
-  - CLI: `simplesign iofe sign` (`--pkcs11-lib …` or `--csc-url …`), `iofe verify` and `iofe view`, in the IOFE
-    extension (below). They refuse an option they do not have (a PFX, a policy, a switch that skips a check).
-  - **Annex B shown by the accredited package itself.** `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py`
-    prepares a Sandbox for each of 70 scenarios (a failure of the CRL, OCSP, TSA or trusted list, a revocation, a
-    credential), runs `simplesign iofe sign|verify|view`, checks the signature or the refusal and its reason with
-    the key in a PKCS#11 module, in a remote signing service or both, and keeps the evidence with a report by item
-    in Spanish, English and Portuguese (`--item F-8` runs one item step by step). The tests that show an item carry
-    the trait `AnnexB`; `AnnexBCoverageTests` fails when an item software can show has no test or no scenario.
-  - What the rehearsal of that audit showed, fixed. The signing agent completes the chain of a certificate whose
-    issuers are not in the module: from `IofeSigningAgentOptions.ChainCertificates` (`simplesign iofe sign --chain
-    FILE`), then from the address the certificate names (AIA); the chain must still end in a trusted root, and a
-    refusal for a missing issuer says which. An agent that does not get to open (trusted list unreadable, PIN refused
-    by the module, remote service refusing it, incomplete options) is recorded in the audit trail as `AgentNotOpened`.
-    The reasons of a rejected document — the notice to the sender, `IofeVerification.Reasons`, the audit record — are
-    in Spanish, one sentence per sub-indication.
-  - The audit walk-through, rehearsed: `src/Extensions/Peru/Iofe/docs/roteiro-de-auditoria.md` (Portuguese),
-    `audit-walkthrough.md` (English) and `guion-de-auditoria.md` (Spanish). The manuals are also in English
-    (`docs/acreditacion/en/`); the Spanish text is the one handed to INDECOPI.
-  - The manuals the guide asks for, in Spanish, under `src/Extensions/Peru/Iofe/docs/acreditacion/` (administration,
-    user, programmer, security configuration, scope); `src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md` marks
-    what the package guarantees (**A**).
-  - Not there yet: the code signing of the release (Req. 17, 27), which needs a code-signing certificate.
 - **CLI extensions: `simplesign extension install PACKAGE`.** A package installed into a CLI that is already there
   adds commands, trust profiles (`--profile`), signing and validation policies by name and trusted-list profiles
   (`--tsl-profile`). The contract is the new package `SimpleSign.Cli.Extensibility` (`ICliExtension`); an extension
@@ -191,7 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--source <folder|https url>` or from a `.nupkg` file, shows its SHA-512 and does not verify a package signature:
   an extension is code that runs each time `simplesign` starts (ADR 0030, `docs/articles/cli-extensions.md`).
 - **`SimpleSign.Peru.Iofe.Cli`, the first extension**: `--profile iofe`, the `iofe` and `iofe-agent` policies,
-  `--tsl-profile iofe` and `simplesign iofe sign|verify|view`.
+  and `--tsl-profile iofe`.
 - **`SimpleSign.Brazil.Cli`, the extension of ICP-Brasil and Gov.br** (`simplesign extension install SimpleSign.Brazil.Cli`):
   `--profile icp-brasil` (with `--sandbox URL`, the Sandbox's root is one more AC Raiz) and `gov-br`, the `icp-brasil`
   and `govbr` policies, and
@@ -249,8 +163,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no longer open their internals to the CLI.
 - **Repository layout** (ADR 0030; package, assembly and namespace names are the same):
   - `src/TrustFrameworks` is now `src/Extensions` (and `tests/unit/TrustFrameworks`, `tests/unit/Extensions`).
-  - Everything of Peru/IOFE is under `src/Extensions/Peru/Iofe`: the three packages, `docs/` (the article that was
-    `docs/articles/iofe.md`, and `acreditacion/`), `playbooks/` (`indecopi-checklist.md`, `indecopi-guia-v4.json`,
+  - Everything of Peru/IOFE is under `src/Extensions/Peru/Iofe`: its packages, `docs/` (the article that was
+    `docs/articles/iofe.md`), `playbooks/` (`indecopi-checklist.md`, `indecopi-guia-v4.json`,
     which were in `docs/playbooks/`) and `tools/indecopi.py` (which was in `tools/playbooks/`).
   - Everything of Brazil is under `src/Extensions/Brazil`: the four packages, `docs/` (`icp-brasil.md` and
     `icp-brasil-validar-check.md`, which were in `docs/articles/`), `playbooks/` (`icp-brasil-pades.json`,

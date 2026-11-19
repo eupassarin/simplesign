@@ -98,7 +98,7 @@ src/
     SimpleSign/                    # meta-package
   Extensions/                      # a trust framework's folder holds all that is its own; CliExtension.targets = what makes a CLI extension
     Brazil/                        # SimpleSign.Brazil, .IcpBrasil, .GovBr, .Cli (CLI extension), docs, playbooks, tools
-    Peru/Iofe/                     # SimpleSign.Peru.Iofe, .Accredited, .Cli (CLI extension), docs, playbooks, tools
+    Peru/Iofe/                     # SimpleSign.Peru.Iofe, .Cli (CLI extension), docs, playbooks, tools
     Europe/Eidas/                  # SimpleSign.Europe.Eidas, .Cli (CLI extension), docs, playbooks, tools
   Signers/
     SimpleSign.Signers.Pkcs11/     # tokens, smartcards, HSMs

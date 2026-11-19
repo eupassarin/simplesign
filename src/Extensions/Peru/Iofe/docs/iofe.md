@@ -161,22 +161,6 @@ simplesign validate contrato-signed.pdf --profile iofe
 simplesign validate contrato-signed.pdf --profile iofe --sandbox http://localhost:5300   # the Sandbox's list, to test
 ```
 
-## The accredited configuration
-
-`SimpleSign.Peru.Iofe.Accredited` is the guide's sections 4.2, 4.3 and 4.4 as an API with nothing to relax: what the
-policies above leave to the integrator (which key, which policy, whether there is an audit trail) is fixed there. It
-is built on these packages and lives in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), with its CLI extension
-(`SimpleSign.Peru.Iofe.Accredited.Cli`: `simplesign iofe sign|verify|view`), the manuals the guide asks for (in English
-and Spanish), the audit walk-through and the script that runs annex B. Up to SimpleSign 0.14.0 it was here.
-
-```bash
-dotnet add package SimpleSign.Peru.Iofe.Accredited
-```
-
-A PKCS#12 (PFX) file is not a key source of the accredited package. To sign with a PFX under IOFE's trust and
-policies, outside the accreditation, use the general signers: `PadesSigner…WithCertificate(pfx).WithProfile(iofe)`, or
-`simplesign sign --cert file.pfx --profile iofe`.
-
 ## Time-stamping authorities
 
 The list says which TSAs are accredited, not where they are: configure each TSA's URL (and credentials) as its provider
@@ -205,9 +189,7 @@ The CLI reads the same list with `--tsl … --tsl-signer … --tsl-profile iofe`
 [`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../playbooks/indecopi-checklist.md) lists every item of annex B of the
 *Guía de Acreditación de Aplicaciones de Software* v4.0 — §4.2 F-1…F-32, §4.3 V-1…V-32, §4.4 S-1…S-4 and §4.1
 E-1…E-19 — and what shows it: a playbook step (P), tests (U), or the accredited product (X: access control, the
-cryptographic module and key custody, code signing of the application, manuals). What the accredited package shows
-itself (A), with a scenario of its audit script and a test for each item, is in the copy of this checklist in
-[its repository](https://github.com/eupassarin/simplesign-iofe-accredited/blob/main/docs/indecopi-checklist.md).
+cryptographic module and key custody, code signing of the application, manuals).
 
 ## Not covered yet
 

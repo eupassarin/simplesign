@@ -33,10 +33,6 @@ the application…"), and the applicant justifies in annex B each item it says d
   through the library and the CLI); `sandbox-basics:ID` and `etsi-baseline:ID` are steps of those playbooks, run with
   them;
 - **U** — covered by unit or integration tests of the library, not by a run;
-- **A** — guaranteed by the accredited configuration, the package `SimpleSign.Peru.Iofe.Accredited`
-  (`IofeSigningAgent`, `IofeVerificationAgent`, the `simplesign iofe` commands): the API gives no way around it. It
-  lives in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), with its tests, its manuals and a copy of this checklist that adds, for every
-  item, the scenario of its audit script and the test that show it. It covers sections 4.2, 4.3 and 4.4;
 - **N** — needs something new first;
 - **X** — outside the library: the accredited product, its operation or its documentation must show it (the column
   says what SimpleSign offers towards it).
@@ -57,13 +53,13 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-10 | Revocation: or OCSP (RFC 2560) for the certificate and its chain | P (`sandbox-basics:ocsp-good`, `sandbox-basics:revoked-ocsp`, `sandbox-basics:ocsp-unauthorized`) |
 | F-11 | An expired certificate cannot sign | P (`sandbox-basics:expired`, `sandbox-basics:not-yet-valid`, `sandbox-basics:expired-ca`) |
 | F-12 | The certificate's nonRepudiation bit is checked | P (`no-nonrepudiation-agent` with playbook:iofe-agent, the iofe policy with KeyUsage = nonRepudiation declared in the playbook; `sandbox-basics:no-signing-key-usage`, `sandbox-basics:no-key-usage-extension`, `sandbox-basics:no-key-usage-cades`, `sandbox-basics:no-key-usage-xades`). `IofePolicies.Signing` also accepts digitalSignature (section 4.1): an automated agent requires nonRepudiation (the adjustment above) |
-| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure): the accredited package opens no port and reads no configuration file (its administration manual, section 9). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
-| F-14 | The certificate checks cannot be switched off (except under a contingency procedure INDECOPI approved) | A — `IofeSigningAgent` takes no policy: it signs under `IofePolicies.AgentSigning`. The one exception is a declared `IofeContingency` (procedure and validity), under which an unknown revocation status is tolerated, a revoked certificate still refused, and the procedure written to each audit record (`SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce`, `SignPdfAsync_RevokedCertificateUnderAContingency_IsStillRefused`). With the general signers the checks are the `SigningPolicy` given to them |
-| F-15 | Audit log of the signatures produced, by kind of transaction | P (`audit`, `audit-refused`) + U (`JsonLinesAuditSink` hash chain, `simplesign audit verify`) + A (the agent is not created without an audit sink, an agent that does not get to open — list unreadable, PIN refused, service refusing it — is recorded as `AgentNotOpened`, and each record carries the transaction as `type/id`: `OpenAsync_IncompleteOptions_IsRefused`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`) |
-| F-16 | Administrator rights cannot produce signatures outside the defined transaction | A — the agent signs only for the kinds of transaction it was opened with; any other is refused and recorded (`SignPdfAsync_TransactionOutsideTheAgents_IsRefusedAndRecorded`), and with a remote key it signs unattended only: a credential a person authorizes is refused (`OpenAsync_CredentialAPersonAuthorizes_IsRefusedAndRecorded`). Who may reach the agent and the module is X: the product's roles and key access |
-| F-17 | The private key signs only inside the certified cryptographic module, never in the application's libraries | A — the agent's key is in a PKCS#11 module (`Pkcs11SignerOptions`) or in a remote signing service the operator declares (`IofeRemoteService`, Cloud Signature Consortium API v2: the agent sends the hash and receives the signature); no certificate file (PKCS#12 / PFX), no key in memory, no other signer can be given (`SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`, `SignPdfAsync_KeyInARemoteService_SignsThereAndRecordsTheProvider`, `OpenAsync_NoKeySourceOrTwoOrNoDeclaration_IsRefused`). The general signers also sign through `IExternalSigner` (PKCS#11, CSC, deferred signing); with a PFX they sign in the application, which is outside the accreditation |
-| F-18 | No automatic copies of the private key on the computer | A — the library never reads, exports or stores a key, and the agent refuses a key its driver does not report as sensitive and not extractable (`Pkcs11Signer.KeyProtection`; `OpenAsync_ExtractableKey_IsRefusedAndRecorded`). With a remote service the key never reaches the computer; that it cannot leave the service is not something the protocol reports: the service's accreditation states it |
-| F-19 | A module that is part of the solution is FIPS 140-2 or Common Criteria EAL 4+ | X — the HSM chosen and its certificate. A: the operator declares the module and its certificate number (`IofeModuleDeclaration`) and any other token is refused (`OpenAsync_TokenThatIsNotTheDeclaredModule_IsRefused`); software cannot check the certification itself. With the key in a remote signing service the module is the provider's, not part of the solution: the operator declares the service and its accreditation (`IofeRemoteServiceDeclaration`: INDECOPI's Resolución 175-2024/DGI for remote signature, or EN 419 241-2 / EN 419 221-5), and any other service is refused before a secret is sent to it (`OpenAsync_ServiceThatIsNotTheDeclaredOne_IsRefusedBeforeAnythingIsSentToIt`) |
+| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
+| F-14 | The certificate checks cannot be switched off (except under a contingency procedure INDECOPI approved) | X — the product must give no way to relax the checks. `IofePolicies.AgentSigning` holds them; with the general signers the checks are the `SigningPolicy` given to them, so a product that fixes that policy and exposes no other makes them impossible to switch off. A contingency procedure is the product's to declare and record |
+| F-15 | Audit log of the signatures produced, by kind of transaction | P (`audit`, `audit-refused`) + U (`JsonLinesAuditSink` hash chain, `simplesign audit verify`). Recording the kind of transaction is the product's (X) |
+| F-16 | Administrator rights cannot produce signatures outside the defined transaction | X — the product's roles, transactions and key access |
+| F-17 | The private key signs only inside the certified cryptographic module, never in the application's libraries | X — the product's choice of key: the general signers sign through `IExternalSigner` (`Pkcs11Signer` for a module, `CscSigner` for a remote signing service, deferred signing), so the key never needs to be in the application; with a PFX they sign in the application, which is outside the accreditation |
+| F-18 | No automatic copies of the private key on the computer | X — the library never reads, exports or stores a key; `Pkcs11Signer.KeyProtection` (`Pkcs11KeyProtection.IsConfinedToToken`) tells whether the driver reports the key as sensitive and not extractable, for the product to refuse one that is not. With a remote service the key never reaches the computer; that it cannot leave the service is not something the protocol reports: the service's accreditation states it |
+| F-19 | A module that is part of the solution is FIPS 140-2 or Common Criteria EAL 4+ | X — the HSM chosen and its certificate; software cannot check the certification itself. With the key in a remote signing service the module is the provider's, not part of the solution: its accreditation (INDECOPI's Resolución 175-2024/DGI for remote signature, or EN 419 241-2 / EN 419 221-5) is what the product shows |
 | F-20 | (Key in the solution) two-person control of access to the key from its generation | X — key ceremony. F-20 … F-27 do not apply when the key is in a remote signing service: the key and its module are the provider's |
 | F-21 | (Key in the solution) two-person control of the key's copies | X — key ceremony |
 | F-22 | (Key in the solution) keys imported and exported encrypted, under a key with two-person control | X — HSM |
@@ -74,17 +70,16 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-27 | (Key in the solution) revocation asked at once when the key is compromised | X — operations, with the EC |
 | F-28 | Current, unbroken algorithms | P (`sandbox-basics:weak-key`, `sandbox-basics:weak-key-cades`, `sandbox-basics:weak-key-xades`, `sandbox-basics:sha1-ca`, `sandbox-basics:sign-rsa-4096`, `sandbox-basics:sign-ecdsa-p256`, `sandbox-basics:sign-ecdsa-p384`) |
 | F-29 | The application itself is signed with a code-signing certificate | X — **open**: the NuGet packages carry nuget.org's repository signature (`dotnet nuget verify --all`) but no author signature, and the assemblies no Authenticode signature; both need a code-signing certificate the release does not have yet. A product signs its own installer or executable |
-| F-30 | A viewer shows the signer and the recipient the document's integrity, signing time, public key and certificate data | P (`viewer`: the validation report; `simplesign validate --html-report --report-language es`) + A (`IofeViewer`, `simplesign iofe view`: `Viewer_SignedPdf_ShowsTheSignerInSpanish`). The product's own screen is X |
+| F-30 | A viewer shows the signer and the recipient the document's integrity, signing time, public key and certificate data | P (`viewer`: the validation report; `simplesign validate --html-report --report-language es`). The product's own screen is X |
 | F-31 | Signing time and the chain's public keys attached and signed (PAdES/XAdES/CAdES from the EPES-equivalent level comply) | P (`sandbox-basics:tsa-ok`, `sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`, `sandbox-basics:cades-blta-enveloped`, `sandbox-basics:xades-blta-detached`, `sandbox-basics:xades-blta-enveloping`; raised later: `aug-tsl-blta`, `aug-tsa-unlisted`) |
-| F-32 | Administrator and user manuals (security policies, configuration options) | A — in the accredited package's repository (`docs/accreditation/`, and in Spanish `docs/es/acreditacion/`): administration, user, programmer ("manual de programador", asked when a library is evaluated), security configuration (section 5) and scope. A product adds its own |
+| F-32 | Administrator and user manuals (security policies, configuration options) | X — the product's manuals (administration, user, security configuration of section 5, scope); SimpleSign's `docs/` and XML docs are the library's programmer's manual |
 
 ## 4.3 Verification by automated agents (V)
 
 Items 1–29 repeat those of 4.2 for a system that checks every signature it receives (and notifies the sender of the
-invalid ones); differences are noted. The notice to the sender is A: `IofeVerificationAgent` rejects a document with any
-signature that is not valid, with none or that cannot be read, and hands an `IofeRejectionNotice` to the
-`IIofeSenderNotifier` it was created with; a notice that cannot be delivered fails the verification
-(`VerifyAsync_RevokedSigner_IsRejectedWithANoticeToTheSender`, `VerifyAsync_NotifierFails_ThrowsAndRecordsTheNoticeAsNotDelivered`).
+invalid ones); differences are noted. The notice to the sender is X: the product sends it, with the reasons
+SimpleSign's validators give for each signature (`PdfSignatureValidator`, `CadesSignatureValidator`,
+`XadesSignatureValidator`).
 
 | # | What the guide asks | How |
 |---|---|---|
@@ -101,16 +96,16 @@ signature that is not valid, with none or that cannot be read, and hands an `Iof
 | V-11 | The certificate and its chain have not expired | P (`sandbox-basics:sample-expired`) |
 | V-12 | The certificate's nonRepudiation bit | P (`v-no-nonrepudiation` with playbook:iofe-agent-validation, the iofe validation policy with KeyUsage = nonRepudiation; `v-key-usage`: the iofe validation policy itself refuses a signer with neither digitalSignature nor nonRepudiation) |
 | V-13 | Protected against unauthorized access | X — as F-13 |
-| V-14 | The checks cannot be switched off | A — `IofeVerificationAgent` takes no policy (`IofePolicies.AgentValidation`, revocation always checked); under a declared `IofeContingency` a revocation status that cannot be obtained is tolerated, a revoked certificate still rejected (the status is always asked for first), and the record names the procedure (`VerifyAsync_RevocationUnavailable_IsRejectedUnlessAContingencyIsInForce`, `VerifyAsync_RevokedSignerUnderAContingency_IsStillRejected`, `VerifyAsync_ContingencyOutsideItsValidity_IsRefused`) |
-| V-15 | Audit log | P (`audit`, `audit-refused`: signing) + A (every verification is recorded, accepted or rejected, in a hash-chained trail; no agent without a sink: `IVerificationAuditSink`, `JsonLinesVerificationAuditSink`, `VerifyAsync_ValidPdf_IsAcceptedAndRecorded`, `RecordAsync_SeveralRecords_FormAChainThatVerifies`, `CreateAsync_WithoutAuditOrNotifier_IsRefused`) |
-| V-16 | Administrator rights cannot act outside the defined transaction | X — `IofeVerificationAgent` does not sign; a product that signs what it receives does it with an `IofeSigningAgent` (F-16) |
-| V-17 | (If the system signs the documents received) key only inside the certified module | Not applicable to `IofeVerificationAgent`, which does not sign; as F-17 for a product that does |
+| V-14 | The checks cannot be switched off | X — as F-14, with `IofePolicies.AgentValidation` (revocation always checked) |
+| V-15 | Audit log | P (`audit`, `audit-refused`: signing). Recording every verification is the product's (X) |
+| V-16 | Administrator rights cannot act outside the defined transaction | X — as F-16 |
+| V-17 | (If the system signs the documents received) key only inside the certified module | X — as F-17, for a product that signs what it receives |
 | V-18 … V-27 | Key copies, module certification and key custody, as F-18 … F-27 (when the system signs) | X — as F-18 … F-27 |
 | V-28 | Current, unbroken algorithms | P (`etsi-baseline:va-weak-key`, `sandbox-basics:weak-key`, `sandbox-basics:sha1-ca`) + U (validation of obsolete algorithms, `ValidationPolicy` Cryptographic constraints) |
 | V-29 | The application is code-signed | X — as F-29 |
 | V-30 | (If the system signs the documents received) a viewer for the relying parties, or a standard format INDECOPI approved | P (`viewer`, `sandbox-basics:sample-tampered`, `sandbox-basics:sample-cades-changed`, `sandbox-basics:sample-xades-changed`) |
 | V-31 | (If the system signs) the validation data of F-31 (the body also asks a reference to the chain's non-revocation) | P (`sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`: B-LT and B-LTA embed the revocation data; added later by augmentation: `aug-tsl-blta`) |
-| V-32 | Manuals | A — as F-32 |
+| V-32 | Manuals | X — as F-32 |
 
 ## 4.4 Time-stamps (S)
 
@@ -118,9 +113,9 @@ Requests to a TSA following RFC 3161; optional, for any of the three types.
 
 | # | What the guide asks | How |
 |---|---|---|
-| S-1 | The token carries the identifier of the certificate of the TSA asked | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-unexpected`, `sandbox-basics:tsa-outside-chain`, `tsl-tsa-unspecified`, `tsl-tsa-unlisted`) + A (`IofeTimestampAuthority` always carries the authority's certificate: `SignPdfAsync_TokenOfAnotherAuthority_IsRefused`) |
-| S-2 | The token's signature verifies | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-invalid-token`) + A (`SignPdfAsync_TokenWithABrokenSignature_IsRefused`) |
-| S-3 | The TSA certificate is not revoked | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-revoked`, `sandbox-basics:tsa-revoked-cades`, `sandbox-basics:tsa-revoked-xades`) + A (`SignPdfAsync_RevokedTimestampAuthority_IsRefused`) |
+| S-1 | The token carries the identifier of the certificate of the TSA asked | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-unexpected`, `sandbox-basics:tsa-outside-chain`, `tsl-tsa-unspecified`, `tsl-tsa-unlisted`) |
+| S-2 | The token's signature verifies | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-invalid-token`) |
+| S-3 | The TSA certificate is not revoked | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-revoked`, `sandbox-basics:tsa-revoked-cades`, `sandbox-basics:tsa-revoked-xades`) |
 | S-4 | The TSA certificate has not expired | P (`sandbox-basics:tsa-ok`, `sandbox-basics:tsa-expired`, `sandbox-basics:tsa-expired-cades`, `sandbox-basics:tsa-expired-xades`) |
 
 INDECOPI's list gives no TSA URLs: the TSAs it lists (Camerfirma, Acepta, Llama.pe, BPO Advisors, Girasol/FirmEasy)
@@ -128,8 +123,7 @@ are anchors, and the product configures each TSA's address with its provider (`s
 
 ## 4.1 End-user signing software (E)
 
-For a product of this type the same steps apply; its items map to those of 4.2. The accredited package does not cover
-this type: what is marked A in 4.2 is, here, as the general signers give it.
+For a product of this type the same steps apply; its items map to those of 4.2.
 
 | # | What the guide asks | How |
 |---|---|---|
@@ -147,21 +141,14 @@ this type: what is marked A in 4.2 is, here, as the general signers give it.
 | E-18 | Validation data | = F-31 |
 | E-19 | Manuals (and a programmer's manual for a library) | X — the product's; SimpleSign's `docs/` and XML docs are the library's programmer's manual |
 
-## Shown by the accredited package itself
-
-The playbooks above run the general signers under the IOFE policies: the same engine, but not the API that is
-accredited. The evidence the accredited package produces itself — a scenario of its audit script and a test for every
-item software can show — is in the copy of this checklist in [its repository](https://github.com/eupassarin/simplesign-iofe-accredited/blob/main/docs/indecopi-checklist.md).
-
 ## Outside the annex: the process
 
 | What | How |
 |---|---|
-| Evidence for every item (screenshots in annex B) | The accredited package's audit script keeps, per scenario, the command, its output, the audit records and the files, and writes the report by item (in its repository). The TestBench's Playbook tab does the same for the general signers (`docs/articles/playbook.md`) |
+| Evidence for every item (screenshots in annex B) | The TestBench's Playbook tab keeps, per step, the signed file, the reports, the CLI commands and the logs, with a summary by item (`docs/articles/playbook.md`); the product adds its own |
 | A live audit session and a presentation to INDECOPI's commission | X — the applicant |
 | A yearly follow-up audit in production | X — the operator; `IofeTrustedListSource.Changed` and the audit trail give the records |
 | Security settings announced to the users (section 5) | X — the product |
 
-Nothing here is **N**: every item a library can show has a step or a test, and a scenario and a test of the accredited
-package (in its repository); the rest belongs to the accredited product.
+Nothing here is **N**: every item a library can show has a step or a test; the rest belongs to the accredited product.
 One item is open on the library's side: F-29 / V-29, the code-signing certificate of the release.

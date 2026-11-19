@@ -14,8 +14,6 @@ namespace SimpleSign.Peru.Iofe.Cli;
 /// <item>the <c>iofe</c> signing and validation policies (<c>--signing-policy iofe</c>, <c>--policy iofe</c>, <c>policy export --preset iofe</c>);</item>
 /// <item><c>--tsl-profile iofe</c>: a trusted list read as INDECOPI's.</item>
 /// </list>
-/// The accredited configuration of the guide's sections 4.2 to 4.4, <c>simplesign iofe sign|verify|view</c>, comes with
-/// its own extension, <c>SimpleSign.Peru.Iofe.Accredited.Cli</c>, from the repository of the accredited package.
 /// </summary>
 public sealed class IofeCliExtension : ICliExtension
 {
@@ -39,8 +37,7 @@ public sealed class IofeCliExtension : ICliExtension
 
     /// <inheritdoc />
     /// <remarks>
-    /// None: what this extension adds goes into the standard commands. <c>simplesign iofe sign|verify|view</c> come with
-    /// <c>SimpleSign.Peru.Iofe.Accredited.Cli</c>.
+    /// None: what this extension adds goes into the standard commands.
     /// </remarks>
     public void AddCommands(IConfigurator config) => ArgumentNullException.ThrowIfNull(config);
 
