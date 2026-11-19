@@ -289,7 +289,8 @@ internal class TrustedValidationSettings : CommonSettings
             catch (System.Security.Cryptography.CryptographicException ex) when (tolerant)
             {
                 // A list not signed by its operator gives no anchors: the signatures are INDETERMINATE, as with a LOTL's lists.
-                Spectre.Console.AnsiConsole.MarkupLine($"[yellow]TSL:[/] {Spectre.Console.Markup.Escape($"{TrustedList}: {ex.Message} No anchor comes from it.")}");
+                // On stderr, so that stdout carries only the command's output (the JSON of --json).
+                Console.Error.WriteLine($"TSL: {TrustedList}: {ex.Message} No anchor comes from it.");
             }
         }
 
@@ -307,7 +308,7 @@ internal class TrustedValidationSettings : CommonSettings
             LoadedTimedAnchors.Add(set);
             foreach (var problem in set.Problems)
             {
-                Spectre.Console.AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Spectre.Console.Markup.Escape($"{problem.Territory} ({problem.Location}): {problem.Reason}")}");
+                Console.Error.WriteLine($"LOTL: {problem.Territory} ({problem.Location}): {problem.Reason}");
             }
         }
 

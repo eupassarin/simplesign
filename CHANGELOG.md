@@ -57,6 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CLI: the trusted-list warnings go to stderr, so `--json` prints only JSON on stdout.** "TSL: … No anchor comes
+  from it." (a list that cannot be read or is not signed by its operator, `--tsl-profile iofe`, or INDECOPI's list
+  not downloaded under `--profile iofe`) and "LOTL: …" (a problem of the `--lotl` set, or the EU LOTL not read under
+  `--profile eidas`) were printed on stdout, after the JSON of `validate`, `inspect` or `sign --json`, which then
+  no longer parsed. The text is the same; only the stream changed. The TestBench's CLI engine reads the JSON from
+  stdout alone and still shows both streams in the run.
+
 - **`simplesign iofe sign --tsl FILE`: a list that is refused now leaves its audit record** (annex B, F-15). The
   command read the file before there was an agent, so a list changed after it was signed, expired or signed by
   another certificate failed the command with the right message and no record; a list downloaded from a URL already

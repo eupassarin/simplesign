@@ -163,15 +163,15 @@ internal sealed class CliExecutor
 
                 string shown = Mask(command) + extra;
                 RunLog.Current?.Note(RunStages.Prepare, "$ " + shown);
-                var (exit, output, ms) = await StartAsync(cli, args, dir, cancellationToken);
+                var (exit, stdout, output, ms) = await StartAsync(cli, args, dir, cancellationToken);
                 RunLog.Current?.Note(RunStages.Finish, L.T("simplesign ended with exit code {0} in {1} ms.", exit, ms) + (output.Length > 0 ? "\n" + Trim(output) : ""), warning: exit != 0);
                 steps.Add(new CliStep(shown, exit, output, ms));
                 if (wantsJson)
                 {
-                    json = ParseJson(output) ?? json;
+                    json = ParseJson(stdout) ?? json;
                 }
 
-                if (validates && exit is 0 or 1 && JsonText(output) is { } verdict)
+                if (validates && exit is 0 or 1 && JsonText(stdout) is { } verdict)
                 {
                     validation = verdict;
                     continue;
@@ -332,8 +332,11 @@ internal sealed class CliExecutor
 
     private static string Trim(string output) => output.Length <= 4000 ? output.TrimEnd() : output[..4000] + "…";
 
-    /// <summary>Starts the CLI (its executable, or <c>dotnet simplesign.dll</c>) and waits for it.</summary>
-    private static async Task<(int Exit, string Output, long Ms)> StartAsync(string cli, IReadOnlyList<string> args, string dir, CancellationToken cancellationToken)
+    /// <summary>
+    /// Starts the CLI (its executable, or <c>dotnet simplesign.dll</c>) and waits for it. <c>Stdout</c> is where the
+    /// <c>--json</c> object is (warnings go to stderr); <c>Output</c> is stdout then stderr, as the run shows it.
+    /// </summary>
+    private static async Task<(int Exit, string Stdout, string Output, long Ms)> StartAsync(string cli, IReadOnlyList<string> args, string dir, CancellationToken cancellationToken)
     {
         bool isDll = cli.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
         var info = new ProcessStartInfo(isDll ? DotnetHost() : cli)
@@ -380,12 +383,13 @@ internal sealed class CliExecutor
                 throw;
             }
 
-            return (-1, L.T("The CLI took longer than {0} minutes and was stopped.", s_timeout.TotalMinutes), watch.ElapsedMilliseconds);
+            string stopped = L.T("The CLI took longer than {0} minutes and was stopped.", s_timeout.TotalMinutes);
+            return (-1, "", stopped, watch.ElapsedMilliseconds);
         }
 
         string output = await stdout;
         string errors = await stderr;
-        return (process.ExitCode, errors.Length == 0 ? output : output + errors, watch.ElapsedMilliseconds);
+        return (process.ExitCode, output, errors.Length == 0 ? output : output + errors, watch.ElapsedMilliseconds);
     }
 
     /// <summary>The <c>dotnet</c> host: the one running the TestBench when it is <c>dotnet</c>, else the one on the PATH.</summary>

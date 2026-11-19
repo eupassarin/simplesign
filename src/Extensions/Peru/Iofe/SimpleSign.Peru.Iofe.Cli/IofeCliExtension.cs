@@ -2,7 +2,6 @@ using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Cli.Extensibility;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Policies;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace SimpleSign.Peru.Iofe.Cli;
@@ -124,7 +123,8 @@ public sealed class IofeCliExtension : ICliExtension
         {
             // A list that cannot be read or is not signed by its operator gives no anchors: the signatures are
             // INDETERMINATE (and signing is refused), as with a LOTL's lists and in the library.
-            AnsiConsole.MarkupLine($"[yellow]TSL:[/] {Markup.Escape($"{ex.Message} No anchor comes from it.")}");
+            // On stderr, so that stdout carries only the command's output (the JSON of --json).
+            Console.Error.WriteLine($"TSL: {ex.Message} No anchor comes from it.");
             return new TrustProfile(IofeProfile.Name, Title, IofePolicies.Signing, IofePolicies.Validation, [], []);
         }
     }

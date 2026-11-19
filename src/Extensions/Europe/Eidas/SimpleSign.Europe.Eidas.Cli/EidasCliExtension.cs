@@ -4,7 +4,6 @@ using SimpleSign.Cli.Extensibility;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Policies;
 using SimpleSign.XAdES.TrustedLists;
-using Spectre.Console;
 using Spectre.Console.Cli;
 
 namespace SimpleSign.Europe.Eidas.Cli;
@@ -89,7 +88,8 @@ public sealed class EidasCliExtension : ICliExtension
         catch (Exception ex) when (ex is HttpRequestException or CryptographicException or InvalidDataException)
         {
             // A LOTL that cannot be read or is not signed by its operator gives no anchors, as in the library.
-            AnsiConsole.MarkupLine($"[yellow]LOTL:[/] {Markup.Escape($"{ex.Message} No anchor comes from it.")}");
+            // On stderr, so that stdout carries only the command's output (the JSON of --json).
+            Console.Error.WriteLine($"LOTL: {ex.Message} No anchor comes from it.");
             return new TrustProfile(EidasProfile.Name, Title, EidasPolicies.Signing, EidasPolicies.Validation, [], []);
         }
     }
