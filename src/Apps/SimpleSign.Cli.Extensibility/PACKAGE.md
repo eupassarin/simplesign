@@ -15,7 +15,7 @@ An extension is a NuGet package with a `cli-extension/` folder: an `extension.js
 
 ```json
 { "name": "iofe", "assembly": "SimpleSign.Peru.Iofe.Cli.dll", "type": "SimpleSign.Peru.Iofe.Cli.IofeCliExtension",
-  "contract": 1, "minCliVersion": "0.13.0", "version": "0.14.0", "package": "SimpleSign.Peru.Iofe.Cli" }
+  "contract": 1, "minCliVersion": "0.13.0", "version": "0.15.0", "package": "SimpleSign.Peru.Iofe.Cli" }
 ```
 
 Installing an extension runs its code with the rights of whoever runs `simplesign`: install only packages you trust.
