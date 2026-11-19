@@ -176,7 +176,7 @@ try {
             }
             if ($entry.id -eq $extractableOf) {
                 # The same key once more, imported as extractable: what a signer that requires the key to stay in
-                # the module (the IOFE signing agent) must refuse.
+                # the module must refuse.
                 Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin, '--extractable',
                     '--write-object', $keyFile, '--type', 'privkey', '--id', 'e0', '--label', $extractableLabel) | Out-Null
                 Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
@@ -193,7 +193,7 @@ try {
     }
 
     # The certificates of the issuing CAs, without keys, as an HSM holds the chain of its signing certificates: a
-    # signer that takes the chain from the module (the IOFE signing agent) finds the issuer of each certificate there.
+    # signer that takes the chain from the module finds the issuer of each certificate there.
     $cas = 0
     foreach ($authority in $pki.authorities) {
         if (-not $authority.issuerId) { continue }

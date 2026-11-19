@@ -11,10 +11,6 @@ accreditation of signature software, in one folder.
 | [`playbooks/`](playbooks) | `indecopi-checklist.md`, every item of the guide's annex B and what shows it, and `indecopi-guia-v4.json`, the playbook the TestBench runs |
 | [`tools/indecopi.py`](tools/indecopi.py) | Writes that playbook |
 
-The accredited configuration of the guide's sections 4.2 to 4.4 — `SimpleSign.Peru.Iofe.Accredited`, its CLI extension
-(`simplesign iofe sign|verify|view`), the manuals the guide asks for, the audit walk-through and the script that runs
-annex B — is in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), built on these packages. It was in this folder up to SimpleSign 0.14.0.
-
 The tests are in `tests/unit/Extensions/Peru/Iofe` (and `IofeTrustedListIntegrationTests` in `tests/integration`, which
 reads INDECOPI's real list).
 

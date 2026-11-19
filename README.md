@@ -48,7 +48,6 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
-| `SimpleSign.Peru.Iofe.Accredited` | The configuration INDECOPI's accreditation guide asks for (sections 4.2–4.4), with its CLI extension `SimpleSign.Peru.Iofe.Accredited.Cli`: in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited) since SimpleSign 0.14, built on these packages |
 | `SimpleSign.Peru.Iofe.Cli` | IOFE for the `simplesign` command line, as an extension: `simplesign extension install SimpleSign.Peru.Iofe.Cli` |
 | `SimpleSign.Brazil.Cli` | ICP-Brasil, Gov.br and Lei 14.063 for the command line, as an extension: `--profile icp-brasil`, `simplesign brasil sign` |
 | `SimpleSign.Europe.Eidas.Cli` | eIDAS for the command line, as an extension: `--profile eidas` |

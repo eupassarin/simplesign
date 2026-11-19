@@ -4,7 +4,7 @@
     <AssemblyName>SimpleSign.Peru.Iofe.Cli</AssemblyName>
     <RootNamespace>SimpleSign.Peru.Iofe.Cli</RootNamespace>
     <PackageId>SimpleSign.Peru.Iofe.Cli</PackageId>
-    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets and --tsl-profile iofe. The accredited configuration of INDECOPI's guide ('simplesign iofe sign|verify|view') comes with SimpleSign.Peru.Iofe.Accredited.Cli.</Description>
+    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets and --tsl-profile iofe.</Description>
     <PackageTags>iofe;indecopi;peru;simplesign;cli;extension</PackageTags>
     <Version>0.15.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

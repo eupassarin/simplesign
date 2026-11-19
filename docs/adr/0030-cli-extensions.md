@@ -20,7 +20,7 @@ The library already had the right shape (ADR 0009, ADR 0029: `ICountryExtension`
 
 - **`src/TrustFrameworks` becomes `src/Extensions`**, and a framework's folder holds everything that is its own: its
   packages, its CLI extension, its documentation, its playbooks and their generator. Peru (IOFE) is the first laid
-  out this way: `src/Extensions/Peru/Iofe/{SimpleSign.Peru.Iofe, SimpleSign.Peru.Iofe.Accredited,
+  out this way: `src/Extensions/Peru/Iofe/{SimpleSign.Peru.Iofe,
   SimpleSign.Peru.Iofe.Cli, docs, playbooks, tools}`. Package, assembly and namespace names do not change.
 - **The CLI has an extension contract**, `SimpleSign.Cli.Extensibility` (`ICliExtension`): an extension adds
   commands (Spectre.Console.Cli), trust profiles (`--profile`), signing and validation policies by name

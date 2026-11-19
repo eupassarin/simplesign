@@ -69,16 +69,6 @@ public sealed class IofeCliExtensionTests : IDisposable
         }
     }
 
-    [Fact]
-    public async Task IofeCommands_AreNotThisExtensions()
-    {
-        // simplesign iofe sign|verify|view come with SimpleSign.Peru.Iofe.Accredited.Cli, from the accredited package's
-        // repository; two extensions adding the same group would list it twice.
-        var (exit, _) = await RunAsync("iofe", "sign", "--help");
-
-        exit.ShouldNotBe(0);
-    }
-
     [Theory]
     [InlineData("signing", "iofe", "INDECOPI")]
     [InlineData("validation", "iofe", "INDECOPI")]
