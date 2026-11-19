@@ -583,6 +583,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // it used goes to the policy, which tells a revoked CA from a revoked signer.
         var chainCrls = new List<byte[]>();
         var chainOcsps = new List<byte[]>();
+        DateTimeOffset? expiredNextUpdate = null;
         if (await CheckChainRevocationAsync(
             cmsData, chainCertificates, embeddedCrls, embeddedOcsps, provenTime, revocationSource, chainAnchored || chainTrustWarning, warnings, cancellationToken).ConfigureAwait(false) is { } chainRevocation)
         {
@@ -602,6 +603,11 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             {
                 (notRevoked, revocationSource) = (true, RevocationSource.CertificateChain);
             }
+            else if (signerUndecided)
+            {
+                // Still unknown: say whether only data past its nextUpdate was found (TRY_LATER), not none.
+                expiredNextUpdate = chainRevocation.ExpiredDataNextUpdate;
+            }
         }
 
         var evaluation = ValidationPolicyEvaluator.Evaluate(new ValidationFacts
@@ -617,6 +623,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             RevocationSource = revocationSource,
             // A live OCSP answer is issued now; for the other sources the issue time is not reported yet.
             RevocationIssuedAt = revocationSource == RevocationSource.OnlineOcsp ? DateTimeOffset.UtcNow : null,
+            RevocationExpiredNextUpdate = expiredNextUpdate,
             IsDocumentTimestamp = false,
             IsTsaTrusted = timestamp.IsTsaTrusted,
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,

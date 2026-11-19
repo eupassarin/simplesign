@@ -110,6 +110,42 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_RevocationUnknownWithOnlyExpiredData_IndeterminateTryLater()
+    {
+        var nextUpdate = new DateTimeOffset(2026, 11, 18, 12, 0, 0, TimeSpan.Zero);
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { IsNotRevoked = false, RevocationSource = RevocationSource.Indeterminate, RevocationExpiredNextUpdate = nextUpdate },
+            ValidationPolicy.Default);
+
+        // Data past its nextUpdate is not fresh (EN 319 102-1 §5.2.5.4): TRY_LATER (§5.2.6.4 1a), and still not valid.
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.TryLater);
+        var available = evaluation.Constraints.Single(c => c.Id == SigningCertificate + "/RevocationDataAvailable");
+        available.Status.ShouldBe(ConstraintStatus.Failed);
+        available.SubIndication.ShouldBe(SignatureSubIndication.TryLater);
+        available.Message.ShouldContain("2026-11-18 12:00");
+        evaluation.Constraints.ShouldContain(c => c.Id == SigningCertificate + "/AcceptableRevocationDataFound"
+            && c.Status == ConstraintStatus.Failed && c.SubIndication == SignatureSubIndication.TryLater);
+    }
+
+    [Fact]
+    public void Evaluate_ExpiredDataWithRevocationDataAvailableIgnored_DoesNotFailOnIt()
+    {
+        // The level of RevocationDataAvailable still decides whether data that cannot be used matters.
+        var policy = ValidationPolicy.Default
+            .With(SigningCertificate + "/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore))
+            .With(SigningCertificate + "/AcceptableRevocationDataFound", new PolicyConstraint(ConstraintLevel.Ignore));
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { IsNotRevoked = false, RevocationSource = RevocationSource.Indeterminate, RevocationExpiredNextUpdate = DateTimeOffset.UtcNow.AddDays(-1) },
+            policy);
+
+        evaluation.Constraints.ShouldNotContain(c => c.Id == SigningCertificate + "/RevocationDataAvailable");
+        evaluation.SubIndication.ShouldNotBe(SignatureSubIndication.TryLater);
+    }
+
+    [Fact]
     public void Evaluate_Sha1WithoutProofOfExistence_IndeterminateCryptoNoPoe()
     {
         var evaluation = ValidationPolicyEvaluator.Evaluate(Facts() with { DigestAlgorithmOid = Sha1 }, ValidationPolicy.Default);

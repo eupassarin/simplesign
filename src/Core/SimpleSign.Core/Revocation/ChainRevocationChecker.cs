@@ -72,12 +72,14 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         var status = ChainRevocationStatus.Good;
         DateTimeOffset? issuedAt = null;
         var used = new List<RevocationData>();
+        var expiredOnly = new ExpiredOnly();
         for (int i = 0; i < chain.Count - 1; i++)
         {
             var certificate = chain[i];
             var issuer = chain[i + 1];
+            var expired = new ExpiredData();
             var (certStatus, issued, data) = await CheckCertificateAsync(
-                certificate, issuer, chain, time, embeddedCrls, embeddedOcsps, allowOnline, cancellationToken).ConfigureAwait(false);
+                certificate, issuer, chain, time, embeddedCrls, embeddedOcsps, allowOnline, expired, cancellationToken).ConfigureAwait(false);
             if (data is not null)
             {
                 used.Add(data);
@@ -95,7 +97,9 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             }
             else if (certStatus == ChainRevocationStatus.Unknown)
             {
-                messages.Add($"[{name}] Revocation status could not be established (no valid CRL or OCSP response).");
+                messages.Add(expiredOnly.Add(expired.Latest) is { } next
+                    ? $"[{name}] Revocation status could not be established: the only revocation data found expired (nextUpdate {next:yyyy-MM-dd HH:mm:ss}Z); newer data may settle it."
+                    : $"[{name}] Revocation status could not be established (no valid CRL or OCSP response).");
                 if (status != ChainRevocationStatus.Revoked)
                 {
                     status = ChainRevocationStatus.Unknown;
@@ -103,13 +107,62 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             }
         }
 
-        return new ChainRevocationResult(status, messages) { IssuedAt = issuedAt, Crls = Of(used, ocsp: false), Ocsps = Of(used, ocsp: true) };
+        return new ChainRevocationResult(status, messages)
+        {
+            IssuedAt = issuedAt,
+            Crls = Of(used, ocsp: false),
+            Ocsps = Of(used, ocsp: true),
+            ExpiredDataNextUpdate = status == ChainRevocationStatus.Unknown ? expiredOnly.NextUpdate : null,
+        };
     }
 
     private static List<byte[]> Of(List<RevocationData> used, bool ocsp) => [.. used.Where(d => d.Ocsp == ocsp).Select(d => d.Bytes)];
 
     /// <summary>The CRL or OCSP response a status came from.</summary>
     private sealed record RevocationData(bool Ocsp, byte[] Bytes);
+
+    /// <summary>
+    /// The revocation data of one certificate that applied to it, its signature verified, but had expired (its nextUpdate
+    /// passed) at the time: never used for a status, only kept to tell "not fresh" (TRY_LATER) from "none".
+    /// </summary>
+    private sealed class ExpiredData
+    {
+        /// <summary>The latest nextUpdate of the expired data found; null when none was found.</summary>
+        public DateTimeOffset? Latest { get; private set; }
+
+        public void Add(DateTimeOffset? nextUpdate)
+        {
+            if (nextUpdate is { } next && (Latest is null || next > Latest))
+            {
+                Latest = next;
+            }
+        }
+    }
+
+    /// <summary>Whether every certificate whose status is unknown had expired data, and the latest of their nextUpdates.</summary>
+    private sealed class ExpiredOnly
+    {
+        private DateTimeOffset? _latest;
+        private bool _withoutData;
+
+        /// <summary>The latest nextUpdate when every unknown certificate had only expired data; null otherwise.</summary>
+        public DateTimeOffset? NextUpdate => _withoutData ? null : _latest;
+
+        /// <summary>Records a certificate whose status is unknown; returns <paramref name="expired"/>.</summary>
+        public DateTimeOffset? Add(DateTimeOffset? expired)
+        {
+            if (expired is not { } next)
+            {
+                _withoutData = true;
+            }
+            else if (_latest is null || next > _latest)
+            {
+                _latest = next;
+            }
+
+            return expired;
+        }
+    }
 
     private async Task<(ChainRevocationStatus Status, DateTimeOffset? IssuedAt, RevocationData? Data)> CheckCertificateAsync(
         X509Certificate2 certificate,
@@ -119,12 +172,13 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         IReadOnlyList<byte[]> embeddedCrls,
         IReadOnlyList<byte[]> embeddedOcsps,
         bool allowOnline,
+        ExpiredData expired,
         CancellationToken cancellationToken)
     {
         bool ocspFirst = Strategy == Validation.RevocationStrategy.OcspFirst;
         var embedded = ocspFirst
-            ? EmbeddedOcsp(certificate, issuer, time, embeddedOcsps) ?? EmbeddedCrl(certificate, issuer, time, embeddedCrls)
-            : EmbeddedCrl(certificate, issuer, time, embeddedCrls) ?? EmbeddedOcsp(certificate, issuer, time, embeddedOcsps);
+            ? EmbeddedOcsp(certificate, issuer, time, embeddedOcsps, expired) ?? EmbeddedCrl(certificate, issuer, time, embeddedCrls, expired)
+            : EmbeddedCrl(certificate, issuer, time, embeddedCrls, expired) ?? EmbeddedOcsp(certificate, issuer, time, embeddedOcsps, expired);
         if (embedded is { } found)
         {
             return found;
@@ -136,25 +190,26 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         }
 
         var first = ocspFirst
-            ? await OnlineOcspAsync(certificate, chain, time, cancellationToken).ConfigureAwait(false)
-            : await OnlineCrlAsync(certificate, issuer, time, useCache: true, cancellationToken).ConfigureAwait(false);
+            ? await OnlineOcspAsync(certificate, chain, time, expired, cancellationToken).ConfigureAwait(false)
+            : await OnlineCrlAsync(certificate, issuer, time, useCache: true, expired, cancellationToken).ConfigureAwait(false);
         if (first is not null || !Fallback)
         {
             return first ?? (ChainRevocationStatus.Unknown, null, null);
         }
 
         return (ocspFirst
-            ? await OnlineCrlAsync(certificate, issuer, time, useCache: true, cancellationToken).ConfigureAwait(false)
-            : await OnlineOcspAsync(certificate, chain, time, cancellationToken).ConfigureAwait(false))
+            ? await OnlineCrlAsync(certificate, issuer, time, useCache: true, expired, cancellationToken).ConfigureAwait(false)
+            : await OnlineOcspAsync(certificate, chain, time, expired, cancellationToken).ConfigureAwait(false))
             ?? (ChainRevocationStatus.Unknown, null, null);
     }
 
     private (ChainRevocationStatus Status, DateTimeOffset? IssuedAt, RevocationData? Data)? EmbeddedCrl(
-        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, IReadOnlyList<byte[]> embeddedCrls)
+        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, IReadOnlyList<byte[]> embeddedCrls, ExpiredData expired)
     {
         foreach (var crl in embeddedCrls)
         {
-            var crlStatus = CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger);
+            var crlStatus = CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger, out var expiredNextUpdate);
+            expired.Add(expiredNextUpdate);
             if (crlStatus != CrlStatus.NotApplicable)
             {
                 return (crlStatus == CrlStatus.Revoked ? ChainRevocationStatus.Revoked : ChainRevocationStatus.Good, CrlEvaluator.ReadThisUpdate(crl), new RevocationData(false, crl));
@@ -165,13 +220,14 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
     }
 
     private (ChainRevocationStatus Status, DateTimeOffset? IssuedAt, RevocationData? Data)? EmbeddedOcsp(
-        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, IReadOnlyList<byte[]> embeddedOcsps)
+        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, IReadOnlyList<byte[]> embeddedOcsps, ExpiredData expired)
     {
         foreach (var ocsp in embeddedOcsps)
         {
             try
             {
-                bool? good = _ocspClient.CheckEmbeddedOcspResponse(certificate, issuer, ocsp, time);
+                bool? good = _ocspClient.CheckEmbeddedOcspResponse(certificate, issuer, ocsp, time, out var expiredNextUpdate);
+                expired.Add(expiredNextUpdate);
                 if (good is not null)
                 {
                     return (good.Value ? ChainRevocationStatus.Good : ChainRevocationStatus.Revoked, OcspClient.ReadProducedAt(ocsp), new RevocationData(true, ocsp));
@@ -202,11 +258,13 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         DateTimeOffset? issuedAt = null;
         var crls = new List<byte[]>();
         var ocsps = new List<byte[]>();
+        var expiredOnly = new ExpiredOnly();
         for (int i = 0; i < chain.Count - 1; i++)
         {
             var certificate = chain[i];
-            var (certStatus, issued, data) = await OnlineOcspAsync(certificate, chain, now, cancellationToken).ConfigureAwait(false)
-                ?? await OnlineCrlAsync(certificate, chain[i + 1], now, useCache: false, cancellationToken).ConfigureAwait(false)
+            var expired = new ExpiredData();
+            var (certStatus, issued, data) = await OnlineOcspAsync(certificate, chain, now, expired, cancellationToken).ConfigureAwait(false)
+                ?? await OnlineCrlAsync(certificate, chain[i + 1], now, useCache: false, expired, cancellationToken).ConfigureAwait(false)
                 ?? (ChainRevocationStatus.Unknown, null, null);
             if (data is not null)
             {
@@ -226,7 +284,9 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             }
             else if (certStatus == ChainRevocationStatus.Unknown)
             {
-                messages.Add($"[{name}] Revocation status could not be established (no answer from the OCSP responder and no valid CRL).");
+                messages.Add(expiredOnly.Add(expired.Latest) is { } next
+                    ? $"[{name}] Revocation status could not be established: the only revocation data found expired (nextUpdate {next:yyyy-MM-dd HH:mm:ss}Z); newer data may settle it."
+                    : $"[{name}] Revocation status could not be established (no answer from the OCSP responder and no valid CRL).");
                 if (status != ChainRevocationStatus.Revoked)
                 {
                     status = ChainRevocationStatus.Unknown;
@@ -234,12 +294,18 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             }
         }
 
-        return new ChainRevocationResult(status, messages) { IssuedAt = issuedAt, Crls = crls, Ocsps = ocsps };
+        return new ChainRevocationResult(status, messages)
+        {
+            IssuedAt = issuedAt,
+            Crls = crls,
+            Ocsps = ocsps,
+            ExpiredDataNextUpdate = status == ChainRevocationStatus.Unknown ? expiredOnly.NextUpdate : null,
+        };
     }
 
     /// <summary>The status from the certificate's CRL distribution point and the CRL's thisUpdate; null when there is no usable CRL.</summary>
     private async Task<(ChainRevocationStatus Status, DateTimeOffset? IssuedAt, RevocationData? Data)?> OnlineCrlAsync(
-        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, bool useCache, CancellationToken cancellationToken)
+        X509Certificate2 certificate, X509Certificate2 issuer, DateTimeOffset time, bool useCache, ExpiredData expired, CancellationToken cancellationToken)
     {
         string? crlUrl = CrlClient.GetCrlUri(certificate, _logger)?.AbsoluteUri
             ?? (_outboundPolicy.AllowLdap ? CrlClient.GetCrlUrls(certificate, _logger).FirstOrDefault(LdapCrlClient.IsLdapUrl) : null);
@@ -248,7 +314,9 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
             return null;
         }
 
-        return CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger) switch
+        var crlStatus = CrlEvaluator.Evaluate(certificate, crl, issuer, time, _logger, out var expiredNextUpdate);
+        expired.Add(expiredNextUpdate);
+        return crlStatus switch
         {
             CrlStatus.Revoked => (ChainRevocationStatus.Revoked, CrlEvaluator.ReadThisUpdate(crl), new RevocationData(false, crl)),
             CrlStatus.Good => (ChainRevocationStatus.Good, CrlEvaluator.ReadThisUpdate(crl), new RevocationData(false, crl)),
@@ -258,7 +326,7 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
 
     /// <summary>The status from the certificate's OCSP responder; null when it gives no usable answer.</summary>
     private async Task<(ChainRevocationStatus Status, DateTimeOffset? IssuedAt, RevocationData? Data)?> OnlineOcspAsync(
-        X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain, DateTimeOffset time, CancellationToken cancellationToken)
+        X509Certificate2 certificate, IReadOnlyList<X509Certificate2> chain, DateTimeOffset time, ExpiredData expired, CancellationToken cancellationToken)
     {
         string? ocspUrl = OcspClient.GetOcspUri(certificate)?.AbsoluteUri;
         if (ocspUrl is null)
@@ -284,6 +352,8 @@ public sealed class ChainRevocationChecker : IChainRevocationChecker
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or AsnContentException
             or CryptographicException or InvalidOperationException or InvalidDataException)
         {
+            // An answer past its nextUpdate is not used, only kept to tell that newer data may settle the status.
+            expired.Add(ExpiredOcspResponse.NextUpdateOf(ex));
             return null;
         }
     }

@@ -57,4 +57,17 @@ public sealed record ChainRevocationResult(ChainRevocationStatus Status, IReadOn
 
     /// <summary>The OCSP responses the statuses came from (carried by the signature or fetched).</summary>
     public IReadOnlyList<byte[]> Ocsps { get; init; } = [];
+
+    /// <summary>
+    /// Set when <see cref="Status"/> is <see cref="ChainRevocationStatus.Unknown"/> only because the revocation data found
+    /// was not fresh: for every certificate whose status is unknown, a CRL or OCSP response that applies to it, signed by
+    /// its issuer or an authorized responder, was found, but its nextUpdate had passed at the time. The latest such
+    /// nextUpdate; null otherwise (a certificate with no data at all, or a status that is known).
+    /// </summary>
+    /// <remarks>
+    /// Expired data is never used for a status: it is not in <see cref="Crls"/> or <see cref="Ocsps"/>, and a
+    /// certificate known only from it stays unknown. It tells a validator that newer data may settle the status:
+    /// INDETERMINATE/TRY_LATER instead of CERTIFICATE_CHAIN_GENERAL_FAILURE (EN 319 102-1 §5.2.5.4, §5.2.6.4).
+    /// </remarks>
+    public DateTimeOffset? ExpiredDataNextUpdate { get; init; }
 }

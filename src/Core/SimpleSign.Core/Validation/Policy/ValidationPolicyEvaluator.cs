@@ -39,6 +39,12 @@ internal sealed record ValidationFacts
     /// <summary>The time the revocation data was issued (CRL thisUpdate, OCSP producedAt), or null.</summary>
     public DateTimeOffset? RevocationIssuedAt { get; init; }
 
+    /// <summary>
+    /// When the revocation status is unknown only because the data found was past its nextUpdate (not fresh), the latest
+    /// such nextUpdate (<see cref="Revocation.ChainRevocationResult.ExpiredDataNextUpdate"/>); null otherwise.
+    /// </summary>
+    public DateTimeOffset? RevocationExpiredNextUpdate { get; init; }
+
     /// <summary>The signing time claimed in the signature (signing-time, SigningTime, PDF /M), or null when absent or unknown.</summary>
     public DateTimeOffset? ClaimedSigningTime { get; init; }
 
@@ -519,7 +525,11 @@ internal static class ValidationPolicyEvaluator
                     path.EndsWith("/SigningCertificate", StringComparison.Ordinal) && facts.IsNotRevoked is not null
                         ? facts.RevocationSource is not (RevocationSource.None or RevocationSource.Indeterminate)
                         : null,
-                    "Acceptable revocation data was found.", "No acceptable revocation data was found.", I, NoData);
+                    "Acceptable revocation data was found.",
+                    facts.RevocationExpiredNextUpdate is { } next
+                        ? $"No acceptable revocation data was found: the data found expired (nextUpdate {next:yyyy-MM-dd HH:mm} UTC)."
+                        : "No acceptable revocation data was found.",
+                    I, facts.RevocationExpiredNextUpdate is null ? NoData : S);
                 return;
             }
 
@@ -868,8 +878,12 @@ internal static class ValidationPolicyEvaluator
                 default:
                     if (facts.RevocationSource is RevocationSource.None or RevocationSource.Indeterminate)
                     {
-                        Check(path + "/RevocationDataAvailable", false, "", "The revocation status could not be established.",
-                            SignatureIndication.Indeterminate, NoData);
+                        // Data past its nextUpdate is not fresh (§5.2.5.4) and is never used, but it was found: newer data
+                        // may settle the status, so TRY_LATER (§5.2.6.4 1a), not CERTIFICATE_CHAIN_GENERAL_FAILURE.
+                        Check(path + "/RevocationDataAvailable", false, "", facts.RevocationExpiredNextUpdate is { } next
+                                ? $"The revocation status could not be established: the only revocation data found is not fresh (its nextUpdate, {next:yyyy-MM-dd HH:mm} UTC, has passed). Try again later with newer data."
+                                : "The revocation status could not be established.",
+                            SignatureIndication.Indeterminate, facts.RevocationExpiredNextUpdate is null ? NoData : SignatureSubIndication.TryLater);
                         return;
                     }
 
