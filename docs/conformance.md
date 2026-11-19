@@ -34,7 +34,7 @@ SimpleSign is designed with PDF 2.0 alignment in mind. The digital signature sub
 
 | Feature | 32000-2 Requirement | Status | Notes |
 |---|---|---|---|
-| **SubFilter** | `ETSI.CAdES.detached` as default | ✅ | `adbe.pkcs7.detached` remains available while retaining PAdES attributes |
+| **SubFilter** | `ETSI.CAdES.detached` as default | ✅ | `adbe.pkcs7.detached` remains available while retaining PAdES attributes, but is not a PAdES baseline signature (see [SubFilter Support](#subfilter-support)) |
 | **Cross-reference streams** | Xref streams required (classic deprecated) | ✅ | Full support: `/Type /XRef`, `/W`, `/Index`, ObjStm, FlateDecode, PNG predictors |
 | **Hash algorithms** | SHA-256/384/512 required; MD5 deprecated | ✅ | SHA-256 default; MD5 rejected at signing time |
 | **DSS dictionary** | Formalized in §12.8.4.3 | ✅ | CRLs, OCSPs, Certs extraction and embedding |
@@ -85,12 +85,24 @@ See [inspection and validation](articles/inspection-validation.md) for these dis
 | **eIDAS** (EU, Regulation 910/2014) | Trust anchors, qualification and policies | ✅ | `SimpleSign.Europe.Eidas`: anchors from the EU LOTL and its national lists (signers bundled, pivot LOTLs followed, service history, kept current by `EidasTrustedListSource`); the qualification of each signature (ETSI TS 119 615 + TS 119 172-4: QESig, QESeal, AdESig-QC…) and of its time-stamps, in the results and the ETSI report; `EidasPolicies`. The items in [eidas-checklist.md](../src/Extensions/Europe/Eidas/playbooks/eidas-checklist.md), the automated ones run by the `eidas-baseline` playbook ([eidas.md](../src/Extensions/Europe/Eidas/docs/eidas.md)). Not covered: PSD2 roles, QWACs |
 | **IOFE** (Peru, Ley 27269) | Trust anchors and policies | ✅ | `SimpleSign.Peru.Iofe.Accredited`: the configuration of the guide's sections 4.2–4.4 with nothing to relax (key in a PKCS#11 module, fixed policy, audit, transactions, notice to the sender, pinned TSA); the release is not code-signed yet (Req. 17, 27). `SimpleSign.Peru.Iofe`: anchors from INDECOPI's signed trusted list (TS 102 231 v3, its `unspecified` TSAs, no code-signing certificate), kept current (`IofeTrustedListSource`), checked against the real list; `IofePolicies` for the *Guía de Acreditación* v4.0, every annex B item mapped in [indecopi-checklist.md](../src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md) and the automated ones run by the `indecopi-guia-v4` playbook ([iofe.md](../src/Extensions/Peru/Iofe/docs/iofe.md)). Not covered: data of Peruvian certificates (DNI/RUC) and the DNIe middleware |
 
+## ETSI Signatures Conformance Checker
+
+The structure of the signatures SimpleSign makes is also checked by ETSI's own tool, the
+[ETSI Signatures Conformance Checker](https://signatures-conformance-checker.etsi.org). It checks each PAdES, CAdES
+and XAdES sample against the baseline profile of its format: EN 319 142-1, EN 319 122-1 and EN 319 132-1. The corpus
+covers every level and the ways of reaching it: other keys and paddings, a counter-signature, an augmentation, an
+archive renewal and a two-phase signature. The checker looks at structure, not trust.
+
+The test that runs it is `SimpleSign.EtsiChecker.Tests`. It needs an account at the checker, so it runs by hand, not
+in CI. What the checker said is kept in [conformance/etsi-checker](conformance/etsi-checker/README.md), with the
+latest results in [summary.md](conformance/etsi-checker/summary.md).
+
 ## SubFilter Support
 
 | SubFilter | Sign | Inspect | Validate | Notes |
 |---|---|---|---|---|
 | `ETSI.CAdES.detached` | ✅ (default) | ✅ | ✅ | Modern ETSI standard |
-| `adbe.pkcs7.detached` | ✅ | ✅ | ✅ | Compatibility subfilter with PAdES attributes |
+| `adbe.pkcs7.detached` | ✅ | ✅ | ✅ | Compatibility subfilter with PAdES attributes; not a PAdES baseline signature (EN 319 142-1 allows only `ETSI.CAdES.detached`): inspection reports `CmsOnly`, signing warns `SubFilterNotBaseline` |
 | `ETSI.RFC3161` | ✅ | ✅ | ✅ | Document timestamps (B-LTA) |
 
 ## Supported Algorithms

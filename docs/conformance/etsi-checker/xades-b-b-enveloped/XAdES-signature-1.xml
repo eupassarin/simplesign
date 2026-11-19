@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <SignedInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+      <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child http://www.w3.org/2000/09/xmldsig#::SignedInfo: 1. Instances found: 1</CheckSuccess>
+      <Reference index="1">
+         <DigestValue>
+            <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
+            <CheckSuccess check="CheckSignedInfoReference" testedBy="Tool" xmlns="">The digest computed value is the same as the present digest value: 'OsQi3QBkcTGfsN5B7iFe4ry83+/qDhGm4JFdZ401kHI='</CheckSuccess>
+         </DigestValue>
+      </Reference>
+      <Reference index="2">
+         <DigestValue>
+            <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
+            <CheckSuccess check="CheckSignedInfoReference" testedBy="Tool" xmlns="">The digest computed value is the same as the present digest value: 'uJEnOMUllKwoLVbl6IeoeTM+A1wKLcxkxxoCcMjYp0Y='</CheckSuccess>
+         </DigestValue>
+      </Reference>
+   </SignedInfo>
+   <KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#">
+      <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child http://www.w3.org/2000/09/xmldsig#::KeyInfo: 0..1. Instances found: 1</CheckSuccess>
+      <CheckSuccess check="CheckIfSignerCertIsInKeyInfo" testedBy="Tool" xmlns=""/>
+      <X509Data index="1">
+         <X509Certificate index="1">
+            <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
+            <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber" xmlns="">85641899249173795219718930760616274813</Value>
+            <Value field="Subject" xmlns="">CN=SimpleSign Synthetic Signer, O=SimpleSign Tests</Value>
+            <Value field="NotBefore" xmlns="">Tue Nov 17 22:16:09 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Wed Nov 17 22:16:09 UTC 2027</Value>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
+         </X509Certificate>
+         <X509Certificate index="2">
+            <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
+            <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber" xmlns="">52790410017019294210311131642313461929</Value>
+            <Value field="Subject" xmlns="">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore" xmlns="">Tue Nov 17 22:16:09 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Mon Nov 17 22:16:09 UTC 2031</Value>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
+         </X509Certificate>
+         <X509Certificate index="3">
+            <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
+            <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber" xmlns="">7628999631337988352</Value>
+            <Value field="Subject" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore" xmlns="">Tue Nov 17 22:16:09 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Mon Nov 17 22:16:09 UTC 2036</Value>
+            <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
+         </X509Certificate>
+      </X509Data>
+      <CheckSuccess check="CheckIfSigningCertIsReferenced" testedBy="Tool" xmlns=""> Digest found in the first Cert element.</CheckSuccess>
+   </KeyInfo>
+   <CheckSuccess check="CheckIfIsXAdESSignature" testedBy="Tool">The signature is a XAdES signature. The SigningCertificateV2 property references the signer's certificate AND SignedProperties is signed by the signature itself.</CheckSuccess>
+   <CheckSuccess check="IsNotDistributedXAdES" testedBy="Tool"> There is one xadesv132:QualifyingProperties element child of one ds:Object AND there is not any xadesv132:QualifyingPropertiesReference element child of a ds:Object.</CheckSuccess>
+   <Object xmlns="http://www.w3.org/2000/09/xmldsig#" index="1"/>
+   <Object xmlns="http://www.w3.org/2000/09/xmldsig#" index="1">
+      <QualifyingProperties xmlns="http://uri.etsi.org/01903/v1.3.2#">
+         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:SignedProperties, xadesv132:UnsignedProperties?</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:SignedProperties</br>
+         </CheckSuccess>
+         <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+            <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Specification: Target Id?</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: Target </br>
+         </CheckSuccess>
+         <SignedProperties>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:SignedSignatureProperties, xadesv132:SignedDataObjectProperties</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:SignedSignatureProperties xadesv132:SignedDataObjectProperties</br>
+            </CheckSuccess>
+            <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+               <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: Id?</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: Id</br>
+            </CheckSuccess>
+            <SignedSignatureProperties>
+               <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:SigningTime, xadesv132:SigningCertificateV2, xadesv132:SignaturePolicyIdentifier?, xadesv132:SignatureProductionPlaceV2?, xadesv132:SignerRoleV2?</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:SigningTime xadesv132:SigningCertificateV2</br>
+               </CheckSuccess>
+               <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: Id?</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: </br>
+               </CheckSuccess>
+               <SigningTime>
+                  <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
+                  <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
+                  <CheckSuccess check="CheckIfValueIsXMLDateTime" testedBy="Tool" xmlns=""/>
+                  <Value xmlns="">2026-11-18T22:17:12Z</Value>
+               </SigningTime>
+               <SigningCertificateV2>
+                  <CheckSuccess check="CheckIfSigningCertIsReferenced" testedBy="Tool" xmlns=""> Digest found in the first Cert element.</CheckSuccess>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:Cert+</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:Cert</br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
+                  <Cert index="1">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:CertDigest, xadesv132:IssuerSerialV2?</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:CertDigest xadesv132:IssuerSerialV2</br>
+                     </CheckSuccess>
+                     <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: URI?</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: </br>
+                     </CheckSuccess>
+                     <Attribute_URI/>
+                     <CertDigest>
+                        <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                           <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                           <br xmlns="http://www.w3.org/1999/xhtml">Specification: ds:DigestMethod ds:DigestValue</br>
+                           <br xmlns="http://www.w3.org/1999/xhtml">Elements found: ds:DigestMethod ds:DigestValue</br>
+                        </CheckSuccess>
+                        <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
+                        <DigestMethod xmlns="http://www.w3.org/2000/09/xmldsig#">
+                           <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
+                           <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+                              <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Specification: Algorithm</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: Algorithm </br>
+                           </CheckSuccess>
+                           <Attribute_Algorithm xmlns="http://uri.etsi.org/01903/v1.3.2#">
+                              <CheckSuccess check="MustBeUri" testedBy="Tool" xmlns="">Value found: 'http://www.w3.org/2001/04/xmlenc#sha256'</CheckSuccess>
+                           </Attribute_Algorithm>
+                        </DigestMethod>
+                        <DigestValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+                           <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
+                           <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
+                           <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns="">Value found 74ltfyZs1U6EPznA+ajEjCkc/uR6qGAnT+nYbSmf0vU=</CheckSuccess>
+                           <Value xmlns="">74ltfyZs1U6EPznA+ajEjCkc/uR6qGAnT+nYbSmf0vU=</Value>
+                           <CheckSuccess check="ReportValue" testedBy="Tool" xmlns="">Value found: 74ltfyZs1U6EPznA+ajEjCkc/uR6qGAnT+nYbSmf0vU=</CheckSuccess>
+                        </DigestValue>
+                     </CertDigest>
+                  </Cert>
+               </SigningCertificateV2>
+               <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child SignatureProductionPlaceV2: 0..1. Instances found: 0</CheckSuccess>
+            </SignedSignatureProperties>
+            <SignedDataObjectProperties>
+               <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:DataObjectFormat*, xadesv132:CommitmentTypeIndication*, xadesv132:AllDataObjectsTimeStamp*, xadesv132:IndividualDataObjectsTimeStamp*</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:DataObjectFormat</br>
+               </CheckSuccess>
+               <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: Id?</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: </br>
+               </CheckSuccess>
+               <Attribute_Id>
+                  <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child : 0..1. Instances found: 0</CheckSuccess>
+               </Attribute_Id>
+               <DataObjectFormat index="1">
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool" xmlns="">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: xadesv132:Description? xadesv132:ObjectIdentifier? xadesv132:MimeType? xadesv132:Encoding?</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: xadesv132:MimeType</br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckSchemaForAttributes" testedBy="Tool" xmlns="">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Present attributes DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: ObjectReference</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: ObjectReference</br>
+                  </CheckSuccess>
+                  <Attribute_ObjectReference>
+                     <CheckSuccess check="CheckIfDOFPointsToReferenceToSignedObject" testedBy="Tool" xmlns="">The xades:DataObjectFormat points to one ds:Reference referencing a signed data object. Value found for attribute ObjectReference: ' #Reference-doc-9226694d'. The pointed ds:Reference is ds:Signature/ds:SignedInfo/ds:Reference[1] (first in sequence is number 1)</CheckSuccess>
+                  </Attribute_ObjectReference>
+                  <MimeType>
+                     <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child MimeType: 1. Instances found: 1</CheckSuccess>
+                     <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
+                     <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
+                     <Value xmlns="">text/xml</Value>
+                     <CheckSuccess check="ReportValue" testedBy="Tool" xmlns="">Value found: text/xml</CheckSuccess>
+                  </MimeType>
+               </DataObjectFormat>
+               <CheckSuccess check="CheckIfDOFsPointToAllReferencesToSignedObjects" testedBy="Tool" xmlns=""> All the ds:Reference elements referencing a signed data object are pointed by one xades:DataObjectFormat AND each xades:DataObjectFormat points to one ds:Reference element referencing a signed data object.</CheckSuccess>
+            </SignedDataObjectProperties>
+         </SignedProperties>
+      </QualifyingProperties>
+   </Object>
+</xcc:ConformanceReports>

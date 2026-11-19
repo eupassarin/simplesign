@@ -12,7 +12,7 @@ namespace SimpleSign.Interop.Tests;
 /// signed attributes and the certificate chain up to the test root (S/MIME signing purpose, no <c>-noverify</c>).
 /// </summary>
 [Trait("Category", "Interop")]
-public sealed class CadesSignerInteropTests(InteropPki pki, ITestOutputHelper output) : IClassFixture<InteropPki>
+public sealed class CadesSignerInteropTests(OfflinePki pki, ITestOutputHelper output) : IClassFixture<OfflinePki>
 {
     private static readonly byte[] Content = Encoding.UTF8.GetBytes("SimpleSign interop: CAdES content\n");
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <CheckFailure check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 75954925658748653744524642438093915510, HAS FAILED. Additional details follow: message-digest attribute value does not match calculated value</CheckFailure>
+   <contentType>
+      <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+   </contentType>
+   <content>
+      <signedData>
+         <signerInfos>
+            <signerInfo>
+               <signedAttrs>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">Children order and number DO MATCH specification</CheckSuccess>
+               </signedAttrs>
+            </signerInfo>
+         </signerInfos>
+      </signedData>
+   </content>
+</xcc:ConformanceReports>

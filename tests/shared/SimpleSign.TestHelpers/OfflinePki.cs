@@ -3,16 +3,15 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
-using SimpleSign.TestHelpers;
 
-namespace SimpleSign.Interop.Tests;
+namespace SimpleSign.TestHelpers;
 
 /// <summary>
-/// The PKI every interop test signs with and every tool trusts: a <see cref="SyntheticPki"/> (root → intermediate →
+/// A PKI that signs with nothing reaching the network, for the interop and conformance tests: a <see cref="SyntheticPki"/> (root → intermediate →
 /// RSA signer), an ECDSA P-256 signer and a TSA under the same intermediate, its CRLs and timestamps answered in memory,
-/// and the certificates and keys written as PEM for the tools (<see cref="Directory"/>). Shared by the tests of a class.
+/// and the certificates and keys written as PEM for external tools (<see cref="Directory"/>). Shared by the tests of a class.
 /// </summary>
-public sealed class InteropPki : IDisposable
+public sealed class OfflinePki : IDisposable
 {
     private const string LeafCrlUrl = "http://198.51.100.1/leaf.crl";
     private const string IntermediateCrlUrl = "http://198.51.100.1/intermediate.crl";
@@ -20,7 +19,7 @@ public sealed class InteropPki : IDisposable
 
     private readonly HttpClient _http;
 
-    public InteropPki()
+    public OfflinePki()
     {
         Pki = new SyntheticPki(crlDistributionPoint: LeafCrlUrl, intermediateCrlDistributionPoint: IntermediateCrlUrl);
         Tsa = Pki.IssueTimestampingCertificate();
@@ -51,7 +50,7 @@ public sealed class InteropPki : IDisposable
         }));
         Http = new SingleClientProvider(_http);
 
-        Directory = Path.Combine(Path.GetTempPath(), $"simplesign-interop-{Guid.NewGuid():N}");
+        Directory = Path.Combine(Path.GetTempPath(), $"simplesign-pki-{Guid.NewGuid():N}");
         System.IO.Directory.CreateDirectory(Directory);
         RootPem = Write("root.pem", Pki.RootCa.ExportCertificatePem());
         ChainPem = Write("chain.pem", Pki.IntermediateCa.ExportCertificatePem());
@@ -93,6 +92,9 @@ public sealed class InteropPki : IDisposable
 
     /// <summary>The ECDSA signer's private key (PKCS#8).</summary>
     public string EcdsaKeyPem { get; }
+
+    /// <summary>This PKI's TSA, for an augmentation.</summary>
+    public TimestampOptions Timestamp => new(TsaUri, Http);
 
     /// <summary>The certificates a signer embeds besides its own.</summary>
     public X509Certificate2[] Chain => Pki.IntermediatesAndRoot();

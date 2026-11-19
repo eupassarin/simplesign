@@ -1,0 +1,1160 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, HAS SUCCEEDED.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, SEEMS TO BE A CAdES SIGNATURE: it is valid and has the contentType, messageDigest and one of the signing certificate reference signed attributes.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, CONTAINS a legal combination of unsigned of signed and unsigned attributes for a CAdES BASELINE signature according to ETSI EN 319 122-1. See below for checking if their cardinalities are correct.</CheckSuccess>
+   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+      <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
+      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: contentType content</br>
+   </CheckSuccess>
+   <contentType>
+      <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+      <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+      <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.7.2</CheckSuccess>
+   </contentType>
+   <content>
+      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Specification: signedData</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signedData</br>
+      </CheckSuccess>
+      <signedData>
+         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Specification: version digestAlgorithms encapContentInfo certificates? crls ? signerInfos</br>
+            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version digestAlgorithms encapContentInfo certificates crls signerInfos</br>
+         </CheckSuccess>
+         <digestAlgorithms>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: digestAlgorithm</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: digestAlgorithm</br>
+            </CheckSuccess>
+            <digestAlgorithm index="1">
+               <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+               </CheckSuccess>
+               <algorithm>
+                  <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+               </algorithm>
+            </digestAlgorithm>
+         </digestAlgorithms>
+         <encapContentInfo>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: eContentType eContent?</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: eContentType eContent</br>
+            </CheckSuccess>
+         </encapContentInfo>
+         <certificates>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificate+</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificate certificate certificate certificate</br>
+            </CheckSuccess>
+            <certificate index="1">
+               <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+               <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+               <Value field="SerialNumber">7628999631337988352</Value>
+               <Value field="Subject">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+               <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2036</Value>
+            </certificate>
+            <certificate index="2">
+               <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+               <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+               <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+               <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+               <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+            </certificate>
+            <certificate index="3">
+               <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+               <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+               <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+               <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+               <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
+               <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+            </certificate>
+            <certificate index="4">
+               <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+               <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+               <Value field="SerialNumber">85641899249173795219718930760616274813</Value>
+               <Value field="Subject">CN=SimpleSign Synthetic Signer, O=SimpleSign Tests</Value>
+               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+               <Value field="NotAfter">Wed Nov 17 22:16:09 UTC 2027</Value>
+            </certificate>
+         </certificates>
+         <crls>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: (crl || other)+</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: crl crl</br>
+            </CheckSuccess>
+            <crl index="1">
+               <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+               <Value field="version">1</Value>
+               <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+               <Value field="thisUpdate">Tue Nov 17 22:16:30 UTC 2026</Value>
+               <Value field="nextUpdate">Fri Dec 18 22:16:30 UTC 2026</Value>
+            </crl>
+            <crl index="2">
+               <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+               <Value field="version">1</Value>
+               <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+               <Value field="thisUpdate">Tue Nov 17 22:16:30 UTC 2026</Value>
+               <Value field="nextUpdate">Fri Dec 18 22:16:30 UTC 2026</Value>
+            </crl>
+         </crls>
+         <signerInfos>
+            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Specification: (signerInfo)+</br>
+               <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signerInfo</br>
+            </CheckSuccess>
+            <signerInfo index="1">
+               <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                  <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Specification: version (issuerAndSerialNumber || subjectKeyIdentifier) digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs?</br>
+                  <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version issuerAndSerialNumber digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs</br>
+               </CheckSuccess>
+               <issuerAndSerialNumber>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: issuer serialNumber</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: issuer serialNumber</br>
+                  </CheckSuccess>
+                  <serialNumber>
+                     <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                  </serialNumber>
+               </issuerAndSerialNumber>
+               <digestAlgorithm>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                  </CheckSuccess>
+                  <algorithm>
+                     <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                  </algorithm>
+               </digestAlgorithm>
+               <signedAttrs>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)+</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute attribute attribute attribute</br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckAllowedAttributes" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: (contentType  || messageDigest || signingTimeUTCTime || SigningTimeGeneralizedTime  || essSigningCertificate  || essSigningCertificateV2  || commitmentTypeIndication || contentHints  || signerLocation  || signerAttributes  || signerAttributesV2 || contentTimeStamp || signaturePolicyId || contentReference  || contentIdentifier)*</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: contentType signingTimeUTCTime messageDigest essSigningCertificateV2 </br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckAttributesCardinality" testedBy="Tool"> The cardinalities of all the attributes match their respective specifications</CheckSuccess>
+                  <CheckSuccess check="CheckOnlyOneAttrOfTheListPresent" testedBy="Tool"> Only one of the attributes in the following list have to be present: essSigningCertificate essSigningCertificateV2 . The attribute essSigningCertificateV2  has been found</CheckSuccess>
+                  <CheckSuccess check="CheckOnlyOneAttrOfTheListPresent" testedBy="Tool"> Only one of the attributes in the following list have to be present: signingTimeUTCTime signingTimeGeneralizedTime . The attribute signingTimeUTCTime  has been found</CheckSuccess>
+                  <attribute index="1">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.3</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <contentType index="1">
+                           <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OID. Tag value found: 6. Value found: 1.2.840.113549.1.7.1</CheckSuccess>
+                        </contentType>
+                     </attrValues>
+                  </attribute>
+                  <attribute index="2">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.5</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <signingTimeUTCTime index="1">
+                           <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) UTCTime. Tag value found: 23. Value found: 261118221641GMT+00:00</CheckSuccess>
+                        </signingTimeUTCTime>
+                     </attrValues>
+                  </attribute>
+                  <attribute index="3">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.4</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <messageDigest index="1">
+                           <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OCTET STRING. Tag value found: 4</CheckSuccess>
+                        </messageDigest>
+                     </attrValues>
+                  </attribute>
+                  <attribute index="4">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.47</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <essSigningCertificateV2 index="1">
+                           <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                              <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs policies?</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                           </CheckSuccess>
+                           <certs>
+                              <essCertIDV2 index="1">
+                                 <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashAlgorithm? certHash issuerSerial?</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash issuerSerial</br>
+                                 </CheckSuccess>
+                                 <certHash>
+                                    <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                 </certHash>
+                                 <issuerSerial>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: issuer serialNumber</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: issuer serialNumber</br>
+                                    </CheckSuccess>
+                                 </issuerSerial>
+                              </essCertIDV2>
+                           </certs>
+                        </essSigningCertificateV2>
+                     </attrValues>
+                  </attribute>
+               </signedAttrs>
+               <unsignedAttrs>
+                  <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)*</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute attribute attribute</br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckAllowedAttributes" testedBy="Tool">
+                     <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Specification: (signatureTimeStamp*  || counterSignature* || signaturePolicyStore || completeCertificateRefs  || completeRevocationRefs  || attributeCertificateReferences  || attributeRevocationReferences || cadesCTimeStamp*  || timeStampedCertCRLsReferences*  || certificateValues* || revocationValues* || archiveTimeStampV3*  || archiveTimeStampV2*)*</br>
+                     <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signatureTimeStamp archiveTimeStampV3 archiveTimeStampV3 </br>
+                  </CheckSuccess>
+                  <CheckSuccess check="CheckAttributesCardinality" testedBy="Tool"> The cardinalities of all the attributes match their respective specifications</CheckSuccess>
+                  <attribute index="1">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.14</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <signatureTimeStamp index="1">
+                           <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
+                           <Value field="sid.SerialNumber">21149756606269829945436664107069721478</Value>
+                           <Value field="genTime">Mon Jan 01 00:00:00 UTC 2024</Value>
+                           <Value field="ordering">false</Value>
+                           <Value field="policy">1.2.3.4</Value>
+                           <Value field="serialNumber">1</Value>
+                           <Value field="nonce">221842529942623281802232054137071386224</Value>
+                           <Trace contribution="0" contributionFrom="signature" what="MssImprintPart">a73b99d7d446f4713884f9dba3098dd5a71e624365125d774223e9cd849b00ae3505ed2e9c84cd0f6622ec99bb44e633fc499e87b1f36f049c0e966736d0f482db39c6522d80ce11762de78ec5d86916b4bbfc1c1a70f8486967a3b7d916c56f758dddc13ced310e0c9161fecd16fcdd85fc0fdda31dbc4606a00e00625e60ba191cd1b1a66ba2576ee6da4a6e88cbd0b2b1809d6d60d2515d0f3c1ee7d8c7341a102513ccb3fd1ec68d0ef5fc8ec008b9292f51f93e38516366af8509754260f373c38c6b5beac07d78fcadf8d557f03a1775b517e1bffb81fe7c0d4c204f97185bbe550578c7b672040375cf8f8b0c7dadd553aedcb3ddc583e9f23c2007d4</Trace>
+                           <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  fb260a52edb22eace4984a83608d4c179b7b5f9a8b1e79f06547df19dbb5f61f</CheckSuccess>
+                           <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                              <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Elements found: contentType content</br>
+                           </CheckSuccess>
+                           <contentType>
+                              <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                              <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+                              <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.7.2</CheckSuccess>
+                           </contentType>
+                           <content>
+                              <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Specification: signedData</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signedData</br>
+                              </CheckSuccess>
+                              <signedData>
+                                 <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Specification: version digestAlgorithms encapContentInfo certificates? crls ? signerInfos</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version digestAlgorithms encapContentInfo certificates signerInfos</br>
+                                 </CheckSuccess>
+                                 <digestAlgorithms>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: digestAlgorithm</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: digestAlgorithm</br>
+                                    </CheckSuccess>
+                                    <digestAlgorithm index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                       </CheckSuccess>
+                                       <algorithm>
+                                          <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                       </algorithm>
+                                    </digestAlgorithm>
+                                 </digestAlgorithms>
+                                 <encapContentInfo>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: eContentType eContent?</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: eContentType eContent</br>
+                                    </CheckSuccess>
+                                 </encapContentInfo>
+                                 <certificates>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificate+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificate certificate</br>
+                                    </CheckSuccess>
+                                    <certificate index="1">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+                                    </certificate>
+                                    <certificate index="2">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+                                    </certificate>
+                                 </certificates>
+                                 <signerInfos>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: (signerInfo)+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signerInfo</br>
+                                    </CheckSuccess>
+                                    <signerInfo index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: version (issuerAndSerialNumber || subjectKeyIdentifier) digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version issuerAndSerialNumber digestAlgorithm signedAttrs signatureAlgorithm signature</br>
+                                       </CheckSuccess>
+                                       <issuerAndSerialNumber>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: issuer serialNumber</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: issuer serialNumber</br>
+                                          </CheckSuccess>
+                                          <serialNumber>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </serialNumber>
+                                       </issuerAndSerialNumber>
+                                       <digestAlgorithm>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                          </CheckSuccess>
+                                          <algorithm>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </algorithm>
+                                       </digestAlgorithm>
+                                       <signedAttrs>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)+</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute attribute attribute attribute</br>
+                                          </CheckSuccess>
+                                          <attribute index="1">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.3</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <contentType index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OID. Tag value found: 6. Value found: 1.2.840.113549.1.9.16.1.4</CheckSuccess>
+                                                </contentType>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="2">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.12</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificate index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs+</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertID index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertID>
+                                                   </certs>
+                                                </essSigningCertificate>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="3">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.4</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <messageDigest index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OCTET STRING. Tag value found: 4</CheckSuccess>
+                                                </messageDigest>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="4">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.47</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificateV2 index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs policies?</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertIDV2 index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashAlgorithm? certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertIDV2>
+                                                   </certs>
+                                                </essSigningCertificateV2>
+                                             </attrValues>
+                                          </attribute>
+                                       </signedAttrs>
+                                    </signerInfo>
+                                 </signerInfos>
+                              </signedData>
+                           </content>
+                        </signatureTimeStamp>
+                     </attrValues>
+                  </attribute>
+                  <attribute index="2">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 0.4.0.1733.2.4</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <archiveTimeStampV3 index="1">
+                           <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
+                           <Value field="sid.SerialNumber">21149756606269829945436664107069721478</Value>
+                           <Value field="genTime">Mon Jan 01 00:00:00 UTC 2024</Value>
+                           <Value field="ordering">false</Value>
+                           <Value field="policy">1.2.3.4</Value>
+                           <Value field="serialNumber">1</Value>
+                           <Value field="nonce">109158224516405240831125579925236999436</Value>
+                           <Trace contribution="1" contributionFrom="eContentType" what="MssImprintPart">06092a864886f70d010701</Trace>
+                           <Trace contribution="2" contributionFrom="digested eContent's OCTET STRING content bytes" what="MssImprintPart">ea63f320a7b145d4f9ff9af640a158f88f3d67eef4d052f577343d9065136eae</Trace>
+                           <Trace contribution="200" contributionFrom="eContent OCTET STRING content bytes before digesting (WARNING: THESE BYTES DO NOT CONTRIBUTE TO MSSG IMPRINT. FOR DEBUGGING PURPOSES ONLY!)" what="MssImprintPart">53696d706c655369676e3a20636f6e74656e74207369676e656420666f7220746865204554534920636f6e666f726d616e636520636865636b65722e0a</Trace>
+                           <Trace contribution="3" contributionFrom="version" what="MssImprintPart">020101</Trace>
+                           <Trace contribution="4" contributionFrom="issuerAndSerialNumber" what="MssImprintPart">305e304a31193017060355040a131053696d706c655369676e205465737473312d302b0603550403132453696d706c655369676e2053796e74686574696320496e7465726d6564696174652043410210406e07a2aa3042c63ff292ae7f0e6b7d</Trace>
+                           <Trace contribution="5" contributionFrom="digestAlgorithm" what="MssImprintPart">300d06096086480165030402010500</Trace>
+                           <Trace contribution="6" contributionFrom="signedAttrs" what="MssImprintPart">a082010b301806092a864886f70d010903310b06092a864886f70d010701301c06092a864886f70d010905310f170d3236313131383232313634315a302f06092a864886f70d01090431220420ea63f320a7b145d4f9ff9af640a158f88f3d67eef4d052f577343d9065136eae30819f060b2a864886f70d010910022f31818f30818c3081893081860420ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f53062304ea44c304a31193017060355040a131053696d706c655369676e205465737473312d302b0603550403132453696d706c655369676e2053796e74686574696320496e7465726d6564696174652043410210406e07a2aa3042c63ff292ae7f0e6b7d</Trace>
+                           <Trace contribution="7" contributionFrom="signatureAlgorithm" what="MssImprintPart">300d06092a864886f70d01010b0500</Trace>
+                           <Trace contribution="8" contributionFrom="signature" what="MssImprintPart">04820100a73b99d7d446f4713884f9dba3098dd5a71e624365125d774223e9cd849b00ae3505ed2e9c84cd0f6622ec99bb44e633fc499e87b1f36f049c0e966736d0f482db39c6522d80ce11762de78ec5d86916b4bbfc1c1a70f8486967a3b7d916c56f758dddc13ced310e0c9161fecd16fcdd85fc0fdda31dbc4606a00e00625e60ba191cd1b1a66ba2576ee6da4a6e88cbd0b2b1809d6d60d2515d0f3c1ee7d8c7341a102513ccb3fd1ec68d0ef5fc8ec008b9292f51f93e38516366af8509754260f373c38c6b5beac07d78fcadf8d557f03a1775b517e1bffb81fe7c0d4c204f97185bbe550578c7b672040375cf8f8b0c7dadd553aedcb3ddc583e9f23c2007d4</Trace>
+                           <Trace contribution="9" contributionFrom="atsHashIndexV3" what="MssImprintPart">30820102300b060960864801650304020130818804205ef276c4173875a690ab1b8c899dc54385c4bb3e21213786d00c718b9ec40b570420f067d102d8beef813b469c98bae02ac45374ad77da9e62d8827723dc5a05f5380420548fbd3a1ef6a5478b41a7724aea9fce7949abb6b837ba7beda3f5530d1475310420ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f5304404204db74c2451e75f701a98a680a5cf3bbee3a2112dff21e2a3d48181e50587e5ac0420559d8bc20aa7c0cefa90cdd2bfcd5e1efa984477b801d3e7e9c2ec19327b493730220420bb846f1f9c687b97da977861e09ec869cdb96c0bd8fa618b047fc7ade608cb4b</Trace>
+                           <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  5b76ef9f57eef88a9f0c809e66b69834e5df8a1d79c04c4be599598b05541d9b</CheckSuccess>
+                           <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                              <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Elements found: contentType content</br>
+                           </CheckSuccess>
+                           <contentType>
+                              <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                              <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+                              <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.7.2</CheckSuccess>
+                           </contentType>
+                           <content>
+                              <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Specification: signedData</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signedData</br>
+                              </CheckSuccess>
+                              <signedData>
+                                 <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Specification: version digestAlgorithms encapContentInfo certificates? crls ? signerInfos</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version digestAlgorithms encapContentInfo certificates signerInfos</br>
+                                 </CheckSuccess>
+                                 <digestAlgorithms>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: digestAlgorithm</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: digestAlgorithm</br>
+                                    </CheckSuccess>
+                                    <digestAlgorithm index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                       </CheckSuccess>
+                                       <algorithm>
+                                          <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                       </algorithm>
+                                    </digestAlgorithm>
+                                 </digestAlgorithms>
+                                 <encapContentInfo>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: eContentType eContent?</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: eContentType eContent</br>
+                                    </CheckSuccess>
+                                 </encapContentInfo>
+                                 <certificates>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificate+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificate certificate</br>
+                                    </CheckSuccess>
+                                    <certificate index="1">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+                                    </certificate>
+                                    <certificate index="2">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+                                    </certificate>
+                                 </certificates>
+                                 <signerInfos>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: (signerInfo)+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signerInfo</br>
+                                    </CheckSuccess>
+                                    <signerInfo index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: version (issuerAndSerialNumber || subjectKeyIdentifier) digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version issuerAndSerialNumber digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs</br>
+                                       </CheckSuccess>
+                                       <issuerAndSerialNumber>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: issuer serialNumber</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: issuer serialNumber</br>
+                                          </CheckSuccess>
+                                          <serialNumber>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </serialNumber>
+                                       </issuerAndSerialNumber>
+                                       <digestAlgorithm>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                          </CheckSuccess>
+                                          <algorithm>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </algorithm>
+                                       </digestAlgorithm>
+                                       <signedAttrs>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)+</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute attribute attribute attribute</br>
+                                          </CheckSuccess>
+                                          <attribute index="1">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.3</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <contentType index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OID. Tag value found: 6. Value found: 1.2.840.113549.1.9.16.1.4</CheckSuccess>
+                                                </contentType>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="2">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.12</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificate index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs+</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertID index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertID>
+                                                   </certs>
+                                                </essSigningCertificate>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="3">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.4</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <messageDigest index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OCTET STRING. Tag value found: 4</CheckSuccess>
+                                                </messageDigest>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="4">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.47</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificateV2 index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs policies?</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertIDV2 index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashAlgorithm? certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertIDV2>
+                                                   </certs>
+                                                </essSigningCertificateV2>
+                                             </attrValues>
+                                          </attribute>
+                                       </signedAttrs>
+                                       <unsignedAttrs>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)*</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute</br>
+                                          </CheckSuccess>
+                                          <CheckSuccess check="CheckAllowedAttributes" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (completeCertificateRefs  || completeRevocationRefs  || certificateValues || revocationValues || atsHashIndex || atsHashIndexV2 || atsHashIndexV3)*</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: atsHashIndexV3 </br>
+                                          </CheckSuccess>
+                                          <CheckSuccess check="CheckAttributesCardinality" testedBy="Tool"> The cardinalities of all the attributes match their respective specifications</CheckSuccess>
+                                          <CheckSuccess check="CheckOnlyOneAttrOfTheListPresent" testedBy="Tool"> Only one of the attributes in the following list have to be present: atsHashIndex atsHashIndexV2 atsHashIndexV3 . The attribute atsHashIndexV3  has been found</CheckSuccess>
+                                          <attribute index="1">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 0.4.0.19122.1.5</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <atsHashIndexV3 index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashIndAlgorithm certificatesHashIndex crlsHashIndex unsignedAttrsHashIndex</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: hashIndAlgorithm certificatesHashIndex crlsHashIndex unsignedAttrsHashIndex</br>
+                                                   </CheckSuccess>
+                                                   <hashIndAlgorithm>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm</br>
+                                                      </CheckSuccess>
+                                                   </hashIndAlgorithm>
+                                                   <certificatesHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificateHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificateHashIndex certificateHashIndex certificateHashIndex certificateHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <certificateHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 5ef276c4173875a690ab1b8c899dc54385c4bb3e21213786d00c718b9ec40b57 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; SerialNumber: 7628999631337988352; Subject: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Mon Nov 17 22:16:09 UTC 2036</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="2">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: f067d102d8beef813b469c98bae02ac45374ad77da9e62d8827723dc5a05f538 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; SerialNumber: 52790410017019294210311131642313461929; Subject: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Mon Nov 17 22:16:09 UTC 2031</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="3">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 548fbd3a1ef6a5478b41a7724aea9fce7949abb6b837ba7beda3f5530d147531 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; SerialNumber: 21149756606269829945436664107069721478; Subject: CN=SimpleSign Synthetic TSA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:17:09 UTC 2026; NotAfter: Fri Nov 17 22:17:09 UTC 2028</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="4">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f5 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; SerialNumber: 85641899249173795219718930760616274813; Subject: CN=SimpleSign Synthetic Signer, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Wed Nov 17 22:16:09 UTC 2027</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                   </certificatesHashIndex>
+                                                   <crlsHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: crlHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: crlHashIndex crlHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <crlHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 4db74c2451e75f701a98a680a5cf3bbee3a2112dff21e2a3d48181e50587e5ac corresponds to the  value within SignedData with the following details: version: 1; Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; thisUpdate: Tue Nov 17 22:16:30 UTC 2026; nextUpdate: Fri Dec 18 22:16:30 UTC 2026</CheckSuccess>
+                                                      </crlHashIndex>
+                                                      <crlHashIndex index="2">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 559d8bc20aa7c0cefa90cdd2bfcd5e1efa984477b801d3e7e9c2ec19327b4937 corresponds to the  value within SignedData with the following details: version: 1; Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; thisUpdate: Tue Nov 17 22:16:30 UTC 2026; nextUpdate: Fri Dec 18 22:16:30 UTC 2026</CheckSuccess>
+                                                      </crlHashIndex>
+                                                   </crlsHashIndex>
+                                                   <unsignedAttrsHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: unsignedAttrHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: unsignedAttrHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <unsignedAttrHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfUnsignedAttrsValuesInstances" testedBy="Tool">The unsigned attribute value digest with value: bb846f1f9c687b97da977861e09ec869cdb96c0bd8fa618b047fc7ade608cb4b corresponds to the unsigned attribute value value within SignedData with the following details: signatureTimeStamp[1][1]</CheckSuccess>
+                                                      </unsignedAttrHashIndex>
+                                                   </unsignedAttrsHashIndex>
+                                                </atsHashIndexV3>
+                                             </attrValues>
+                                          </attribute>
+                                       </unsignedAttrs>
+                                    </signerInfo>
+                                 </signerInfos>
+                              </signedData>
+                           </content>
+                        </archiveTimeStampV3>
+                     </attrValues>
+                  </attribute>
+                  <attribute index="3">
+                     <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                        <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                        <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                     </CheckSuccess>
+                     <attrType>
+                        <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 0.4.0.1733.2.4</CheckSuccess>
+                     </attrType>
+                     <attrValues>
+                        <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                        <archiveTimeStampV3 index="1">
+                           <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
+                           <Value field="sid.SerialNumber">21149756606269829945436664107069721478</Value>
+                           <Value field="genTime">Mon Jan 01 00:00:00 UTC 2024</Value>
+                           <Value field="ordering">false</Value>
+                           <Value field="policy">1.2.3.4</Value>
+                           <Value field="serialNumber">1</Value>
+                           <Value field="nonce">42104650478986297052766663303592106766</Value>
+                           <Trace contribution="1" contributionFrom="eContentType" what="MssImprintPart">06092a864886f70d010701</Trace>
+                           <Trace contribution="2" contributionFrom="digested eContent's OCTET STRING content bytes" what="MssImprintPart">ea63f320a7b145d4f9ff9af640a158f88f3d67eef4d052f577343d9065136eae</Trace>
+                           <Trace contribution="200" contributionFrom="eContent OCTET STRING content bytes before digesting (WARNING: THESE BYTES DO NOT CONTRIBUTE TO MSSG IMPRINT. FOR DEBUGGING PURPOSES ONLY!)" what="MssImprintPart">53696d706c655369676e3a20636f6e74656e74207369676e656420666f7220746865204554534920636f6e666f726d616e636520636865636b65722e0a</Trace>
+                           <Trace contribution="3" contributionFrom="version" what="MssImprintPart">020101</Trace>
+                           <Trace contribution="4" contributionFrom="issuerAndSerialNumber" what="MssImprintPart">305e304a31193017060355040a131053696d706c655369676e205465737473312d302b0603550403132453696d706c655369676e2053796e74686574696320496e7465726d6564696174652043410210406e07a2aa3042c63ff292ae7f0e6b7d</Trace>
+                           <Trace contribution="5" contributionFrom="digestAlgorithm" what="MssImprintPart">300d06096086480165030402010500</Trace>
+                           <Trace contribution="6" contributionFrom="signedAttrs" what="MssImprintPart">a082010b301806092a864886f70d010903310b06092a864886f70d010701301c06092a864886f70d010905310f170d3236313131383232313634315a302f06092a864886f70d01090431220420ea63f320a7b145d4f9ff9af640a158f88f3d67eef4d052f577343d9065136eae30819f060b2a864886f70d010910022f31818f30818c3081893081860420ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f53062304ea44c304a31193017060355040a131053696d706c655369676e205465737473312d302b0603550403132453696d706c655369676e2053796e74686574696320496e7465726d6564696174652043410210406e07a2aa3042c63ff292ae7f0e6b7d</Trace>
+                           <Trace contribution="7" contributionFrom="signatureAlgorithm" what="MssImprintPart">300d06092a864886f70d01010b0500</Trace>
+                           <Trace contribution="8" contributionFrom="signature" what="MssImprintPart">04820100a73b99d7d446f4713884f9dba3098dd5a71e624365125d774223e9cd849b00ae3505ed2e9c84cd0f6622ec99bb44e633fc499e87b1f36f049c0e966736d0f482db39c6522d80ce11762de78ec5d86916b4bbfc1c1a70f8486967a3b7d916c56f758dddc13ced310e0c9161fecd16fcdd85fc0fdda31dbc4606a00e00625e60ba191cd1b1a66ba2576ee6da4a6e88cbd0b2b1809d6d60d2515d0f3c1ee7d8c7341a102513ccb3fd1ec68d0ef5fc8ec008b9292f51f93e38516366af8509754260f373c38c6b5beac07d78fcadf8d557f03a1775b517e1bffb81fe7c0d4c204f97185bbe550578c7b672040375cf8f8b0c7dadd553aedcb3ddc583e9f23c2007d4</Trace>
+                           <Trace contribution="9" contributionFrom="atsHashIndexV3" what="MssImprintPart">30820124300b060960864801650304020130818804205ef276c4173875a690ab1b8c899dc54385c4bb3e21213786d00c718b9ec40b570420f067d102d8beef813b469c98bae02ac45374ad77da9e62d8827723dc5a05f5380420548fbd3a1ef6a5478b41a7724aea9fce7949abb6b837ba7beda3f5530d1475310420ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f5304404204db74c2451e75f701a98a680a5cf3bbee3a2112dff21e2a3d48181e50587e5ac0420559d8bc20aa7c0cefa90cdd2bfcd5e1efa984477b801d3e7e9c2ec19327b493730440420bb846f1f9c687b97da977861e09ec869cdb96c0bd8fa618b047fc7ade608cb4b0420868b5f88f4b688ad50e056d1d0808a581126d6290c6f9e0a5b8beff26a3bf18b</Trace>
+                           <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  129dcf09adae66acd9eb3433c2043df1dcabd370769c6a90f82074c6b65f3278</CheckSuccess>
+                           <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                              <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
+                              <br xmlns="http://www.w3.org/1999/xhtml">Elements found: contentType content</br>
+                           </CheckSuccess>
+                           <contentType>
+                              <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                              <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+                              <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.7.2</CheckSuccess>
+                           </contentType>
+                           <content>
+                              <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Specification: signedData</br>
+                                 <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signedData</br>
+                              </CheckSuccess>
+                              <signedData>
+                                 <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Specification: version digestAlgorithms encapContentInfo certificates? crls ? signerInfos</br>
+                                    <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version digestAlgorithms encapContentInfo certificates signerInfos</br>
+                                 </CheckSuccess>
+                                 <digestAlgorithms>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: digestAlgorithm</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: digestAlgorithm</br>
+                                    </CheckSuccess>
+                                    <digestAlgorithm index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                       </CheckSuccess>
+                                       <algorithm>
+                                          <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                       </algorithm>
+                                    </digestAlgorithm>
+                                 </digestAlgorithms>
+                                 <encapContentInfo>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: eContentType eContent?</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: eContentType eContent</br>
+                                    </CheckSuccess>
+                                 </encapContentInfo>
+                                 <certificates>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificate+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificate certificate</br>
+                                    </CheckSuccess>
+                                    <certificate index="1">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+                                    </certificate>
+                                    <certificate index="2">
+                                       <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+                                       <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+                                       <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+                                       <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+                                       <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
+                                       <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+                                    </certificate>
+                                 </certificates>
+                                 <signerInfos>
+                                    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Specification: (signerInfo)+</br>
+                                       <br xmlns="http://www.w3.org/1999/xhtml">Elements found: signerInfo</br>
+                                    </CheckSuccess>
+                                    <signerInfo index="1">
+                                       <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Specification: version (issuerAndSerialNumber || subjectKeyIdentifier) digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs?</br>
+                                          <br xmlns="http://www.w3.org/1999/xhtml">Elements found: version issuerAndSerialNumber digestAlgorithm signedAttrs signatureAlgorithm signature unsignedAttrs</br>
+                                       </CheckSuccess>
+                                       <issuerAndSerialNumber>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: issuer serialNumber</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: issuer serialNumber</br>
+                                          </CheckSuccess>
+                                          <serialNumber>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </serialNumber>
+                                       </issuerAndSerialNumber>
+                                       <digestAlgorithm>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm parameters</br>
+                                          </CheckSuccess>
+                                          <algorithm>
+                                             <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                          </algorithm>
+                                       </digestAlgorithm>
+                                       <signedAttrs>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)+</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute attribute attribute attribute</br>
+                                          </CheckSuccess>
+                                          <attribute index="1">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.3</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <contentType index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OID. Tag value found: 6. Value found: 1.2.840.113549.1.9.16.1.4</CheckSuccess>
+                                                </contentType>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="2">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.12</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificate index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs+</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertID index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertID>
+                                                   </certs>
+                                                </essSigningCertificate>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="3">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.4</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <messageDigest index="1">
+                                                   <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) OCTET STRING. Tag value found: 4</CheckSuccess>
+                                                </messageDigest>
+                                             </attrValues>
+                                          </attribute>
+                                          <attribute index="4">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.9.16.2.47</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <essSigningCertificateV2 index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: certs policies?</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certs</br>
+                                                   </CheckSuccess>
+                                                   <certs>
+                                                      <essCertIDV2 index="1">
+                                                         <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashAlgorithm? certHash issuerSerial?</br>
+                                                            <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certHash</br>
+                                                         </CheckSuccess>
+                                                         <certHash>
+                                                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         </certHash>
+                                                      </essCertIDV2>
+                                                   </certs>
+                                                </essSigningCertificateV2>
+                                             </attrValues>
+                                          </attribute>
+                                       </signedAttrs>
+                                       <unsignedAttrs>
+                                          <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (attribute)*</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attribute</br>
+                                          </CheckSuccess>
+                                          <CheckSuccess check="CheckAllowedAttributes" testedBy="Tool">
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Specification: (completeCertificateRefs  || completeRevocationRefs  || certificateValues || revocationValues || atsHashIndex || atsHashIndexV2 || atsHashIndexV3)*</br>
+                                             <br xmlns="http://www.w3.org/1999/xhtml">Elements found: atsHashIndexV3 </br>
+                                          </CheckSuccess>
+                                          <CheckSuccess check="CheckAttributesCardinality" testedBy="Tool"> The cardinalities of all the attributes match their respective specifications</CheckSuccess>
+                                          <CheckSuccess check="CheckOnlyOneAttrOfTheListPresent" testedBy="Tool"> Only one of the attributes in the following list have to be present: atsHashIndex atsHashIndexV2 atsHashIndexV3 . The attribute atsHashIndexV3  has been found</CheckSuccess>
+                                          <attribute index="1">
+                                             <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Specification: attrType attrValues</br>
+                                                <br xmlns="http://www.w3.org/1999/xhtml">Elements found: attrType attrValues</br>
+                                             </CheckSuccess>
+                                             <attrType>
+                                                <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 0.4.0.19122.1.5</CheckSuccess>
+                                             </attrType>
+                                             <attrValues>
+                                                <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
+                                                <atsHashIndexV3 index="1">
+                                                   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Specification: hashIndAlgorithm certificatesHashIndex crlsHashIndex unsignedAttrsHashIndex</br>
+                                                      <br xmlns="http://www.w3.org/1999/xhtml">Elements found: hashIndAlgorithm certificatesHashIndex crlsHashIndex unsignedAttrsHashIndex</br>
+                                                   </CheckSuccess>
+                                                   <hashIndAlgorithm>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: algorithm parameters?</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: algorithm</br>
+                                                      </CheckSuccess>
+                                                   </hashIndAlgorithm>
+                                                   <certificatesHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: certificateHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: certificateHashIndex certificateHashIndex certificateHashIndex certificateHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <certificateHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 5ef276c4173875a690ab1b8c899dc54385c4bb3e21213786d00c718b9ec40b57 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; SerialNumber: 7628999631337988352; Subject: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Mon Nov 17 22:16:09 UTC 2036</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="2">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: f067d102d8beef813b469c98bae02ac45374ad77da9e62d8827723dc5a05f538 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; SerialNumber: 52790410017019294210311131642313461929; Subject: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Mon Nov 17 22:16:09 UTC 2031</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="3">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 548fbd3a1ef6a5478b41a7724aea9fce7949abb6b837ba7beda3f5530d147531 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; SerialNumber: 21149756606269829945436664107069721478; Subject: CN=SimpleSign Synthetic TSA, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:17:09 UTC 2026; NotAfter: Fri Nov 17 22:17:09 UTC 2028</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                      <certificateHashIndex index="4">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: ef896d7f266cd54e843f39c0f9a8c48c291cfee47aa860274fe9d86d299fd2f5 corresponds to the  value within SignedData with the following details: Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; SerialNumber: 85641899249173795219718930760616274813; Subject: CN=SimpleSign Synthetic Signer, O=SimpleSign Tests; NotBefore: Tue Nov 17 22:16:09 UTC 2026; NotAfter: Wed Nov 17 22:16:09 UTC 2027</CheckSuccess>
+                                                      </certificateHashIndex>
+                                                   </certificatesHashIndex>
+                                                   <crlsHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: crlHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: crlHashIndex crlHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <crlHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 4db74c2451e75f701a98a680a5cf3bbee3a2112dff21e2a3d48181e50587e5ac corresponds to the  value within SignedData with the following details: version: 1; Issuer: CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests; thisUpdate: Tue Nov 17 22:16:30 UTC 2026; nextUpdate: Fri Dec 18 22:16:30 UTC 2026</CheckSuccess>
+                                                      </crlHashIndex>
+                                                      <crlHashIndex index="2">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfPKIDataInSignedData" testedBy="Tool">The  digest with value: 559d8bc20aa7c0cefa90cdd2bfcd5e1efa984477b801d3e7e9c2ec19327b4937 corresponds to the  value within SignedData with the following details: version: 1; Issuer: CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests; thisUpdate: Tue Nov 17 22:16:30 UTC 2026; nextUpdate: Fri Dec 18 22:16:30 UTC 2026</CheckSuccess>
+                                                      </crlHashIndex>
+                                                   </crlsHashIndex>
+                                                   <unsignedAttrsHashIndex>
+                                                      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Specification: unsignedAttrHashIndex+</br>
+                                                         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: unsignedAttrHashIndex unsignedAttrHashIndex</br>
+                                                      </CheckSuccess>
+                                                      <unsignedAttrHashIndex index="1">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfUnsignedAttrsValuesInstances" testedBy="Tool">The unsigned attribute value digest with value: bb846f1f9c687b97da977861e09ec869cdb96c0bd8fa618b047fc7ade608cb4b corresponds to the unsigned attribute value value within SignedData with the following details: signatureTimeStamp[1][1]</CheckSuccess>
+                                                      </unsignedAttrHashIndex>
+                                                      <unsignedAttrHashIndex index="2">
+                                                         <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                                         <CheckSuccess check="CheckIfIsDigestOfUnsignedAttrsValuesInstances" testedBy="Tool">The unsigned attribute value digest with value: 868b5f88f4b688ad50e056d1d0808a581126d6290c6f9e0a5b8beff26a3bf18b corresponds to the unsigned attribute value value within SignedData with the following details: archiveTimeStampV3[1][1]</CheckSuccess>
+                                                      </unsignedAttrHashIndex>
+                                                   </unsignedAttrsHashIndex>
+                                                </atsHashIndexV3>
+                                             </attrValues>
+                                          </attribute>
+                                       </unsignedAttrs>
+                                    </signerInfo>
+                                 </signerInfos>
+                              </signedData>
+                           </content>
+                        </archiveTimeStampV3>
+                     </attrValues>
+                  </attribute>
+               </unsignedAttrs>
+            </signerInfo>
+         </signerInfos>
+      </signedData>
+   </content>
+</xcc:ConformanceReports>

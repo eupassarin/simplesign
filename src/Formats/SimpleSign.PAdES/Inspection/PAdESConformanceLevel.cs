@@ -9,9 +9,10 @@ public enum PAdESConformanceLevel
     Unknown = 0,
 
     /// <summary>
-    /// CMS signature (adbe.pkcs7.detached) without PAdES-specific attributes.
-    /// Valid signature but does not meet PAdES baseline requirements.
-    /// Common in older or simpler signing tools (including some Gov.br signers).
+    /// A CMS signature that is not a PAdES baseline signature: it has no ESS signing-certificate attribute, or its
+    /// SubFilter is not ETSI.CAdES.detached (adbe.pkcs7.detached, PBAD.PAdES), which EN 319 142-1 requires.
+    /// It may still be a valid signature. Common in older or simpler signing tools (including some Gov.br signers),
+    /// in signatures kept compatible with PDF/A-1, and in the ICP-Brasil signature dictionary.
     /// </summary>
     CmsOnly = 1,
 

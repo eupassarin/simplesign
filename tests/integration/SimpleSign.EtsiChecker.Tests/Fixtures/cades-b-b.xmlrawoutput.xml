@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 75954925658748653744524642438093915510, HAS SUCCEEDED.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 75954925658748653744524642438093915510, SEEMS TO BE A CAdES SIGNATURE: it is valid and has the contentType, messageDigest and one of the signing certificate reference signed attributes.</CheckSuccess>
+   <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+      &lt;br xmlns="http://www.w3.org/1999/xhtm"&gt;hildren order and number DO MATCH specification&lt;/br&gt;
+      &lt;br xmlns="http://www.w3.org/1999/xhtm"&gt;pecification: contentType content&lt;/br&gt;
+      &lt;br xmlns="http://www.w3.org/1999/xhtm"&gt;lements found: contentType content&lt;/br&gt;
+   </CheckSuccess>
+   <contentType>
+      <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+      <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: 1.2.840.113549.1.7.2 Found value: 1.2.840.113549.1.7.2</CheckSuccess>
+      <CheckSuccess check="PresentTextualValue" testedBy="Tool">Value found: 1.2.840.113549.1.7.2</CheckSuccess>
+   </contentType>
+   <content>
+      <signedData>
+         <signerInfos>
+            <signerInfo>
+               <signedAttrs>
+                  <attribute>
+                     <attrValues>
+                        <essSigningCertificateV2>
+                           <certs>
+                              <essCertIDV2>
+                                 <certHash>
+                                    <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool"/>
+                                 </certHash>
+                              </essCertIDV2>
+                           </certs>
+                        </essSigningCertificateV2>
+                     </attrValues>
+                  </attribute>
+               </signedAttrs>
+            </signerInfo>
+         </signerInfos>
+      </signedData>
+   </content>
+</xcc:ConformanceReports>

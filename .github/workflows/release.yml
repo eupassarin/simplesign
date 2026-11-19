@@ -45,7 +45,7 @@ jobs:
       - name: Test
         # The same filter as the regular CI run: VeraPdf and Interop need veraPDF, qpdf, pyHanko,
         # OpenSSL and xmlsec1, and have their own jobs on every push.
-        run: dotnet test --no-build --configuration Release --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop" --verbosity quiet
+        run: dotnet test --no-build --configuration Release --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&Category!=EtsiChecker" --verbosity quiet
 
       - name: Test NativeAOT smoke application
         run: |

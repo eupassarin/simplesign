@@ -20,6 +20,26 @@ public sealed class ConformanceDetectorTests
         level.ShouldBe(PAdESConformanceLevel.CmsOnly);
     }
 
+    [Theory(DisplayName = "Detect returns CmsOnly for a SubFilter other than ETSI.CAdES.detached, whatever the signature holds")]
+    [InlineData("adbe.pkcs7.detached")]
+    [InlineData("PBAD.PAdES")]
+    public void Detect_SubFilterNotEtsiCadesDetached_ReturnsCmsOnly(string subFilter)
+    {
+        var sig = MakeSig(hasSigningCertV2: true, hasTimestamp: true, byteRangeOffset2: 1000, subFilter: subFilter);
+        var docTs = MakeDocTimestamp(byteRangeOffset2: 2000);
+        var doc = MakeDoc(hasDss: true);
+
+        ConformanceDetector.Detect(sig, doc, [sig, docTs]).ShouldBe(PAdESConformanceLevel.CmsOnly);
+    }
+
+    [Fact(DisplayName = "DetectStructure gives what an adbe.pkcs7.detached signature holds, for an augmentation")]
+    public void DetectStructure_AdbeSubFilterWithTimestamp_ReturnsBaselineT()
+    {
+        var sig = MakeSig(hasSigningCertV2: true, hasTimestamp: true, subFilter: "adbe.pkcs7.detached");
+
+        ConformanceDetector.DetectStructure(sig, MakeDoc(), [sig]).ShouldBe(PAdESConformanceLevel.BaselineT);
+    }
+
     [Fact(DisplayName = "Detect returns BaselineB with signingCertificateV2 only")]
     public void Detect_SigningCertV2Only_ReturnsBaselineB()
     {
@@ -131,11 +151,13 @@ public sealed class ConformanceDetectorTests
     private static SignatureFieldInfo MakeSig(
         bool hasSigningCertV2 = false,
         bool hasTimestamp = false,
-        long byteRangeOffset2 = 500)
+        long byteRangeOffset2 = 500,
+        string subFilter = "ETSI.CAdES.detached")
     {
         return new SignatureFieldInfo
         {
             FieldName = "Sig",
+            SubFilter = subFilter,
             HasSigningCertificateV2 = hasSigningCertV2,
             Timestamp = hasTimestamp
                 ? new TimestampInfo { GenerationTime = DateTimeOffset.UtcNow }
