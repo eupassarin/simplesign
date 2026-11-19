@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and
+  `XadesAugmenter` ignored `TimestampOptions.ExpectedTsaCertificate` and accepted a token from any TSA; such a token now
+  throws `SigningException` with `SigningErrorReason.TimestampUntrusted`. New, on each augmenter: `WithSigningPolicy`
+  (its `Timestamp` constraints: the TSA chains to a trust anchor, is valid at the genTime, is not revoked),
+  `WithTrustAnchors` and `WithChainRevocationChecker`. Without them nothing else changes: the `Timestamp` constraints of
+  `SigningPolicy.Default` are IGNORE.
+
 ## [0.15.0] - 2026-11-19
 
 ### Removed

@@ -28,13 +28,14 @@ public sealed class PadesAugmenterTests : IDisposable
         return CertificateLoader.LoadPkcs12(cert.Export(X509ContentType.Pfx, "export"), "export");
     }
 
-    private static HttpClient MockTsa() =>
+    private static HttpClient MockTsa(X509Certificate2? tsaCertificate = null) =>
         new(new MockHttpHandler(async request =>
         {
             byte[] body = await request.Content!.ReadAsByteArrayAsync().ConfigureAwait(false);
+            var options = tsaCertificate is null ? null : new TimestampTokenOptions { TsaCertificate = tsaCertificate, GenTime = DateTimeOffset.UtcNow };
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
-                Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(body))
+                Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(body, options))
                 {
                     Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/timestamp-reply") },
                 },
@@ -136,5 +137,38 @@ public sealed class PadesAugmenterTests : IDisposable
         }
 
         server.CrlDownloads.ShouldBe(expectedDownloads);
+    }
+
+    [Fact]
+    public async Task AugmentAsync_TokenFromAnotherTsaThanExpected_ThrowsTimestampUntrusted()
+    {
+        using var pki = new SyntheticPki();
+        using var expected = pki.IssueTimestampingCertificate("CN=Expected TSA");
+        using var other = pki.IssueTimestampingCertificate("CN=Other TSA");
+        using var tsa = MockTsa(other);
+        byte[] signed = await SignBasicAsync();
+
+        var exception = await Should.ThrowAsync<SigningException>(() => PadesAugmenter.Document(signed)
+            .WithTimestamp(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa)) { ExpectedTsaCertificate = expected })
+            .ToLevel(AdesBaselineLevel.Timestamped)
+            .AugmentAsync());
+
+        exception.Reason.ShouldBe(SigningErrorReason.TimestampUntrusted);
+    }
+
+    [Fact]
+    public async Task AugmentAsync_TokenFromTheExpectedTsa_ReachesTheLevel()
+    {
+        using var pki = new SyntheticPki();
+        using var expected = pki.IssueTimestampingCertificate("CN=Expected TSA");
+        using var tsa = MockTsa(expected);
+        byte[] signed = await SignBasicAsync();
+
+        var result = await PadesAugmenter.Document(signed)
+            .WithTimestamp(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa)) { ExpectedTsaCertificate = expected })
+            .ToLevel(AdesBaselineLevel.Timestamped)
+            .AugmentAsync();
+
+        result.Level.ShouldBe(AdesBaselineLevel.Timestamped);
     }
 }

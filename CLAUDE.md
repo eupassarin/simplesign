@@ -88,7 +88,7 @@ src/
 │       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
 │       └── tools/                            indecopi.py writes that playbook
 │                                             (the accredited configuration, SimpleSign.Peru.Iofe.Accredited, with its manuals, audit
-│                                              script and CLI extension `simplesign iofe sign|verify|view`, is in https://github.com/eupassarin/simplesign-iofe-accredited)
+│                                              script and CLI extension `simplesign iofe sign|verify|view|augment`, is in https://github.com/eupassarin/simplesign-iofe-accredited)
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2

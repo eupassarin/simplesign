@@ -4,7 +4,9 @@ using System.Xml;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.XAdES.Constants;
@@ -37,6 +39,9 @@ public sealed class XadesAugmenter
     private TimestampOptions? _timestamp;
     private IHttpClientProvider _httpClientProvider = DefaultHttpClientProvider.Instance;
     private IRevocationCache? _revocationCache;
+    private SigningPolicy _signingPolicy = SigningPolicy.Default;
+    private readonly List<ITrustAnchorProvider> _trustAnchors = [];
+    private IChainRevocationChecker? _chainRevocationChecker;
     private AdesBaselineLevel _target = AdesBaselineLevel.Archive;
     private bool _renew;
     private ILogger _logger = NullLogger.Instance;
@@ -108,6 +113,46 @@ public sealed class XadesAugmenter
         return this;
     }
 
+    /// <summary>
+    /// The checks of each time-stamp the augmenter obtains: the <c>Timestamp</c> constraints of <paramref name="policy"/>
+    /// (the TSA certificate chains to a trust anchor, is valid at the genTime and is not revoked), as a signer applies
+    /// them. The other constraints of the policy concern the signing certificate and do not apply here. Default:
+    /// <see cref="SigningPolicy.Default"/>, whose <c>Timestamp</c> constraints are IGNORE.
+    /// <see cref="TimestampOptions.ExpectedTsaCertificate"/> is enforced whatever the policy.
+    /// </summary>
+    /// <param name="policy">The signing policy.</param>
+    /// <returns>This augmenter.</returns>
+    public XadesAugmenter WithSigningPolicy(SigningPolicy policy)
+    {
+        _signingPolicy = policy ?? throw new ArgumentNullException(nameof(policy));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds trust anchors for the TSA certificate of each time-stamp the augmenter obtains: it must chain to one of
+    /// them when the policy's <c>Timestamp/ProspectiveCertificateChain</c> is not IGNORE (<see cref="WithSigningPolicy"/>).
+    /// </summary>
+    /// <param name="providers">The trust anchor providers (e.g. <c>DirectoryTrustAnchorProvider</c>, <c>TrustedList</c>).</param>
+    /// <returns>This augmenter.</returns>
+    public XadesAugmenter WithTrustAnchors(params ITrustAnchorProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        _trustAnchors.AddRange(providers);
+        return this;
+    }
+
+    /// <summary>
+    /// The checker of the TSA chain's revocation, when the policy's <c>Timestamp/NotRevoked</c> or
+    /// <c>Timestamp/RevocationDataAvailable</c> is not IGNORE. Default: one over <see cref="WithHttpClientProvider"/>.
+    /// </summary>
+    /// <param name="checker">The chain revocation checker.</param>
+    /// <returns>This augmenter.</returns>
+    public XadesAugmenter WithChainRevocationChecker(IChainRevocationChecker checker)
+    {
+        _chainRevocationChecker = checker ?? throw new ArgumentNullException(nameof(checker));
+        return this;
+    }
+
     /// <summary>The level to reach. Default: <see cref="AdesBaselineLevel.Archive"/> (B-LTA). A lower level than the signature has changes nothing.</summary>
     /// <param name="level">The target level.</param>
     /// <returns>This augmenter.</returns>
@@ -158,6 +203,10 @@ public sealed class XadesAugmenter
     /// <exception cref="SigningException">
     /// <see cref="SigningErrorReason.LevelNotAchievable"/>: no TSA for a level that needs a time-stamp, or the
     /// revocation data of B-LT could not be collected.
+    /// <see cref="SigningErrorReason.TimestampUntrusted"/>: a time-stamp is not from <see cref="TimestampOptions.ExpectedTsaCertificate"/>
+    /// or its TSA is not trusted; <see cref="SigningErrorReason.TimestampCertificateNotValid"/>,
+    /// <see cref="SigningErrorReason.TimestampCertificateRevoked"/>, <see cref="SigningErrorReason.TimestampRevocationStatusUnknown"/>:
+    /// a <c>Timestamp</c> constraint of the policy (<see cref="WithSigningPolicy"/>).
     /// </exception>
     public async Task<XadesAugmentationResult> AugmentAsync(CancellationToken cancellationToken = default)
     {
@@ -204,11 +253,19 @@ public sealed class XadesAugmenter
     {
         var timestamp = _timestamp ?? throw new SigningException(
             "A time-stamp is needed for this level: give the TSA with WithTimestamp.", SigningErrorReason.LevelNotAchievable);
-        var client = BaselineSigning.CreateTimestampClient(timestamp, null, _httpClientProvider, _logger);
+        var client = CreateTimestampClient(timestamp);
         byte[] token = await client.GetTimestampAsync(data, hash, cancellationToken).ConfigureAwait(false);
         TimestampClient.ValidateTimestampToken(token, data, hash);
         return token;
     }
+
+    /// <summary>
+    /// The TSA client, with each token checked as a signer checks it (<see cref="TimestampOptions.ExpectedTsaCertificate"/>
+    /// and the policy's <c>Timestamp</c> constraints).
+    /// </summary>
+    private ITimestampClient CreateTimestampClient(TimestampOptions timestamp) =>
+        new TimestampAcceptance(_signingPolicy, _trustAnchors, _chainRevocationChecker, _httpClientProvider, _logger)
+            .Wrap(BaselineSigning.CreateTimestampClient(timestamp, null, _httpClientProvider, _logger), timestamp);
 
     private async Task<byte[]> AddValidationDataAsync(byte[] xml, string? signatureId, CancellationToken cancellationToken)
     {
