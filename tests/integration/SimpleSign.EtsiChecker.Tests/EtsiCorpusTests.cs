@@ -1,7 +1,9 @@
 using Shouldly;
 using SimpleSign.CAdES;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
+using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
 using SimpleSign.XAdES;
 using Xunit;
@@ -10,8 +12,10 @@ using Xunit.Abstractions;
 namespace SimpleSign.EtsiChecker.Tests;
 
 /// <summary>
-/// The corpus <see cref="EtsiCorpus"/> sends to the ETSI checker, checked offline: every sample is made and reaches
-/// the level it claims, so a finding of the checker is about the structure, not about a sample that failed to build.
+/// The corpus <see cref="EtsiCorpus"/> sends to the ETSI checker, checked offline: every sample is made, reaches
+/// the level it claims, and every signature in it — the earlier ones of a PDF signed again included — is intact and
+/// valid for SimpleSign's own validators. So a finding of the checker is about the structure, not about a sample
+/// that failed to build or that a later signature broke.
 /// With <c>SIMPLESIGN_ETSI_CORPUS</c> set, the samples are also written there, for an upload by hand.
 /// </summary>
 [Trait("Category", "Unit")]
@@ -67,6 +71,47 @@ public sealed class EtsiCorpusTests(OfflinePki pki, ITestOutputHelper output) : 
             string path = Path.Combine(directory, sample.FileName);
             await File.WriteAllBytesAsync(path, signed);
             output.WriteLine($"Written to {path}");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EtsiCorpus.Ids), MemberType = typeof(EtsiCorpus))]
+    public async Task Validate_EverySample_EverySignatureIsIntactAndValid(string id)
+    {
+        var sample = EtsiCorpus.Get(id);
+        byte[] signed = await sample.Sign(pki);
+        var options = new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false, TrustedRoots = [pki.Pki.RootCa] };
+
+        switch (sample.Format)
+        {
+            case EtsiFormat.Cades:
+                var report = new CadesSignatureValidator(options).ValidateAll(signed, trustAnchors: [pki.Pki.RootCa]);
+                report.Signers.Count.ShouldBe(sample.Signatures);
+                report.IsValid.ShouldBeTrue(string.Join("; ", report.Errors.Concat(report.Signers.SelectMany(s => s.Result.Errors))));
+                break;
+            case EtsiFormat.Xades:
+                var results = new XadesSignatureValidator(options).ValidateAll(signed, [pki.Pki.RootCa]);
+                results.Count.ShouldBe(sample.Signatures);
+                results.ShouldAllBe(r => r.IsValid, string.Join("\n", results.Where(r => !r.IsValid).Select(r =>
+                    $"{r.SignatureId}: {r.Indication}/{r.SubIndication} {string.Join("; ", r.Errors)} | "
+                    + string.Join("; ", r.Constraints.Where(c => c.Status is not (ConstraintStatus.Passed or ConstraintStatus.NotChecked))
+                        .Select(c => $"{c.Id} {c.Status}: {c.Message}")))));
+                results.ShouldAllBe(r => XadesAugmenter.LevelOf(signed, r.SignatureId) == sample.Level);
+                break;
+            default:
+                var validated = await new PdfSignatureValidator(options).ValidateAsync(new MemoryStream(signed));
+                var inspection = await PdfSignatureInspector.InspectAsync(new MemoryStream(signed));
+                inspection.Signatures.Count(s => !s.IsDocumentTimestamp).ShouldBe(sample.Signatures);
+                validated.Count.ShouldBe(inspection.Signatures.Count);
+                foreach (var result in validated)
+                {
+                    string what = $"{result.FieldName}: {string.Join("; ", result.Errors)}";
+                    result.IsIntegrityValid.ShouldBeTrue(what);
+                    result.IsSignatureValid.ShouldBeTrue(what);
+                    result.IsCertificateChainValid.ShouldBeTrue(what);
+                }
+
+                break;
         }
     }
 }

@@ -26,13 +26,19 @@ written to `SIMPLESIGN_ETSI_ARTIFACTS`, or to `etsi-checker/` next to the test a
 
 [`EtsiCorpus`](../../../tests/integration/SimpleSign.EtsiChecker.Tests/EtsiCorpus.cs) makes them offline. The
 signer, ECDSA key, TSA and CRLs come from `OfflinePki`. Each sample is checked against the baseline profile of its
-format:
+format.
+
+Before any of them goes to the checker, `EtsiCorpusTests` (a unit test, run in CI) checks each one with SimpleSign
+itself. It must reach the level it claims and hold the number of signatures it should, and every signature in it
+must be intact and valid for SimpleSign's own validators: the earlier signatures of a PDF signed again, each
+co-signer and each counter-signature included. A later signature that broke an earlier one fails there, without an
+account at the checker.
 
 | Format | Profile (`selectedSpec`) | Samples |
 |---|---|---|
-| PAdES | EN 319 142-1 v1.1.1 (`EN31914201v010101`) | B-B, B-T, B-LT, B-LTA; adbe.pkcs7.detached (fails as expected); ECDSA; RSASSA-PSS; visible; certified; two signatures; B-B augmented to B-LTA; archive renewed; two-phase |
-| CAdES | EN 319 122-1 v1.1.1 (`EN31912201v010101`) | B-B, B-T, B-LT, B-LTA (enveloping); ECDSA; RSASSA-PSS; counter-signed; B-B augmented to B-LTA; archive renewed; two-phase |
-| XAdES | EN 319 132-1 (`EN31913201v010101`) | B-B enveloped and enveloping; B-T, B-LT, B-LTA; ECDSA; counter-signed; B-B augmented to B-LTA; archive renewed; two-phase |
+| PAdES | EN 319 142-1 v1.1.1 (`EN31914201v010101`) | B-B, B-T, B-LT, B-LTA; adbe.pkcs7.detached (fails as expected); ECDSA; RSASSA-PSS; visible; certified; B-B augmented to B-LTA; archive renewed; two-phase; **several signatures:** two (RSA, ECDSA), three, certified then signed, two raised together to B-LTA, B-LTA signed again at B-LTA |
+| CAdES | EN 319 122-1 v1.1.1 (`EN31912201v010101`) | B-B, B-T, B-LT, B-LTA (enveloping); ECDSA; RSASSA-PSS; B-B augmented to B-LTA; archive renewed; two-phase; **several signatures:** counter-signed, co-signed (two SignerInfos) at B-T and at B-LTA |
+| XAdES | EN 319 132-1 (`EN31913201v010101`) | B-B enveloped and enveloping; B-T, B-LT, B-LTA; ECDSA; B-B augmented to B-LTA; archive renewed; two-phase; **several signatures:** counter-signed, two enveloped signatures at B-T and at B-LTA |
 
 Detached CAdES and XAdES are left out. The checker takes a single file and has no field for the detached content,
 so it can only report the message digest as wrong.
