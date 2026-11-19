@@ -12,9 +12,10 @@ namespace SimpleSign.Peru.Iofe.Cli;
 /// <list type="bullet">
 /// <item><c>--profile iofe</c>: INDECOPI's trusted list and the policies of its accreditation guide;</item>
 /// <item>the <c>iofe</c> signing and validation policies (<c>--signing-policy iofe</c>, <c>--policy iofe</c>, <c>policy export --preset iofe</c>);</item>
-/// <item><c>--tsl-profile iofe</c>: a trusted list read as INDECOPI's;</item>
-/// <item><c>simplesign iofe sign|verify|view</c>: the configuration of the guide's sections 4.2 to 4.4.</item>
+/// <item><c>--tsl-profile iofe</c>: a trusted list read as INDECOPI's.</item>
 /// </list>
+/// The accredited configuration of the guide's sections 4.2 to 4.4, <c>simplesign iofe sign|verify|view</c>, comes with
+/// its own extension, <c>SimpleSign.Peru.Iofe.Accredited.Cli</c>, from the repository of the accredited package.
 /// </summary>
 public sealed class IofeCliExtension : ICliExtension
 {
@@ -37,20 +38,11 @@ public sealed class IofeCliExtension : ICliExtension
     }
 
     /// <inheritdoc />
-    public void AddCommands(IConfigurator config)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        config.AddBranch("iofe", iofe =>
-        {
-            iofe.SetDescription("Peru (IOFE): sign and verify as INDECOPI's accreditation guide asks (sections 4.2 to 4.4)");
-            iofe.AddCommand<IofeSignCommand>("sign")
-                .WithDescription("Sign as an automated agent under INDECOPI's guide (section 4.2): key in a PKCS#11 module, fixed policy, audit");
-            iofe.AddCommand<IofeVerifyCommand>("verify")
-                .WithDescription("Verify a received document as an automated agent under INDECOPI's guide (section 4.3)");
-            iofe.AddCommand<IofeViewCommand>("view")
-                .WithDescription("Write the viewer page of a signed document, in Spanish");
-        });
-    }
+    /// <remarks>
+    /// None: what this extension adds goes into the standard commands. <c>simplesign iofe sign|verify|view</c> come with
+    /// <c>SimpleSign.Peru.Iofe.Accredited.Cli</c>.
+    /// </remarks>
+    public void AddCommands(IConfigurator config) => ArgumentNullException.ThrowIfNull(config);
 
     /// <inheritdoc />
     public IReadOnlyList<CliProfile> Profiles { get; } =

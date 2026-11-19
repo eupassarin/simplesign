@@ -69,17 +69,14 @@ public sealed class IofeCliExtensionTests : IDisposable
         }
     }
 
-    [Theory]
-    [InlineData("iofe")]
-    [InlineData("iofe sign")]
-    [InlineData("iofe verify")]
-    [InlineData("iofe view")]
-    public async Task Help_EveryIofeCommand_Renders(string command)
+    [Fact]
+    public async Task IofeCommands_AreNotThisExtensions()
     {
-        var (exit, output) = await RunAsync([.. command.Split(' '), "--help"]);
+        // simplesign iofe sign|verify|view come with SimpleSign.Peru.Iofe.Accredited.Cli, from the accredited package's
+        // repository; two extensions adding the same group would list it twice.
+        var (exit, _) = await RunAsync("iofe", "sign", "--help");
 
-        exit.ShouldBe(0, output);
-        output.ShouldNotBeNullOrWhiteSpace();
+        exit.ShouldNotBe(0);
     }
 
     [Theory]

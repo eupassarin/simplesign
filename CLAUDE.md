@@ -33,7 +33,7 @@ dotnet test tests/unit/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.T
 dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
 dotnet test tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
 
-# PKCS#11 on a SoftHSM2 token, in Docker (Signers.Pkcs11.Tests and Peru.Iofe.Accredited.Tests; skipped without SOFTHSM2_MODULE)
+# PKCS#11 on a SoftHSM2 token, in Docker (Signers.Pkcs11.Tests; skipped without SOFTHSM2_MODULE)
 scripts/tests/pkcs11.sh
 
 # Integration tests (requires network for TSA/OCSP)
@@ -83,11 +83,12 @@ src/
 │   │   └── tools/eidas.py                      writes that playbook
 │   └── Peru/Iofe/                            everything of Peru/IOFE/INDECOPI lives here
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
-│       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (key in a PKCS#11 module or a declared remote service; no PFX), verification agent, audit
-│       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe, `simplesign iofe …`
-│       ├── docs/                             iofe.md, audit-walkthrough.md, accreditation/ = the manuals; es/ = the walk-through and the manuals in Spanish (English is the main text)
+│       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe
+│       ├── docs/                             iofe.md
 │       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
-│       └── tools/                            indecopi.py writes that playbook; auditoria/auditoria.py runs annex B through `simplesign iofe` and keeps the evidence
+│       └── tools/                            indecopi.py writes that playbook
+│                                             (the accredited configuration, SimpleSign.Peru.Iofe.Accredited, with its manuals, audit
+│                                              script and CLI extension `simplesign iofe sign|verify|view`, is in https://github.com/eupassarin/simplesign-iofe-accredited)
 ├── Signers/
 │   ├── SimpleSign.Signers.Pkcs11/  sign through a PKCS#11 driver (tokens, HSMs)
 │   └── SimpleSign.Signers.Cloud/   cloud certificates: ICP-Brasil PSC and CSC v2
@@ -226,9 +227,6 @@ SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension eac
 
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
-
-SimpleSign.Peru.Iofe.Accredited (INDECOPI's guide §4.2–4.4: no policy, key or switch taken from the caller)
-  └── depends on SimpleSign.Peru.Iofe + PAdES + CAdES + XAdES + Signers.Pkcs11 + Signers.Cloud — public API only
 
 SimpleSign.Cli.Extensibility (the contract of CLI extensions)
   └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli

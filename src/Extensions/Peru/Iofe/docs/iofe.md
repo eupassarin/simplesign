@@ -164,73 +164,18 @@ simplesign validate contrato-signed.pdf --profile iofe --sandbox http://localhos
 ## The accredited configuration
 
 `SimpleSign.Peru.Iofe.Accredited` is the guide's sections 4.2, 4.3 and 4.4 as an API with nothing to relax: what the
-policies above leave to the integrator (which key, which policy, whether there is an audit trail) is fixed there.
+policies above leave to the integrator (which key, which policy, whether there is an audit trail) is fixed there. It
+is built on these packages and lives in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), with its CLI extension
+(`SimpleSign.Peru.Iofe.Accredited.Cli`: `simplesign iofe sign|verify|view`), the manuals the guide asks for (in English
+and Spanish), the audit walk-through and the script that runs annex B. Up to SimpleSign 0.14.0 it was here.
 
 ```bash
 dotnet add package SimpleSign.Peru.Iofe.Accredited
 ```
 
-```csharp
-await using var agent = await IofeSigningAgent.OpenAsync(new IofeSigningAgentOptions
-{
-    Module = new Pkcs11SignerOptions { LibraryPath = hsmDriver, TokenLabel = "firma", KeyLabel = "sello-2026", Pin = pin },
-    ModuleDeclaration = new IofeModuleDeclaration("Thales", "Luna K7", "FIPS 140-2 Level 3", "4090"),
-    Audit = new JsonLinesAuditSink("/var/log/firma/auditoria.jsonl"),
-    Transactions = ["factura", "constancia"],
-    Timestamp = new IofeTimestampAuthority(new Uri(tsaUrl), tsaCertificate),
-});
-IofeSignedDocument signed = await agent.SignPdfAsync(pdf, new IofeTransaction("factura", "F001-123"));
-
-await using var verifier = await IofeVerificationAgent.CreateAsync(new IofeVerificationAgentOptions
-{
-    Audit = new JsonLinesVerificationAuditSink("/var/log/firma/verificacion.jsonl"),
-    Notifier = notifier,
-});
-IofeVerification result = await verifier.VerifyAsync(received, new IofeSender("20123456789", "mesa@entidad.pe"));
-```
-
-| The guide asks | The package |
-|---|---|
-| Key operations only in the cryptographic module, no copies (Req. 15) | The key is in a PKCS#11 module — one the driver does not report as sensitive and not extractable is refused, and the token must be the declared module — or in a remote signing service the operator declares (CSC v2: only the hash is sent), which must be that service. No PKCS#12 (PFX) file, no key in memory |
-| The checks always on (Req. 14, 24) | No policy parameter. The one exception is an `IofeContingency` (procedure approved by INDECOPI, with its validity), written to each record |
-| An audit trail by kind of transaction (Req. 14, 24) | No agent without a sink; signatures carry `type/id`; verifications have their own hash-chained trail |
-| No signatures outside the defined transaction (Req. 14) | A closed list of kinds of transaction |
-| A notice to the sender of an invalid document (§4.3) | `IofeRejectionNotice` handed to an `IIofeSenderNotifier`; a notice not delivered fails the verification |
-| The checks of each time-stamp (§4.4) | `IofeTimestampAuthority` carries the authority's certificate: a token of any other is refused |
-| A viewer (Req. 18, 28) | `IofeViewer`, in Spanish |
-| Manuals (Req. 20, 30) | [`src/Extensions/Peru/Iofe/docs/accreditation/`](accreditation/README.md); in Spanish, [`es/acreditacion/`](es/acreditacion/README.md) |
-
-The same from the command line, with the extension installed: `simplesign iofe sign`, `simplesign iofe verify`,
-`simplesign iofe view`.
-
-With the key in a remote signing service instead of the organization's module:
-
-```csharp
-RemoteService = new IofeRemoteService
-{
-    Service = new CscClientOptions { BaseUri = serviceUri, ClientId = clientId, ClientSecret = clientSecret },
-    CredentialId = "sello-2026",
-    Pin = pin,
-},
-RemoteServiceDeclaration = new IofeRemoteServiceDeclaration(
-    "Proveedor S.A.", "Firma Remota", "PSVA de firma remota acreditado ante el INDECOPI", "Res. 000-2025/DGI-INDECOPI"),
-```
-
-The agent signs unattended, so it authenticates with a service token or client credentials (renewed when the token
-expires) and the credential's PIN; a credential a person has to authorize is refused. The service is asked what it is
-before a secret is sent to it. On the command line: `--csc-url`, `--csc-credential`, `--csc-client-id`,
-`--csc-client-secret` (or `--csc-token`) and `--service-provider`, `--service-name`, `--service-accreditation`,
-`--service-reference`.
-
-**A PKCS#12 (PFX) file is not a key source of the accredited package**, and no option makes it one: it is a copy of the
-key, and signing with it is a key operation in the application (Req. 15). To sign with a PFX under IOFE's trust and
+A PKCS#12 (PFX) file is not a key source of the accredited package. To sign with a PFX under IOFE's trust and
 policies, outside the accreditation, use the general signers: `PadesSigner…WithCertificate(pfx).WithProfile(iofe)`, or
 `simplesign sign --cert file.pfx --profile iofe`.
-
-What stays with the operator: the certification of the module or the accreditation of the remote service (declared,
-not checked by software — INDECOPI accredits remote signature services under Resolución 175-2024/DGI), key custody
-under two-person control, access control of the system that hosts the library. What is still open on the library's side: the
-code signing of the release (Req. 17, 27).
 
 ## Time-stamping authorities
 
@@ -260,8 +205,9 @@ The CLI reads the same list with `--tsl … --tsl-signer … --tsl-profile iofe`
 [`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../playbooks/indecopi-checklist.md) lists every item of annex B of the
 *Guía de Acreditación de Aplicaciones de Software* v4.0 — §4.2 F-1…F-32, §4.3 V-1…V-32, §4.4 S-1…S-4 and §4.1
 E-1…E-19 — and what shows it: a playbook step (P), tests (U), or the accredited product (X: access control, the
-cryptographic module and key custody, code signing of the application, manuals). Every item a library can show has a
-step or a test.
+cryptographic module and key custody, code signing of the application, manuals). What the accredited package shows
+itself (A), with a scenario of its audit script and a test for each item, is in the copy of this checklist in
+[its repository](https://github.com/eupassarin/simplesign-iofe-accredited/blob/main/docs/indecopi-checklist.md).
 
 ## Not covered yet
 

@@ -446,37 +446,16 @@ signature's qualification) and the `eidas` policies. More in the [eIDAS article]
 
 ### IOFE (Peru)
 
-With `SimpleSign.Peru.Iofe.Cli` installed: `--profile iofe`, the `iofe` and `iofe-agent` policies, `--tsl-profile iofe`,
-and `simplesign iofe`, the configuration of INDECOPI's accreditation guide (sections 4.2 to 4.4,
-`SimpleSign.Peru.Iofe.Accredited`), where the options the guide leaves no choice about are not options.
+With `SimpleSign.Peru.Iofe.Cli` installed: `--profile iofe`, the `iofe` and `iofe-agent` policies and
+`--tsl-profile iofe`. More in the [IOFE article](../../src/Extensions/Peru/Iofe/docs/iofe.md).
+
+The configuration of INDECOPI's accreditation guide (sections 4.2 to 4.4), where the options the guide leaves no
+choice about are not options, is `simplesign iofe sign|verify|view`: it comes with its own extension,
+`SimpleSign.Peru.Iofe.Accredited.Cli`, from [the accredited package's repository](https://github.com/eupassarin/simplesign-iofe-accredited), which has its manuals.
 
 ```bash
-simplesign iofe sign factura.pdf -o factura-firmada.pdf \
-  --pkcs11-lib /usr/lib/libCryptoki2_64.so --pkcs11-key sello-2026 --pin env:HSM_PIN \
-  --module-manufacturer "Thales" --module-model "Luna K7" --module-certification "FIPS 140-2 Level 3" --module-certificate 4090 \
-  --transaction factura/F001-123 --allow factura --audit-log auditoria.jsonl \
-  --tsa https://tsa.example/tsa --tsa-cert tsa.pem
-simplesign iofe verify recibido.pdf --sender 20123456789 --audit-log verificacion.jsonl --notice comunicado.txt
-simplesign iofe view factura-firmada.pdf -o visor.html
+simplesign extension install SimpleSign.Peru.Iofe.Accredited.Cli
 ```
-
-The key of `iofe sign` is in a PKCS#11 module, as above, or in a remote signing service (CSC v2), which is declared
-the same way and must be the declared one; a PFX file is not accepted (`simplesign sign --cert file.pfx --profile iofe`
-signs with one, outside the accreditation):
-
-```bash
-simplesign iofe sign factura.pdf -o factura-firmada.pdf \
-  --csc-url https://provider.example/csc/v2/ --csc-credential sello-2026 --pin env:CSC_PIN \
-  --csc-client-id agente --csc-client-secret env:CSC_SECRET \
-  --service-provider "Proveedor S.A." --service-name "Firma Remota" \
-  --service-accreditation "PSVA de firma remota acreditado" --service-reference "Res. 000-2025/DGI-INDECOPI" \
-  --transaction factura/F001-123 --allow factura --audit-log auditoria.jsonl
-```
-
-`iofe verify` returns 0 when every signature is valid and 1 when the document is rejected, with the notice to the
-sender written to `--notice`. `--trust-root`, or `--tsl` with `--tsl-signer`, replace INDECOPI's trusted list;
-`--contingency` with `--contingency-until` declares a contingency. The manuals are in
-[`src/Extensions/Peru/Iofe/docs/accreditation/`](../../src/Extensions/Peru/Iofe/docs/accreditation/user-manual.md).
 
 ## Network
 
