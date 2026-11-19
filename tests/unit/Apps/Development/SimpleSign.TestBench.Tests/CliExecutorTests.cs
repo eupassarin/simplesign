@@ -71,6 +71,34 @@ public sealed class CliExecutorTests : IDisposable
         CliExecutor.Locate(Path.Combine(_dir, "nowhere.dll"), _dir).ShouldBeNull();
     }
 
+    [SkippableFact]
+    public async Task RunAsync_ValidateWithAWarningOnStderr_ReadsTheJsonOfStdout()
+    {
+        Skip.If(OperatingSystem.IsWindows(), "The stand-in CLI is a shell script.");
+
+        // The CLI writes the verdict on stdout and a trusted-list warning on stderr, then ends with 1 ("not valid").
+        string cli = Path.Combine(_dir, "simplesign");
+        File.WriteAllText(cli, """
+            #!/bin/sh
+            printf '{\n  "signatures": [ { "indication": "Indeterminate" } ]\n}\n'
+            echo 'TSL: the list was refused. No anchor comes from it.' >&2
+            exit 1
+            """.Replace("\r\n", "\n", StringComparison.Ordinal));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(cli, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var job = new CliJob([new CliLine("validate", "signed.pdf")], new Dictionary<string, byte[]>(), new Dictionary<string, string>());
+
+        var outcome = await new CliExecutor(() => cli).RunAsync(job, CancellationToken.None);
+
+        outcome.Failed.ShouldBeNull(outcome.Error);
+        outcome.ValidationJson.ShouldNotBeNull().ShouldContain("Indeterminate");
+        outcome.ValidationJson.ShouldNotContain("No anchor comes from it");
+        outcome.Steps[0].Output.ShouldContain("No anchor comes from it.");
+    }
+
     [Fact]
     public void Path_TestBuild_HasTheCliNextToIt() =>
         File.Exists(new CliExecutor().Path).ShouldBeTrue("the TestBench build copies the CLI to cli/");
