@@ -31,7 +31,6 @@ dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
-dotnet add package SimpleSign.Peru.Iofe.Accredited   # IOFE: the accreditation guide's sections 4.2–4.4, nothing to relax
 dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
@@ -49,7 +48,7 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
-| `SimpleSign.Peru.Iofe.Accredited` | The configuration INDECOPI's accreditation guide asks for (sections 4.2–4.4): signing and verification agents with the key in a PKCS#11 module or in a declared remote signing service, fixed policies, audit trails, the notice to the sender |
+| `SimpleSign.Peru.Iofe.Accredited` | The configuration INDECOPI's accreditation guide asks for (sections 4.2–4.4), with its CLI extension `SimpleSign.Peru.Iofe.Accredited.Cli`: in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited) since SimpleSign 0.14, built on these packages |
 | `SimpleSign.Peru.Iofe.Cli` | IOFE for the `simplesign` command line, as an extension: `simplesign extension install SimpleSign.Peru.Iofe.Cli` |
 | `SimpleSign.Brazil.Cli` | ICP-Brasil, Gov.br and Lei 14.063 for the command line, as an extension: `--profile icp-brasil`, `simplesign brasil sign` |
 | `SimpleSign.Europe.Eidas.Cli` | eIDAS for the command line, as an extension: `--profile eidas` |

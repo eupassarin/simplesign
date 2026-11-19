@@ -6,14 +6,14 @@ accreditation of signature software, in one folder.
 | | |
 |---|---|
 | [`SimpleSign.Peru.Iofe/`](SimpleSign.Peru.Iofe) | The library: trust anchors from INDECOPI's signed trusted list, kept current, and the policies of the accreditation guide. One `ICountryExtension`, built on the public API of Core and XAdES |
-| [`SimpleSign.Peru.Iofe.Accredited/`](SimpleSign.Peru.Iofe.Accredited) | The configuration the guide asks for in sections 4.2 to 4.4, with nothing to relax: signing and verification agents, key in a PKCS#11 module, audit trails |
-| [`SimpleSign.Peru.Iofe.Cli/`](SimpleSign.Peru.Iofe.Cli) | The extension of the `simplesign` command line: `--profile iofe`, the `iofe` policies, `--tsl-profile iofe`, `simplesign iofe sign\|verify\|view` |
-| [`docs/iofe.md`](docs/iofe.md) | The article: the list, the policies, the profile, the accredited configuration |
-| [`docs/accreditation/`](docs/accreditation/README.md) | The manuals the guide asks for: administration, user, programmer, security configuration, scope. In Spanish, the version handed to INDECOPI: [`docs/es/acreditacion/`](docs/es/acreditacion/README.md) |
-| [`docs/audit-walkthrough.md`](docs/audit-walkthrough.md) | The audit walk-through: what to prepare, run and show the auditor, rehearsed. In Spanish: [`docs/es/guion-de-auditoria.md`](docs/es/guion-de-auditoria.md) |
+| [`SimpleSign.Peru.Iofe.Cli/`](SimpleSign.Peru.Iofe.Cli) | The extension of the `simplesign` command line: `--profile iofe`, the `iofe` policies, `--tsl-profile iofe` |
+| [`docs/iofe.md`](docs/iofe.md) | The article: the list, the policies, the profile |
 | [`playbooks/`](playbooks) | `indecopi-checklist.md`, every item of the guide's annex B and what shows it, and `indecopi-guia-v4.json`, the playbook the TestBench runs |
 | [`tools/indecopi.py`](tools/indecopi.py) | Writes that playbook |
-| [`tools/auditoria/auditoria.py`](tools/auditoria/auditoria.py) | The audit, run: for each item of annex B it prepares a Sandbox, runs `simplesign iofe` (the accredited package, not the general signers), checks the signature or the refusal and its reason, and keeps the evidence with a report in English and Spanish. With `--entorno file` it runs in a real environment instead (the operator's HSM, INDECOPI's list, the real CA), does what that environment can show and reports the rest as not run there; `entorno.ejemplo.json` describes the file. `escenarios.json` is its catalog |
+
+The accredited configuration of the guide's sections 4.2 to 4.4 — `SimpleSign.Peru.Iofe.Accredited`, its CLI extension
+(`simplesign iofe sign|verify|view`), the manuals the guide asks for, the audit walk-through and the script that runs
+annex B — is in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), built on these packages. It was in this folder up to SimpleSign 0.14.0.
 
 The tests are in `tests/unit/Extensions/Peru/Iofe` (and `IofeTrustedListIntegrationTests` in `tests/integration`, which
 reads INDECOPI's real list).

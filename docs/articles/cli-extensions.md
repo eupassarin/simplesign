@@ -36,7 +36,7 @@ the three below for the CLI it runs); `extension remove` does not touch those.
 
 | | Where it shows |
 |---|---|
-| Commands | Its own branch, e.g. `simplesign iofe sign` |
+| Commands | Its own branch, e.g. `simplesign brasil timestamp verify` |
 | Commands that run a standard one | `simplesign brasil sign` is `simplesign sign`, every option of it, plus the extension's own (`--icp-policy`…) |
 | Trust profiles | `--profile NAME`, `--trust-profile NAME`, `simplesign profiles` |
 | Signing policies | `--signing-policy NAME`, `simplesign policy export signing --preset NAME` |
@@ -69,7 +69,7 @@ without the policy that was asked for.
 |---|---|---|
 | `SimpleSign.Brazil.Cli` | `brasil` | Brazil: `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, `simplesign brasil sign` (`--icp-policy`, `--aea`, `--health-document`), `brasil timestamp verify`, and the ICP-Brasil and Gov.br chain validation, the Lei 14.063 level and the signer's manifest in `validate` and `inspect` — see [ICP-Brasil](../../src/Extensions/Brazil/docs/icp-brasil.md) |
 | `SimpleSign.Europe.Eidas.Cli` | `eidas` | EU (eIDAS): `--profile eidas` (the EU LOTL, the qualification of each signature) and the `eidas` policies — see [eIDAS](../../src/Extensions/Europe/Eidas/docs/eidas.md) |
-| `SimpleSign.Peru.Iofe.Cli` | `iofe` | Peru (IOFE): `--profile iofe`, the `iofe` and `iofe-agent` policies, `--tsl-profile iofe`, `simplesign iofe sign\|verify\|view` — see [IOFE](../../src/Extensions/Peru/Iofe/docs/iofe.md) |
+| `SimpleSign.Peru.Iofe.Cli` | `iofe` | Peru (IOFE): `--profile iofe`, the `iofe` and `iofe-agent` policies, `--tsl-profile iofe` — see [IOFE](../../src/Extensions/Peru/Iofe/docs/iofe.md). `simplesign iofe sign\|verify\|view` come with `SimpleSign.Peru.Iofe.Accredited.Cli`, from [its repository](https://github.com/eupassarin/simplesign-iofe-accredited) |
 
 ## Writing one
 

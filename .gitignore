@@ -44,9 +44,6 @@ tests-local/
 
 nupkgs/
 evidencias/
-evidencias-*/
-# a real environment for auditoria.py --entorno (the example, entorno.ejemplo.json, is versioned)
-entorno.json
 
 
 

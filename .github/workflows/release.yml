@@ -68,7 +68,6 @@ jobs:
             src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj
             src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj
             src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj
-            src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Accredited/SimpleSign.Peru.Iofe.Accredited.csproj
             src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj
             src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj
             src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas.Cli/SimpleSign.Europe.Eidas.Cli.csproj

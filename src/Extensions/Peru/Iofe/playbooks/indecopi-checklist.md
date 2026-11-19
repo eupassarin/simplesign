@@ -34,11 +34,9 @@ the application…"), and the applicant justifies in annex B each item it says d
   them;
 - **U** — covered by unit or integration tests of the library, not by a run;
 - **A** — guaranteed by the accredited configuration, the package `SimpleSign.Peru.Iofe.Accredited`
-  (`IofeSigningAgent`, `IofeVerificationAgent`, the `simplesign iofe` commands): the API gives no way around it. The
-  tests named are those of `SimpleSign.Peru.Iofe.Accredited.Tests`, run on a SoftHSM2 token by
-  `scripts/tests/pkcs11-run.sh` (those of a remote signing service run everywhere, against one in memory); the manuals
-  are under `src/Extensions/Peru/Iofe/docs/accreditation/` (in Spanish, `docs/es/acreditacion/`). It covers sections 4.2,
-  4.3 and 4.4;
+  (`IofeSigningAgent`, `IofeVerificationAgent`, the `simplesign iofe` commands): the API gives no way around it. It
+  lives in [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited), with its tests, its manuals and a copy of this checklist that adds, for every
+  item, the scenario of its audit script and the test that show it. It covers sections 4.2, 4.3 and 4.4;
 - **N** — needs something new first;
 - **X** — outside the library: the accredited product, its operation or its documentation must show it (the column
   says what SimpleSign offers towards it).
@@ -59,7 +57,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-10 | Revocation: or OCSP (RFC 2560) for the certificate and its chain | P (`sandbox-basics:ocsp-good`, `sandbox-basics:revoked-ocsp`, `sandbox-basics:ocsp-unauthorized`) |
 | F-11 | An expired certificate cannot sign | P (`sandbox-basics:expired`, `sandbox-basics:not-yet-valid`, `sandbox-basics:expired-ca`) |
 | F-12 | The certificate's nonRepudiation bit is checked | P (`no-nonrepudiation-agent` with playbook:iofe-agent, the iofe policy with KeyUsage = nonRepudiation declared in the playbook; `sandbox-basics:no-signing-key-usage`, `sandbox-basics:no-key-usage-extension`, `sandbox-basics:no-key-usage-cades`, `sandbox-basics:no-key-usage-xades`). `IofePolicies.Signing` also accepts digitalSignature (section 4.1): an automated agent requires nonRepudiation (the adjustment above) |
-| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure): the accredited package opens no port and reads no configuration file (`src/Extensions/Peru/Iofe/docs/accreditation/administration-manual.md`, section 9). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
+| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure): the accredited package opens no port and reads no configuration file (its administration manual, section 9). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
 | F-14 | The certificate checks cannot be switched off (except under a contingency procedure INDECOPI approved) | A — `IofeSigningAgent` takes no policy: it signs under `IofePolicies.AgentSigning`. The one exception is a declared `IofeContingency` (procedure and validity), under which an unknown revocation status is tolerated, a revoked certificate still refused, and the procedure written to each audit record (`SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce`, `SignPdfAsync_RevokedCertificateUnderAContingency_IsStillRefused`). With the general signers the checks are the `SigningPolicy` given to them |
 | F-15 | Audit log of the signatures produced, by kind of transaction | P (`audit`, `audit-refused`) + U (`JsonLinesAuditSink` hash chain, `simplesign audit verify`) + A (the agent is not created without an audit sink, an agent that does not get to open — list unreadable, PIN refused, service refusing it — is recorded as `AgentNotOpened`, and each record carries the transaction as `type/id`: `OpenAsync_IncompleteOptions_IsRefused`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`) |
 | F-16 | Administrator rights cannot produce signatures outside the defined transaction | A — the agent signs only for the kinds of transaction it was opened with; any other is refused and recorded (`SignPdfAsync_TransactionOutsideTheAgents_IsRefusedAndRecorded`), and with a remote key it signs unattended only: a credential a person authorizes is refused (`OpenAsync_CredentialAPersonAuthorizes_IsRefusedAndRecorded`). Who may reach the agent and the module is X: the product's roles and key access |
@@ -78,7 +76,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-29 | The application itself is signed with a code-signing certificate | X — **open**: the NuGet packages carry nuget.org's repository signature (`dotnet nuget verify --all`) but no author signature, and the assemblies no Authenticode signature; both need a code-signing certificate the release does not have yet. A product signs its own installer or executable |
 | F-30 | A viewer shows the signer and the recipient the document's integrity, signing time, public key and certificate data | P (`viewer`: the validation report; `simplesign validate --html-report --report-language es`) + A (`IofeViewer`, `simplesign iofe view`: `Viewer_SignedPdf_ShowsTheSignerInSpanish`). The product's own screen is X |
 | F-31 | Signing time and the chain's public keys attached and signed (PAdES/XAdES/CAdES from the EPES-equivalent level comply) | P (`sandbox-basics:tsa-ok`, `sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`, `sandbox-basics:cades-blta-enveloped`, `sandbox-basics:xades-blta-detached`, `sandbox-basics:xades-blta-enveloping`; raised later: `aug-tsl-blta`, `aug-tsa-unlisted`) |
-| F-32 | Administrator and user manuals (security policies, configuration options) | A — `src/Extensions/Peru/Iofe/docs/accreditation/`, and in Spanish `docs/es/acreditacion/`: administration, user, programmer ("manual de programador", asked when a library is evaluated), security configuration (section 5) and scope. A product adds its own |
+| F-32 | Administrator and user manuals (security policies, configuration options) | A — in the accredited package's repository (`docs/accreditation/`, and in Spanish `docs/es/acreditacion/`): administration, user, programmer ("manual de programador", asked when a library is evaluated), security configuration (section 5) and scope. A product adds its own |
 
 ## 4.3 Verification by automated agents (V)
 
@@ -152,71 +150,18 @@ this type: what is marked A in 4.2 is, here, as the general signers give it.
 ## Shown by the accredited package itself
 
 The playbooks above run the general signers under the IOFE policies: the same engine, but not the API that is
-accredited. This table is the evidence produced by `SimpleSign.Peru.Iofe.Accredited` itself, for every item software
-can show:
-
-- **Scenarios** of `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py`, which prepares a Sandbox (a failure of the
-  CRL, OCSP, TSA or trusted list, a revocation, a credential), runs `simplesign iofe sign|verify|view` and checks the
-  signature or the refusal and its reason, with the key in a PKCS#11 module, in a remote signing service, or both. It
-  keeps each command, its output, the audit records and the files, and writes a report in English and Spanish.
-  `docs/audit-walkthrough.md` (in Spanish, `docs/es/guion-de-auditoria.md`) is the walk-through.
-- **Tests** of `SimpleSign.Peru.Iofe.Accredited.Tests` carrying the trait `AnnexB` with the item
-  (`dotnet test … --filter "AnnexB=F-8"`).
-
-`AnnexBCoverageTests` fails when an item whose row above is not X or "Not applicable" has no scenario or no test here;
-the few it leaves out are listed there with the reason.
-
-| # | Scenarios (`auditoria.py`) | Tests (`SimpleSign.Peru.Iofe.Accredited.Tests`) |
-|---|---|---|
-| F-1 | `tsl-vigente`, `tsl-otro-firmante`, `tsl-alterada` | tests: `Sign_ListSignedByItsOperatorWithTheRootListed_Signs`, `TrustedList_SignedByAnotherCertificateOrChanged_IsNotRead` |
-| F-2 | `tsl-expirada` | tests: `TrustedList_Expired_IsNotRead` |
-| F-3 | `tsl-vigente`, `raiz-no-listada` | tests: `SignPdfAsync_RootNotTrusted_IsRefused`, `Sign_ListSignedByItsOperatorWithTheRootListed_Signs`, `Sign_RootNotInTheList_IsRefused` |
-| F-5 | `crl-http`, `crl-https`, `crl-ldap`, `revocado-crl-https`, `revocado-crl-ldap` | tests: `SignPdfAsync_RevokedCertificate_IsRefusedBeforeTheServiceIsAskedToSign` |
-| F-6 | `crl-clave-ajena` | tests: `Sign_CrlSignedWithAnotherKey_IsRefused` |
-| F-7 | `crl-expirada`, `crl-sin-proxima-actualizacion` | tests: `Sign_CrlExpiredOrWithoutNextUpdate_IsRefused` |
-| F-8 | `crl-http`, `revocado`, `revocado-crl-https`, `revocado-crl-ldap`, `revocacion-no-disponible` | tests: `SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce`, `SignPdfAsync_RevokedCertificate_IsRefusedBeforeTheServiceIsAskedToSign` |
-| F-9 | `cadena-revocada` | tests: `Sign_IssuingCaRevoked_IsRefused` |
-| F-10 | `ocsp-vigente`, `ocsp-revocado`, `ocsp-no-autorizado` | tests: — (see `AnnexBCoverageTests.WithoutATest`) |
-| F-11 | `expirado`, `aun-no-valido`, `ec-expirada` | tests: `Sign_ExpiredCertificate_IsRefused` |
-| F-12 | `sin-no-repudio`, `sin-uso-de-firma` | tests: `SignPdfAsync_CertificateWithoutNonRepudiation_IsRefused` |
-| F-14 | `revocacion-no-disponible`, `sin-opcion-de-politica`, `contingencia`, `contingencia-revocado`, `contingencia-vencida` | tests: `SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce`, `SignPdfAsync_RevokedCertificateUnderAContingency_IsStillRefused` |
-| F-15 | `tsl-otro-firmante`, `auditoria`, `sin-registro-de-auditoria`, `pin-incorrecto` | tests: `Open_IncompleteOptions_IsRecorded`, `Open_ServiceRefusesTheAgent_IsRecordedAndThrownAsItWas`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`, `SignPdfAsync_KeyInARemoteService_SignsThereAndRecordsTheProvider`, `SignPdfAsync_RevokedCertificate_IsRefusedBeforeTheServiceIsAskedToSign` |
-| F-16 | `transaccion-no-definida`, `credencial-con-persona` | tests: `OpenAsync_CredentialAPersonAuthorizes_IsRefusedAndRecorded`, `SignPdfAsync_TransactionOutsideTheAgents_IsRefusedAndRecorded` |
-| F-17 | `clave-en-el-modulo`, `clave-en-el-servicio-remoto`, `pin-incorrecto`, `pfx-no-aceptado` | tests: `OpenAsync_NoKeySourceOrTwoOrNoDeclaration_IsRefused`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`, `SignPdfAsync_KeyInARemoteService_SignsThereAndRecordsTheProvider` |
-| F-18 | `clave-en-el-modulo`, `clave-extraible`, `clave-en-el-servicio-remoto`, `pfx-no-aceptado` | tests: `OpenAsync_ExtractableKey_IsRefusedAndRecorded`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`, `SignPdfAsync_KeyInARemoteService_SignsThereAndRecordsTheProvider` |
-| F-19 | `modulo-no-declarado`, `servicio-no-declarado` | tests: `OpenAsync_ServiceThatIsNotTheDeclaredOne_IsRefusedBeforeAnythingIsSentToIt`, `OpenAsync_TokenThatIsNotTheDeclaredModule_IsRefused` |
-| F-28 | `clave-debil`, `sha1-en-la-cadena`, `algoritmos-vigentes` | tests: `Sign_Rsa1024Key_IsRefused` |
-| F-30 | `visor` | tests: `Viewer_DocumentTheAgentSigned_ShowsIntegrityPublicKeyAndCertificate`, `Viewer_SignedPdf_ShowsTheSignerInSpanish` |
-| F-31 | `datos-de-validacion`, `formatos` | tests: `SignCmsAsyncAndSignXmlAsync_KeyInARemoteService_ProduceSignaturesTheVerifierAccepts`, `SignPdfAsync_WithTheTimestampAuthority_ReachesLongTermAndIsAccepted` |
-| V-1 | `v-valido`, `v-tsl-otro-firmante` | tests: `TrustedList_SignedByAnotherCertificateOrChanged_IsNotRead`, `VerifyAsync_TrustedList_AcceptsAListedRootAndRejectsAnUnlistedOne` |
-| V-2 | `v-tsl-expirada` | tests: `TrustedList_Expired_IsNotRead` |
-| V-3 | `v-valido`, `v-raiz-no-listada` | tests: `VerifyAsync_TrustedList_AcceptsAListedRootAndRejectsAnUnlistedOne` |
-| V-5 | `v-valido`, `v-revocado`, `v-revocado-crl-https`, `v-revocado-crl-ldap` | tests: `VerifyAsync_RevokedSigner_IsRejectedWithANoticeToTheSender`, `VerifyAsync_ValidPdf_IsAcceptedAndRecorded` |
-| V-6 | `v-crl-clave-ajena` | tests: `Verify_CrlSignedWithAnotherKeyOrExpired_IsRejected` |
-| V-7 | `v-crl-expirada` | tests: `Verify_CrlSignedWithAnotherKeyOrExpired_IsRejected` |
-| V-8 | `v-revocado` | tests: `VerifyAsync_RevokedSigner_IsRejectedWithANoticeToTheSender` |
-| V-9 | `v-revocado`, `v-cadena-revocada` | tests: `Verify_IssuingCaRevoked_IsRejected` |
-| V-10 | `v-valido`, `v-revocado`, `v-ocsp-revocado` | tests: — (see `AnnexBCoverageTests.WithoutATest`) |
-| V-11 | `v-valido`, `v-expirado` | tests: — (see `AnnexBCoverageTests.WithoutATest`) |
-| V-12 | `v-valido`, `v-sin-no-repudio` | tests: `VerifyAsync_SignerWithoutNonRepudiation_IsRejected` |
-| V-14 | `v-sin-opcion-de-politica`, `v-contingencia`, `v-contingencia-revocado` | tests: `VerifyAsync_RevocationUnavailable_IsRejectedUnlessAContingencyIsInForce`, `VerifyAsync_RevokedSignerUnderAContingency_IsStillRejected` |
-| V-15 | `v-valido`, `v-auditoria` | tests: `VerifyAsync_RevokedSigner_IsRejectedWithANoticeToTheSender`, `VerifyAsync_ValidPdf_IsAcceptedAndRecorded` |
-| V-28 | `v-clave-debil` | tests: — (see `AnnexBCoverageTests.WithoutATest`) |
-| V-30 | `v-documento-alterado`, `v-sin-firmas`, `v-visor` | tests: `VerifyAsync_DocumentChangedAfterSigning_IsRejected`, `Viewer_SignedPdf_ShowsIntegrityTimePublicKeyAndCertificateInSpanish` |
-| S-1 | `datos-de-validacion`, `tsa-otra-autoridad` | tests: `SignPdfAsync_WithTheTimestampAuthority_ReachesLongTermAndIsAccepted`, `Sign_TokenOfAnotherAuthority_IsRefused` |
-| S-2 | `datos-de-validacion`, `tsa-sello-alterado` | tests: `SignPdfAsync_WithTheTimestampAuthority_ReachesLongTermAndIsAccepted`, `Sign_TokenWithABrokenSignature_IsRefused` |
-| S-3 | `datos-de-validacion`, `tsa-revocada` | tests: `SignPdfAsync_WithTheTimestampAuthority_ReachesLongTermAndIsAccepted`, `Sign_RevokedTimestampAuthority_IsRefused` |
-| S-4 | `datos-de-validacion`, `tsa-expirada` | tests: — (see `AnnexBCoverageTests.WithoutATest`) |
+accredited. The evidence the accredited package produces itself — a scenario of its audit script and a test for every
+item software can show — is in the copy of this checklist in [its repository](https://github.com/eupassarin/simplesign-iofe-accredited/blob/main/docs/indecopi-checklist.md).
 
 ## Outside the annex: the process
 
 | What | How |
 |---|---|
-| Evidence for every item (screenshots in annex B) | `auditoria.py` keeps, per scenario, the command of the accredited package, its output, the audit records and the files, and writes the report by item (`docs/audit-walkthrough.md`). The TestBench's Playbook tab does the same for the general signers (`docs/articles/playbook.md`) |
+| Evidence for every item (screenshots in annex B) | The accredited package's audit script keeps, per scenario, the command, its output, the audit records and the files, and writes the report by item (in its repository). The TestBench's Playbook tab does the same for the general signers (`docs/articles/playbook.md`) |
 | A live audit session and a presentation to INDECOPI's commission | X — the applicant |
 | A yearly follow-up audit in production | X — the operator; `IofeTrustedListSource.Changed` and the audit trail give the records |
 | Security settings announced to the users (section 5) | X — the product |
 
 Nothing here is **N**: every item a library can show has a step or a test, and a scenario and a test of the accredited
-package (the table above); the rest belongs to the accredited product.
+package (in its repository); the rest belongs to the accredited product.
 One item is open on the library's side: F-29 / V-29, the code-signing certificate of the release.

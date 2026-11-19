@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **The IOFE accredited configuration moved to [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited)**, with its history:
+  `SimpleSign.Peru.Iofe.Accredited` (same package ID, now versioned there, starting at 1.0.0 on SimpleSign 0.14), its
+  tests, the manuals the guide asks for (English and Spanish), the audit walk-through and the script that runs annex B.
+  SimpleSign no longer packs it.
+- **`simplesign iofe sign|verify|view` are no longer in `SimpleSign.Peru.Iofe.Cli`**: they come with
+  `SimpleSign.Peru.Iofe.Accredited.Cli`, from that repository (`simplesign extension install
+  SimpleSign.Peru.Iofe.Accredited.Cli`), with the same options. `SimpleSign.Peru.Iofe.Cli` keeps `--profile iofe`, the
+  `iofe` and `iofe-agent` policy presets and `--tsl-profile iofe`, and with this release the two extensions go
+  together; with an older one the CLI lists the `iofe` group twice.
+
 ## [0.14.0] - 2026-11-19
 
 ### Added

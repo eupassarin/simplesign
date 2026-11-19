@@ -4,7 +4,7 @@
     <AssemblyName>SimpleSign.Peru.Iofe.Cli</AssemblyName>
     <RootNamespace>SimpleSign.Peru.Iofe.Cli</RootNamespace>
     <PackageId>SimpleSign.Peru.Iofe.Cli</PackageId>
-    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets, --tsl-profile iofe, and 'simplesign iofe sign|verify|view' — the configuration of INDECOPI's accreditation guide, sections 4.2 to 4.4.</Description>
+    <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets and --tsl-profile iofe. The accredited configuration of INDECOPI's guide ('simplesign iofe sign|verify|view') comes with SimpleSign.Peru.Iofe.Accredited.Cli.</Description>
     <PackageTags>iofe;indecopi;peru;simplesign;cli;extension</PackageTags>
     <Version>0.14.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -14,7 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SimpleSign.Peru.Iofe\SimpleSign.Peru.Iofe.csproj" />
-    <ProjectReference Include="..\SimpleSign.Peru.Iofe.Accredited\SimpleSign.Peru.Iofe.Accredited.csproj" />
     <ProjectReference Include="..\..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
   </ItemGroup>
 
