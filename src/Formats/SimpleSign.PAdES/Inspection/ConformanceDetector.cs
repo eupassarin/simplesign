@@ -6,14 +6,35 @@ namespace SimpleSign.PAdES.Inspection;
 /// </summary>
 public static class ConformanceDetector
 {
+    /// <summary>The SubFilter EN 319 142-1 requires of a PAdES baseline signature.</summary>
+    private const string BaselineSubFilter = "ETSI.CAdES.detached";
+
     /// <summary>
-    /// Determines the PAdES conformance level for a single signature field.
+    /// Determines the PAdES conformance level for a single signature field. A signature whose SubFilter is not
+    /// <c>ETSI.CAdES.detached</c> (<c>adbe.pkcs7.detached</c>, <c>PBAD.PAdES</c>) is
+    /// <see cref="PAdESConformanceLevel.CmsOnly"/>, whatever it holds: EN 319 142-1 counts only that SubFilter as a
+    /// PAdES baseline signature.
     /// </summary>
     /// <param name="signature">The inspected signature field.</param>
     /// <param name="document">The document info (needed to check DSS presence).</param>
     /// <param name="allSignatures">All signatures in the document (to detect doc timestamps).</param>
     /// <returns>The detected conformance level.</returns>
     public static PAdESConformanceLevel Detect(
+        SignatureFieldInfo signature,
+        PdfDocumentInfo document,
+        IReadOnlyList<SignatureFieldInfo> allSignatures)
+    {
+        ArgumentNullException.ThrowIfNull(signature);
+        return string.Equals(signature.SubFilter, BaselineSubFilter, StringComparison.Ordinal)
+            ? DetectStructure(signature, document, allSignatures)
+            : PAdESConformanceLevel.CmsOnly;
+    }
+
+    /// <summary>
+    /// The level of what a signature holds (signing-certificate attribute, time-stamp, DSS, archive time-stamp),
+    /// whatever its SubFilter: what an augmentation builds on.
+    /// </summary>
+    internal static PAdESConformanceLevel DetectStructure(
         SignatureFieldInfo signature,
         PdfDocumentInfo document,
         IReadOnlyList<SignatureFieldInfo> allSignatures)
@@ -71,8 +92,16 @@ public static class ConformanceDetector
     /// Returns the document-level conformance: the lowest level among all non-timestamp signatures.
     /// A document is only as conformant as its weakest signature.
     /// </summary>
-    public static PAdESConformanceLevel DetectHighest(PdfInspectionResult result)
+    public static PAdESConformanceLevel DetectHighest(PdfInspectionResult result) => Lowest(result, Detect);
+
+    /// <summary>The <see cref="DetectStructure"/> level of the document: the lowest among its signatures.</summary>
+    internal static PAdESConformanceLevel DetectStructureOfDocument(PdfInspectionResult result) => Lowest(result, DetectStructure);
+
+    private static PAdESConformanceLevel Lowest(
+        PdfInspectionResult result,
+        Func<SignatureFieldInfo, PdfDocumentInfo, IReadOnlyList<SignatureFieldInfo>, PAdESConformanceLevel> detect)
     {
+        ArgumentNullException.ThrowIfNull(result);
         var lowest = PAdESConformanceLevel.Unknown;
         bool found = false;
 
@@ -84,7 +113,7 @@ public static class ConformanceDetector
                 continue;
             }
 
-            var level = Detect(sig, result.Document, result.Signatures);
+            var level = detect(sig, result.Document, result.Signatures);
             if (!found || level < lowest)
             {
                 lowest = level;

@@ -57,7 +57,7 @@ Each `SignatureFieldInfo` includes:
 Detect the PAdES conformance level of each signature:
 
 ```csharp
-using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Inspection;
 
 var inspection = await PdfSignatureInspector.InspectAsync(stream);
 var levels = ConformanceDetector.DetectAll(inspection);
@@ -65,12 +65,22 @@ var levels = ConformanceDetector.DetectAll(inspection);
 foreach (var item in levels)
 {
     Console.WriteLine($"{item.Signature.FieldName}: {item.Level}");
-    // B-B, B-T, B-LT, B-LTA
+    // BaselineB, BaselineT, BaselineLT, BaselineLTA, or CmsOnly
 }
 ```
 
 Conformance detection identifies observed PDF structures. Timestamp integrity,
 revocation evidence, and certificate trust require the validation API.
+
+A signature is a PAdES baseline signature only with `/SubFilter /ETSI.CAdES.detached`
+and the ESS signing-certificate attribute (ETSI EN 319 142-1). Otherwise its level is
+`CmsOnly` (in the CLI, "CMS (not PAdES baseline)"), whatever time-stamps or validation
+data it holds. That covers `adbe.pkcs7.detached`, which SimpleSign writes on request for
+PDF/A-1 and older validators, and the ICP-Brasil `PBAD.PAdES`. Signing with such a
+SubFilter adds the warning `SigningWarningCode.SubFilterNotBaseline`. `AchievedLevel`
+still tells what the signature holds, and `PadesAugmenter` still raises such a signature.
+The ETSI Signatures Conformance Checker agrees: see
+[conformance/etsi-checker](../conformance/etsi-checker/README.md).
 
 ## Signing Guarantees and Evidence
 

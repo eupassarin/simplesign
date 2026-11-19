@@ -4,11 +4,11 @@ What to prepare, run and show the auditor to accredit `SimpleSign.Peru.Iofe.Accr
 commands under the *Guía de Acreditación de Aplicaciones de Software* v4.0, sections 4.2, 4.3 and 4.4. Everything
 here was rehearsed on a development machine (macOS) against the test environment; what was not rehearsed says so.
 
-Other languages: [Português](roteiro-de-auditoria.md) · [Español](guion-de-auditoria.md).
+In Spanish: [`es/guion-de-auditoria.md`](es/guion-de-auditoria.md), a translation of this text.
 
-What the auditor is handed are the manuals ([`acreditacion/`](acreditacion/README.md) in Spanish,
-[`acreditacion/en/`](acreditacion/en/README.md) in English) and the evidence this walk-through produces. This
-document is for your team.
+What the auditor is handed are the manuals ([`accreditation/`](accreditation/README.md); in Spanish,
+[`es/acreditacion/`](es/acreditacion/README.md)) and the evidence this walk-through produces. This document is for
+your team.
 
 ## 1. How the accreditation works
 
@@ -123,7 +123,7 @@ For each scenario the script prepares the Sandbox (switches a failure on, revoke
 
 | File | What it is |
 |---|---|
-| `informe.es.html`, `informe.en.html`, `informe.pt.html` (and `.md`) | The report by item of annex B: what the guide asks, the scenarios, the result, and each command with its output |
+| `informe.en.html`, `informe.es.html` (and `.md`) | The report by item of annex B: what the guide asks, the scenarios, the result, and each command with its output |
 | `NN-scenario-key/comandos.txt` | The commands run and what each printed |
 | `NN-…/auditoria.jsonl`, `verificacion.jsonl` | The scenario's audit trail |
 | `NN-…/firmado-*.pdf`, `comunicado.txt`, `visor.html` | The signed document, the notice to the sender, the viewer's page |
@@ -200,17 +200,85 @@ itself names (AIA). When an issuer is still missing, the refusal is `UntrustedRo
 Rehearsed with a token without the CAs' certificates: refused without network, signed with `--chain` and signed
 through AIA.
 
-The failure scenarios (a CRL signed by another key, a revoked TSA) depend on the Sandbox: with the real PKI you show
-the good path and the refusals that need no failure of a third party (transaction, module not declared, an option
-that does not exist, PFX, contingency). The rest comes from the rehearsal's report. **Not rehearsed**: a real HSM, a
-real remote service and INDECOPI's real list, this time.
+### Running the walk-through in production
+
+The same walk-through runs on the production server, with the real HSM, certificate and trusted list; nothing of the
+Sandbox is used. The environment is described in a file, made from the example and kept out of the repository:
+
+```bash
+cp src/Extensions/Peru/Iofe/tools/auditoria/entorno.ejemplo.json entorno.json
+```
+
+| Field | What it is |
+|---|---|
+| `pkcs11` | The HSM's driver, the token's label and the **name** of the environment variable with the PIN (`env:HSM_PIN`). The PIN is not written in the file |
+| `module` | The declaration of the module: manufacturer, model, certification and certificate number |
+| `keys.default` | The label, in the HSM, of the key of the organization's signing certificate |
+| `keys.<role>` | Optional: keys of test certificates, where the CA issues them (`revoked`, `expired`, `no-nonrepudiation`…) |
+| `chain` | Certificates of the issuing CAs, when the HSM holds the signing certificate alone |
+| `tsa` | Address and certificate of the time-stamp authority under contract |
+| `otherRoot` | Any root certificate that issued none of the above: it serves "root not listed", "list of another signer" and "token of another authority" |
+| `received` | Optional: documents third parties signed with a certificate revoked or expired afterwards, and so on |
+| `trustedList.expired` | Optional: an old copy of the trusted list, past its next update |
+| `allow` | Scenarios that act on the module and run only when named: `pin-incorrecto` sends a wrong PIN once |
+
+```bash
+read -rs HSM_PIN && export HSM_PIN
+```
+
+```bash
+python3 src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py --entorno entorno.json --list --lang en
+```
+
+```bash
+python3 src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py --entorno entorno.json --ensayo evidencias --out evidencias-produccion --lang en
+```
+
+`--list` runs nothing: it says, scenario by scenario, what this environment can show and why not the rest. The run
+does those only. The others stay in the report as "not run in this environment", with the reason and, with
+`--ensayo`, the result they had in the Sandbox rehearsal, presented as a rehearsal and not as evidence of the
+environment.
+
+What runs, measured by rehearsing this mode with a SoftHSM token and the Sandbox standing in for production:
+
+| Environment | Scenarios run |
+|---|---|
+| The organization's signing certificate alone, the TSA and `otherRoot` | 24 of 70 |
+| Plus test certificates (revoked, expired, without non-repudiation), received documents, an expired list and `pin-incorrecto` allowed | 37 of 70 |
+
+With the organization's certificate alone: the list current, of another signer and changed; root not listed; a policy
+option that does not exist; expired contingency; audit trail; no signature without an audit log; transaction not
+defined; key in the module; module not declared; PFX; viewer; validation data with the TSA; XML and CMS; token of
+another authority. In verification: a document that is valid, changed and without signatures; root not listed; list
+of another signer; a policy option that does not exist; audit; viewer.
+
+These do not run outside the Sandbox, because they depend on a failure no CA or TSA produces on request: a CRL signed
+with another key, expired or without a next update; an unauthorized OCSP response; revocation unavailable and the
+contingency that covers it; an issuing CA revoked or expired; RSA 1024; SHA-1 in the chain; a TSA revoked, expired or
+with a changed token. Nor do the three scenarios of the remote service: this mode describes an HSM.
+
+In `evidencias-produccion/`, besides what section 6 lists: `00-entorno/`, with the tool's version, the extensions,
+the module and the certificates in it (subject, validity, thumbprint) and the certificate of the first signature
+made, which is the certificate profile annex B asks to attach; and `MANIFIESTO.sha256`, with the digest of each file.
+
+Take care:
+
+- **These are real signatures**, made with the organization's key, over the walk-through's test documents ("Factura
+  F001-123 - documento de prueba"). Each one is in the run's own audit trail, which is part of the evidence.
+- **`pin-incorrecto`** counts towards locking the token: run it once, on purpose, or leave it to the rehearsal.
+- **Extractable key**: one is not created in a production HSM to show the refusal. It stays with the rehearsal.
+- **Network**: the server must reach INDECOPI's list, the CA's CRL or OCSP and the TSA. The scenario of the changed
+  list downloads the list with Python; without a way out to it, give a copy in `trustedList.copy`.
+- **Not rehearsed**: a real HSM and a real remote service. Against INDECOPI's real list what does not depend on a
+  Peruvian certificate was rehearsed: downloaded, the list is accepted; changed or with another signer, it is
+  refused; and a certificate from outside it does not sign.
 
 ## 10. Filling in annex B
 
 Use `evidencias/informe.es.html`: the table "Por ítem del Anexo B" gives, for each item, the scenarios and the
 result; each scenario has the command and its output. The full correspondence, with the tests, is in
 [`playbooks/indecopi-checklist.md`](../playbooks/indecopi-checklist.md) (the table "Shown by the accredited package
-itself"). The scope data (items a–k) is in [`acreditacion/en/scope.md`](acreditacion/en/scope.md).
+itself"). The scope data (items a–k) is in [`accreditation/scope.md`](accreditation/scope.md).
 
 Items to declare **not applicable or the operator's**, with the reason:
 
@@ -245,6 +313,8 @@ Items to declare **not applicable or the operator's**, with the reason:
 | `Error (UntrustedRoot)` on the PKCS#11 track | An issuing CA's certificate is missing and could not be downloaded (the message says which): `--chain file`, or `tools/stack/softhsm-provision.sh --force` in the rehearsal |
 | `(pkcs11)` scenarios skipped | `SOFTHSM2_CONF` is not exported or the token was not provisioned |
 | `Unknown option --…` in `simplesign iofe` | The command has no such option; unknown options are an error, on purpose |
+| `Refused (ModuleMismatch)` in production | The manufacturer and model declared in `module` are not what the token reports: check with `simplesign pkcs11 list --lib <driver>` |
+| A scenario you expected is "not run in this environment" | The reason comes with it: the key, the document or the copy it asks for is missing in the environment file (`--list` shows them all) |
 | The Sandbox was restarted and the token "does not match" | Each `--ephemeral` Sandbox has a new PKI: provision again |
 
 ## 13. A suggested order for the presentation

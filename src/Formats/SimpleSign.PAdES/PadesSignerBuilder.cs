@@ -780,6 +780,13 @@ public sealed partial class PadesSignerBuilder
 
         var achieved = BaselineSigning.AchievedLevel(
             artifactFacts.HasTimestamp, artifactFacts.HasLtvMaterial, artifactFacts.HasArchiveTimestamp);
+        if (_options.Field.SubFilter != PdfSignatureSubFilter.EtsiCadesDetached)
+        {
+            warnings.Add(new SigningWarning(
+                SigningWarningCode.SubFilterNotBaseline,
+                $"The SubFilter is {SubFilterName(_options.Field.SubFilter)}, not ETSI.CAdES.detached: the signature holds what " +
+                $"{achieved} requires, but EN 319 142-1 does not count it as a PAdES baseline signature."));
+        }
 
         logger.ReadBackVerified(opId, artifactFacts.BaseSignatureValid, artifactFacts.HasTimestamp,
             artifactFacts.HasLtvMaterial, artifactFacts.HasArchiveTimestamp, achieved.ToString());
@@ -908,6 +915,10 @@ public sealed partial class PadesSignerBuilder
 
     /// <summary>The certificate chain given with the signer certificate (empty when none was given).</summary>
     public IReadOnlyList<X509Certificate2> SignerChain => _options.Credential is { } credential ? GetChain(credential) : [];
+
+    /// <summary>The name a SubFilter other than ETSI.CAdES.detached has in the signature dictionary.</summary>
+    private static string SubFilterName(PdfSignatureSubFilter subFilter) =>
+        subFilter == PdfSignatureSubFilter.PbadPades ? "PBAD.PAdES" : "adbe.pkcs7.detached";
 
     private static X509Certificate2 GetCertificate(SigningCredential credential) => credential switch
     {

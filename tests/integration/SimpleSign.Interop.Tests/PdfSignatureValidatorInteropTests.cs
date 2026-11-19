@@ -13,7 +13,7 @@ namespace SimpleSign.Interop.Tests;
 /// by SimpleSign, and both signatures validated by pyHanko and the file checked by qpdf.
 /// </summary>
 [Trait("Category", "Interop")]
-public sealed class PdfSignatureValidatorInteropTests(InteropPki pki, ITestOutputHelper output) : IClassFixture<InteropPki>
+public sealed class PdfSignatureValidatorInteropTests(OfflinePki pki, ITestOutputHelper output) : IClassFixture<OfflinePki>
 {
     public static TheoryData<string> Sources => new("xref-table.pdf", "xref-stream.pdf");
 

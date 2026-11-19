@@ -13,7 +13,7 @@ SimpleSign is a .NET library for PAdES, CAdES and XAdES signatures (ETSI EN 319 
 dotnet build
 
 # Run every test project (what CI runs)
-dotnet test SimpleSign.sln --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop"
+dotnet test SimpleSign.sln --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&Category!=EtsiChecker"
 
 # PDF/A preservation checked by veraPDF (Docker: docker pull the image in VeraPdf.cs; or SIMPLESIGN_VERAPDF=<local CLI>)
 dotnet test tests/integration/SimpleSign.VeraPdf.Tests --framework net10.0
@@ -21,6 +21,10 @@ dotnet test tests/integration/SimpleSign.VeraPdf.Tests --framework net10.0
 # Interop with qpdf, pyHanko, OpenSSL 3, xmlsec1 (on the PATH, or SIMPLESIGN_QPDF/_OPENSSL/_XMLSEC1/_PYTHON;
 # pyHanko: pip install -r tests/integration/SimpleSign.Interop.Tests/tools/requirements.txt)
 dotnet test tests/integration/SimpleSign.Interop.Tests --framework net10.0
+
+# Structure checked by the ETSI Signatures Conformance Checker (needs an account there: SIMPLESIGN_ETSI_USER/_PASSWORD;
+# writes the reports to docs/conformance/etsi-checker; SIMPLESIGN_ETSI_CORPUS=<dir> only writes the samples)
+dotnet test tests/integration/SimpleSign.EtsiChecker.Tests --framework net10.0
 
 # Run specific test project
 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
@@ -81,7 +85,7 @@ src/
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 │       ├── SimpleSign.Peru.Iofe.Accredited/  INDECOPI's guide §4.2–4.4 with nothing to relax: signing agent (key in a PKCS#11 module or a declared remote service; no PFX), verification agent, audit
 │       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe, `simplesign iofe …`
-│       ├── docs/                             iofe.md; acreditacion/ = the manuals in Spanish (en/ = in English); the audit walk-through (pt, en, es)
+│       ├── docs/                             iofe.md, audit-walkthrough.md, accreditation/ = the manuals; es/ = the walk-through and the manuals in Spanish (English is the main text)
 │       ├── playbooks/                        indecopi-checklist.md (annex B), indecopi-guia-v4.json
 │       └── tools/                            indecopi.py writes that playbook; auditoria/auditoria.py runs annex B through `simplesign iofe` and keeps the evidence
 ├── Signers/
@@ -192,7 +196,7 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
   the Sandbox under `tests/unit/Apps/Development`).
   Every test project is in `SimpleSign.sln`.
 - Every test class has `[Trait("Category", …)]`: `Unit` by default, `Contract` in Contracts.Tests,
-  `Integration` (network), `Stress` (excluded from the regular CI run), `VeraPdf` (needs veraPDF; its own CI job), `Interop` (needs qpdf/pyHanko/OpenSSL/xmlsec1; its own CI job)
+  `Integration` (network), `Stress` (excluded from the regular CI run), `VeraPdf` (needs veraPDF; its own CI job), `Interop` (needs qpdf/pyHanko/OpenSSL/xmlsec1; its own CI job), `EtsiChecker` (needs an account at the ETSI checker; run by hand, not in CI)
 - Test fixtures in `tests/shared/SimpleSign.TestFixtures`
 - Test helpers in `tests/shared/SimpleSign.TestHelpers`
 - Test cert generation: use helpers, don't commit real certificates

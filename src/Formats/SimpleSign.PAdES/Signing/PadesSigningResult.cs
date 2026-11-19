@@ -9,7 +9,10 @@ namespace SimpleSign.PAdES.Signing;
 /// <remarks>
 /// The <c>Has*</c> properties and <see cref="ISigningResult.AchievedLevel"/> describe
 /// properties established in the produced artifact, never configuration flags or
-/// pipeline steps that were merely attempted.
+/// pipeline steps that were merely attempted. With a SubFilter other than <c>ETSI.CAdES.detached</c>
+/// (<see cref="PdfSignatureSubFilter.AdbePkcs7Detached"/>, <see cref="PdfSignatureSubFilter.PbadPades"/>) the
+/// signature is not a PAdES baseline signature under ETSI EN 319 142-1: the achieved level then tells what it
+/// holds, and <see cref="Warnings"/> has <see cref="SigningWarningCode.SubFilterNotBaseline"/>.
 /// </remarks>
 public sealed record PadesSigningResult : ISigningResult
 {

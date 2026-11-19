@@ -13,7 +13,7 @@ namespace SimpleSign.Interop.Tests;
 /// trusted certificate.
 /// </summary>
 [Trait("Category", "Interop")]
-public sealed class XadesSignerInteropTests(InteropPki pki, ITestOutputHelper output) : IClassFixture<InteropPki>
+public sealed class XadesSignerInteropTests(OfflinePki pki, ITestOutputHelper output) : IClassFixture<OfflinePki>
 {
     private const string DetachedUri = "document.xml";
 

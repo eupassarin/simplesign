@@ -23,6 +23,13 @@ public enum SigningWarningCode
 
     /// <summary>A WARN constraint of the signing policy is not met.</summary>
     PolicyConstraint = 5,
+
+    /// <summary>
+    /// The PDF signature's SubFilter is not <c>ETSI.CAdES.detached</c> (it is <c>adbe.pkcs7.detached</c> or
+    /// <c>PBAD.PAdES</c>), so it is not a PAdES baseline signature under ETSI EN 319 142-1. The achieved level then
+    /// tells what the signature holds (time-stamp, validation data, archive time-stamp), not a baseline level.
+    /// </summary>
+    SubFilterNotBaseline = 6,
 }
 
 /// <summary>

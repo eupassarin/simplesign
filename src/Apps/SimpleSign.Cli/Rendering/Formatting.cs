@@ -20,7 +20,7 @@ internal static class Formatting
     internal static string FormatLevel(PAdESConformanceLevel level) => level switch
     {
         PAdESConformanceLevel.Unknown => "Unknown",
-        PAdESConformanceLevel.CmsOnly => "CMS (no PAdES attributes)",
+        PAdESConformanceLevel.CmsOnly => "CMS (not PAdES baseline)",
         PAdESConformanceLevel.BaselineB => "PAdES B-B",
         PAdESConformanceLevel.BaselineT => "PAdES B-T",
         PAdESConformanceLevel.BaselineLT => "PAdES B-LT",

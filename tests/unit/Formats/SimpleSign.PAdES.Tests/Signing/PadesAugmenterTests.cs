@@ -5,6 +5,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Inspection;
+using SimpleSign.PAdES.Signing;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -42,6 +43,26 @@ public sealed class PadesAugmenterTests : IDisposable
 
     private Task<byte[]> SignBasicAsync() =>
         PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert).SignAsync();
+
+    [Fact]
+    public async Task AugmentAsync_AdbeSubFilter_BuildsOnWhatTheSignatureHolds()
+    {
+        using var tsa = MockTsa();
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert)
+            .WithSubFilter(PdfSignatureSubFilter.AdbePkcs7Detached).SignAsync();
+
+        var result = await PadesAugmenter.Document(signed)
+            .WithTimestamp(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa)))
+            .ToLevel(AdesBaselineLevel.Timestamped)
+            .AugmentAsync();
+
+        // Not a baseline signature (ConformanceDetector says CmsOnly), but the augmentation still sees its B-B structure.
+        result.InitialLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.Level.ShouldBe(AdesBaselineLevel.Timestamped);
+        var inspection = await PdfSignatureInspector.InspectAsync(new MemoryStream(result.Document));
+        inspection.Signatures.Count(s => s.IsDocumentTimestamp).ShouldBe(1);
+        ConformanceDetector.DetectHighest(inspection).ShouldBe(PAdESConformanceLevel.CmsOnly);
+    }
 
     [Fact]
     public async Task AugmentAsync_BasicToTimestamped_AddsADocumentTimestamp()

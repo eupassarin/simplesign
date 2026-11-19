@@ -99,7 +99,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release --framework ${{ matrix.framework }} \
-            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
+            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&Category!=EtsiChecker&FullyQualifiedName!~SimpleSign.TestBench.Tests" \
             --logger "trx" \
             --logger "console;verbosity=normal" \
             --results-directory TestResults
@@ -112,7 +112,7 @@ jobs:
           SIMPLESIGN_REQUIRE_SANDBOX: "true"
         run: |
           dotnet test --no-build --configuration Release \
-            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop" \
+            --filter "Category!=Stress&Category!=VeraPdf&Category!=Interop&Category!=EtsiChecker" \
             --collect:"XPlat Code Coverage" \
             --settings coverlet.runsettings \
             --results-directory TestResults \

@@ -37,7 +37,8 @@ the application…"), and the applicant justifies in annex B each item it says d
   (`IofeSigningAgent`, `IofeVerificationAgent`, the `simplesign iofe` commands): the API gives no way around it. The
   tests named are those of `SimpleSign.Peru.Iofe.Accredited.Tests`, run on a SoftHSM2 token by
   `scripts/tests/pkcs11-run.sh` (those of a remote signing service run everywhere, against one in memory); the manuals
-  are under `src/Extensions/Peru/Iofe/docs/acreditacion/`. It covers sections 4.2, 4.3 and 4.4;
+  are under `src/Extensions/Peru/Iofe/docs/accreditation/` (in Spanish, `docs/es/acreditacion/`). It covers sections 4.2,
+  4.3 and 4.4;
 - **N** — needs something new first;
 - **X** — outside the library: the accredited product, its operation or its documentation must show it (the column
   says what SimpleSign offers towards it).
@@ -58,7 +59,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-10 | Revocation: or OCSP (RFC 2560) for the certificate and its chain | P (`sandbox-basics:ocsp-good`, `sandbox-basics:revoked-ocsp`, `sandbox-basics:ocsp-unauthorized`) |
 | F-11 | An expired certificate cannot sign | P (`sandbox-basics:expired`, `sandbox-basics:not-yet-valid`, `sandbox-basics:expired-ca`) |
 | F-12 | The certificate's nonRepudiation bit is checked | P (`no-nonrepudiation-agent` with playbook:iofe-agent, the iofe policy with KeyUsage = nonRepudiation declared in the playbook; `sandbox-basics:no-signing-key-usage`, `sandbox-basics:no-key-usage-extension`, `sandbox-basics:no-key-usage-cades`, `sandbox-basics:no-key-usage-xades`). `IofePolicies.Signing` also accepts digitalSignature (section 4.1): an automated agent requires nonRepudiation (the adjustment above) |
-| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure): the accredited package opens no port and reads no configuration file (`src/Extensions/Peru/Iofe/docs/acreditacion/manual-de-administracion.md`, section 9). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
+| F-13 | The application is protected against unauthorized access | X — the product (authentication, network exposure): the accredited package opens no port and reads no configuration file (`src/Extensions/Peru/Iofe/docs/accreditation/administration-manual.md`, section 9). The Agent listens on 127.0.0.1 only; the TestBench and Sandbox are test tools |
 | F-14 | The certificate checks cannot be switched off (except under a contingency procedure INDECOPI approved) | A — `IofeSigningAgent` takes no policy: it signs under `IofePolicies.AgentSigning`. The one exception is a declared `IofeContingency` (procedure and validity), under which an unknown revocation status is tolerated, a revoked certificate still refused, and the procedure written to each audit record (`SignPdfAsync_RevocationUnavailable_IsRefusedUnlessAContingencyIsInForce`, `SignPdfAsync_RevokedCertificateUnderAContingency_IsStillRefused`). With the general signers the checks are the `SigningPolicy` given to them |
 | F-15 | Audit log of the signatures produced, by kind of transaction | P (`audit`, `audit-refused`) + U (`JsonLinesAuditSink` hash chain, `simplesign audit verify`) + A (the agent is not created without an audit sink, an agent that does not get to open — list unreadable, PIN refused, service refusing it — is recorded as `AgentNotOpened`, and each record carries the transaction as `type/id`: `OpenAsync_IncompleteOptions_IsRefused`, `SignPdfAsync_AllowedTransaction_SignsInTheModuleAndRecordsIt`) |
 | F-16 | Administrator rights cannot produce signatures outside the defined transaction | A — the agent signs only for the kinds of transaction it was opened with; any other is refused and recorded (`SignPdfAsync_TransactionOutsideTheAgents_IsRefusedAndRecorded`), and with a remote key it signs unattended only: a credential a person authorizes is refused (`OpenAsync_CredentialAPersonAuthorizes_IsRefusedAndRecorded`). Who may reach the agent and the module is X: the product's roles and key access |
@@ -77,7 +78,7 @@ the application…"), and the applicant justifies in annex B each item it says d
 | F-29 | The application itself is signed with a code-signing certificate | X — **open**: the NuGet packages carry nuget.org's repository signature (`dotnet nuget verify --all`) but no author signature, and the assemblies no Authenticode signature; both need a code-signing certificate the release does not have yet. A product signs its own installer or executable |
 | F-30 | A viewer shows the signer and the recipient the document's integrity, signing time, public key and certificate data | P (`viewer`: the validation report; `simplesign validate --html-report --report-language es`) + A (`IofeViewer`, `simplesign iofe view`: `Viewer_SignedPdf_ShowsTheSignerInSpanish`). The product's own screen is X |
 | F-31 | Signing time and the chain's public keys attached and signed (PAdES/XAdES/CAdES from the EPES-equivalent level comply) | P (`sandbox-basics:tsa-ok`, `sandbox-basics:sign-lt`, `sandbox-basics:pades-blta`, `sandbox-basics:cades-blt`, `etsi-baseline:cades-blta`, `sandbox-basics:xades-blt`, `etsi-baseline:xades-blta`, `sandbox-basics:cades-blta-enveloped`, `sandbox-basics:xades-blta-detached`, `sandbox-basics:xades-blta-enveloping`; raised later: `aug-tsl-blta`, `aug-tsa-unlisted`) |
-| F-32 | Administrator and user manuals (security policies, configuration options) | A — in Spanish, `src/Extensions/Peru/Iofe/docs/acreditacion/`: administration, user, programmer ("manual de programador", asked when a library is evaluated), security configuration (section 5) and scope. A product adds its own |
+| F-32 | Administrator and user manuals (security policies, configuration options) | A — `src/Extensions/Peru/Iofe/docs/accreditation/`, and in Spanish `docs/es/acreditacion/`: administration, user, programmer ("manual de programador", asked when a library is evaluated), security configuration (section 5) and scope. A product adds its own |
 
 ## 4.3 Verification by automated agents (V)
 
@@ -157,8 +158,8 @@ can show:
 - **Scenarios** of `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py`, which prepares a Sandbox (a failure of the
   CRL, OCSP, TSA or trusted list, a revocation, a credential), runs `simplesign iofe sign|verify|view` and checks the
   signature or the refusal and its reason, with the key in a PKCS#11 module, in a remote signing service, or both. It
-  keeps each command, its output, the audit records and the files, and writes a report in Spanish, English and
-  Portuguese. `docs/roteiro-de-auditoria.md` (and its English and Spanish versions) is the walk-through.
+  keeps each command, its output, the audit records and the files, and writes a report in English and Spanish.
+  `docs/audit-walkthrough.md` (in Spanish, `docs/es/guion-de-auditoria.md`) is the walk-through.
 - **Tests** of `SimpleSign.Peru.Iofe.Accredited.Tests` carrying the trait `AnnexB` with the item
   (`dotnet test … --filter "AnnexB=F-8"`).
 
@@ -211,7 +212,7 @@ the few it leaves out are listed there with the reason.
 
 | What | How |
 |---|---|
-| Evidence for every item (screenshots in annex B) | `auditoria.py` keeps, per scenario, the command of the accredited package, its output, the audit records and the files, and writes the report by item (`docs/roteiro-de-auditoria.md`). The TestBench's Playbook tab does the same for the general signers (`docs/articles/playbook.md`) |
+| Evidence for every item (screenshots in annex B) | `auditoria.py` keeps, per scenario, the command of the accredited package, its output, the audit records and the files, and writes the report by item (`docs/audit-walkthrough.md`). The TestBench's Playbook tab does the same for the general signers (`docs/articles/playbook.md`) |
 | A live audit session and a presentation to INDECOPI's commission | X — the applicant |
 | A yearly follow-up audit in production | X — the operator; `IofeTrustedListSource.Changed` and the audit trail give the records |
 | Security settings announced to the users (section 5) | X — the product |

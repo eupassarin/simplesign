@@ -29,7 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`IofeTrust.ListFile(path, trustedListSigners)`** (`SimpleSign.Peru.Iofe.Accredited`): a copy of the trusted list
   kept as a file, read and checked when the agent or the viewer is created, not before.
 
+- **The IOFE audit script runs in a real environment** (`src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py
+  --entorno file`): the operator's HSM, INDECOPI's own list and the certificates of a real CA instead of a Sandbox,
+  described by a file (`entorno.ejemplo.json`; the PIN stays in an environment variable). The same 70 scenarios and
+  checks; each is first gone through without running a command, so what the environment cannot show — a failure of a
+  CA or a TSA, a certificate nobody issued — is reported as not run there, with the reason, and nothing is signed for
+  a scenario that would stop halfway. `--list` shows that beforehand; `--ensayo folder` names, for those scenarios,
+  the result of a Sandbox run, as a rehearsal. A wrong trusted list is shown with INDECOPI's own: another signer
+  certificate, or a copy changed after it was signed. The evidence gains `00-entorno/` (tool, extensions, the module
+  and its certificates, the certificate that signed) and `MANIFIESTO.sha256`. With the signing certificate alone 24
+  scenarios run; with test certificates from the CA, 37. The audit walk-through has the steps.
+
 ### Changed
+
+- **IOFE documentation: English is the main text, Spanish its translation, and there is none in Portuguese.** Under
+  `src/Extensions/Peru/Iofe/docs/` the accreditation manuals are now `accreditation/` (English) and
+  `es/acreditacion/` (Spanish, the version handed to INDECOPI), and the audit walk-through is `audit-walkthrough.md`
+  and `es/guion-de-auditoria.md`; the Portuguese walk-through is gone. The audit script writes its report in English
+  and Spanish (`informe.en.*`, `informe.es.*`), prints in English unless `--lang es`, and its catalog
+  (`escenarios.json`) carries the titles in those two languages.
 
 - **The text beside a stamp's QR code keeps the proportion it has without one.** The QR code makes the stamp at
   least 80pt tall, and the text stayed at 7pt/6pt in its top corner. It is now enlarged to the stamp's height, as the
@@ -52,6 +70,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   left one. The file is now read by `IofeSigningAgent.OpenAsync` (`IofeTrust.ListFile`), which records
   `AgentNotOpened` with the reason and throws the same exception. `iofe verify` and `iofe view` read the file the
   same way; they have no record to write before there is a document, as before.
+
+- **A PDF signature whose SubFilter is not `ETSI.CAdES.detached` is no longer reported as PAdES baseline.** EN 319
+  142-1 allows only that SubFilter in a baseline signature; the ETSI Signatures Conformance Checker failed an
+  `adbe.pkcs7.detached` signature that SimpleSign called B-T. `ConformanceDetector` (and so `simplesign inspect` and
+  `validate`) now reports `CmsOnly` for `adbe.pkcs7.detached` and `PBAD.PAdES`, shown as "CMS (not PAdES baseline)".
+  Signing with such a SubFilter adds the warning `SigningWarningCode.SubFilterNotBaseline`; `AchievedLevel` still
+  tells what the signature holds, and `PadesAugmenter` still raises such a signature.
+
+### Tests
+
+- **The structure of SimpleSign's signatures is checked by ETSI's own conformance checker.**
+  `SimpleSign.EtsiChecker.Tests` signs 32 PAdES, CAdES and XAdES samples offline: every baseline level, other keys
+  and paddings, a counter-signature, an augmentation, an archive renewal and a two-phase signature. It sends each one
+  to the [ETSI Signatures Conformance Checker](https://signatures-conformance-checker.etsi.org), which checks it
+  against EN 319 142-1, EN 319 122-1 or EN 319 132-1. The checker needs an account, so the test runs by hand, not in
+  CI. The reports are kept in `docs/conformance/etsi-checker`.
 
 ## [0.13.0] - 2026-11-17
 
