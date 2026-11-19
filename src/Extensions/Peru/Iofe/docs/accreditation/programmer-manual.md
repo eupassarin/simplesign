@@ -3,8 +3,8 @@
 How the library `SimpleSign.Peru.Iofe.Accredited` works and how to configure it (Req. 20: "manual de programador").
 Namespace: `SimpleSign.Peru.Iofe.Accredited`. Frameworks: .NET 8 and .NET 10; compatible with Native AOT. All the
 cryptography uses `System.Security.Cryptography`; the private-key operation happens in the PKCS#11 module or in the
-remote signing service. (English translation of [`manual-del-programador.md`](../manual-del-programador.md); the
-Spanish text is the one handed to INDECOPI.)
+remote signing service. (In Spanish, the version handed to INDECOPI:
+[`manual-del-programador.md`](../es/acreditacion/manual-del-programador.md).)
 
 ```bash
 dotnet add package SimpleSign.Peru.Iofe.Accredited
@@ -211,4 +211,4 @@ any machine; the token ones, with `scripts/tests/pkcs11.sh`. Each test that show
 trait `AnnexB` (`dotnet test --filter "AnnexB=F-8"`).
 
 The script `src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py` runs `simplesign iofe` for each item of annex B
-against the Sandbox and keeps the evidence: see the [audit walk-through](../../audit-walkthrough.md).
+against the Sandbox and keeps the evidence: see the [audit walk-through](../audit-walkthrough.md).

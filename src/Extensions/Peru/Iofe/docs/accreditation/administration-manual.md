@@ -1,8 +1,8 @@
 # Administration manual
 
 For whoever installs, configures and operates a solution built on `SimpleSign.Peru.Iofe.Accredited`.
-(English translation of [`manual-de-administracion.md`](../manual-de-administracion.md); the Spanish text is the one
-handed to INDECOPI.)
+(In Spanish, the version handed to INDECOPI:
+[`manual-de-administracion.md`](../es/acreditacion/manual-de-administracion.md).)
 
 ## 1. Requirements
 

@@ -4,6 +4,7 @@ Funcionamiento y configuración adecuada de la librería `SimpleSign.Peru.Iofe.A
 programador"). Espacio de nombres: `SimpleSign.Peru.Iofe.Accredited`. Marcos: .NET 8 y .NET 10; compatible con
 Native AOT. Toda la criptografía usa `System.Security.Cryptography`; la operación con la clave privada ocurre en el
 módulo PKCS#11 o en el servicio de firma remota.
+(Traducción al español de [`programmer-manual.md`](../../accreditation/programmer-manual.md), que es el texto principal. Esta versión es la que se entrega al INDECOPI.)
 
 ```bash
 dotnet add package SimpleSign.Peru.Iofe.Accredited

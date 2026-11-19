@@ -2,6 +2,7 @@
 
 Configuración que debe implementarse para que la aplicación cumpla todos los requerimientos. Los usuarios de la
 aplicación son responsables de aplicarla y mantenerla actualizada.
+(Traducción al español de [`security-configuration.md`](../../accreditation/security-configuration.md), que es el texto principal. Esta versión es la que se entrega al INDECOPI.)
 
 La mayor parte de los requerimientos **no depende de configuración**: la política de verificación del certificado es
 fija y la librería no ofrece ningún parámetro para desactivarla. Lo que sigue es lo que sí depende de quien la instala.

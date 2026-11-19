@@ -37,8 +37,10 @@ IofeVerification result = await verifier.VerifyAsync(received, new IofeSender("2
 ```
 
 By default both trust INDECOPI's trusted list (`IofeTrust.IndecopiList()`), kept current. The manuals the guide asks
-for (administration, user, programmer, security configuration, scope) are in Spanish under
-[src/Extensions/Peru/Iofe/docs/acreditacion](https://github.com/eupassarin/SimpleSign/tree/main/src/Extensions/Peru/Iofe/docs/acreditacion). MIT licensed.
+for (administration, user, programmer, security configuration, scope) are under
+[src/Extensions/Peru/Iofe/docs/accreditation](https://github.com/eupassarin/SimpleSign/tree/main/src/Extensions/Peru/Iofe/docs/accreditation),
+and in Spanish under
+[docs/es/acreditacion](https://github.com/eupassarin/SimpleSign/tree/main/src/Extensions/Peru/Iofe/docs/es/acreditacion). MIT licensed.
 
 Being accredited is a decision of INDECOPI about a product and its operation: this package gives the software part,
 and the manuals say what remains with the operator (the module's certification, key custody, access control).

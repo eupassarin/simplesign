@@ -5,10 +5,11 @@ y los comandos `simplesign iofe` conforme a la *Guía de Acreditación de Aplica
 4.3 y 4.4. Todo lo que sigue fue ensayado en una máquina de desarrollo (macOS) contra el entorno de pruebas; lo que
 no fue ensayado se indica.
 
-Otros idiomas: [Português](roteiro-de-auditoria.md) · [English](audit-walkthrough.md).
+Traducción al español de [`audit-walkthrough.md`](../audit-walkthrough.md), que es el texto principal.
 
-Lo que se entrega al auditor son los manuales ([`acreditacion/`](acreditacion/README.md), también en
-[inglés](acreditacion/en/README.md)) y las evidencias que este guion produce. Este documento es para su equipo.
+Lo que se entrega al auditor son los manuales ([`acreditacion/`](acreditacion/README.md); en inglés,
+[`accreditation/`](../accreditation/README.md)) y las evidencias que este guion produce. Este documento es para su
+equipo.
 
 ## 1. Cómo funciona la acreditación
 
@@ -124,7 +125,7 @@ Para cada escenario el guion prepara el Sandbox (activa una falla, revoca, crea 
 
 | Archivo | Qué es |
 |---|---|
-| `informe.es.html`, `informe.en.html`, `informe.pt.html` (y `.md`) | El informe por ítem del Anexo B: lo que pide la Guía, los escenarios, el resultado y cada comando con su salida |
+| `informe.en.html`, `informe.es.html` (y `.md`) | El informe por ítem del Anexo B: lo que pide la Guía, los escenarios, el resultado y cada comando con su salida |
 | `NN-escenario-clave/comandos.txt` | Los comandos ejecutados y la salida de cada uno |
 | `NN-…/auditoria.jsonl`, `verificacion.jsonl` | El registro de auditoría del escenario |
 | `NN-…/firmado-*.pdf`, `comunicado.txt`, `visor.html` | El documento firmado, el comunicado al emisor, la página del visor |
@@ -200,16 +201,86 @@ de las EC emisoras indicados con `--chain archivo` o, a falta de ellos, descarga
 certificado indica (AIA). Si aun así falta un emisor, el rechazo es `UntrustedRoot` y el mensaje dice cuál. Ensayado
 con un token sin los certificados de las EC: rechazó sin red, firmó con `--chain` y firmó mediante AIA.
 
-Los escenarios de falla (CRL de clave ajena, TSA revocada) dependen del Sandbox: con la PKI real se muestra el camino
-correcto y los rechazos que no requieren la falla de un tercero (transacción, módulo no declarado, opción inexistente,
-PFX, contingencia). Lo demás proviene del informe del ensayo. **No ensayado**: un HSM real, un servicio remoto real y
-la TSL real del INDECOPI, en esta ocasión.
+### Ejecutar el guion en producción
+
+El mismo guion se ejecuta en el servidor de producción, con el HSM, el certificado y la TSL reales; no se usa nada del
+Sandbox. El entorno se describe en un archivo, hecho a partir del ejemplo y guardado fuera del repositorio:
+
+```bash
+cp src/Extensions/Peru/Iofe/tools/auditoria/entorno.ejemplo.json entorno.json
+```
+
+| Campo | Qué es |
+|---|---|
+| `pkcs11` | El controlador del HSM, la etiqueta del token y el **nombre** de la variable de entorno con el PIN (`env:HSM_PIN`). El PIN no se escribe en el archivo |
+| `module` | La declaración del módulo: fabricante, modelo, certificación y número del certificado |
+| `keys.default` | La etiqueta, en el HSM, de la clave del certificado de firma de la organización |
+| `keys.<papel>` | Opcional: claves de certificados de prueba, si la EC los emite (`revoked`, `expired`, `no-nonrepudiation`…) |
+| `chain` | Certificados de las EC emisoras, cuando el HSM solo guarda el de firma |
+| `tsa` | Dirección y certificado de la TSA contratada |
+| `otherRoot` | Un certificado raíz cualquiera que no emitió los anteriores: sirve a "raíz no listada", "TSL de otro firmante" y "sello de otra autoridad" |
+| `received` | Opcional: documentos de terceros firmados con un certificado luego revocado, expirado, etc. |
+| `trustedList.expired` | Opcional: una copia antigua de la TSL, ya vencida |
+| `allow` | Escenarios con efecto sobre el módulo, que solo se ejecutan si se nombran: `pin-incorrecto` envía un PIN incorrecto una vez |
+
+```bash
+read -rs HSM_PIN && export HSM_PIN
+```
+
+```bash
+python3 src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py --entorno entorno.json --list --lang es
+```
+
+```bash
+python3 src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py --entorno entorno.json --ensayo evidencias --out evidencias-produccion --lang es
+```
+
+`--list` no ejecuta nada: dice, escenario por escenario, lo que este entorno puede mostrar y por qué no lo demás. La
+ejecución corre solo esos. Los demás quedan en el informe como "no ejecutado en este entorno", con el motivo y, con
+`--ensayo`, con el resultado que tuvieron en el ensayo del Sandbox, presentado como ensayo y no como evidencia del
+entorno.
+
+Lo que se ejecuta, medido ensayando este modo con un token SoftHSM y el Sandbox en el papel de producción:
+
+| Entorno | Escenarios ejecutados |
+|---|---|
+| Solo el certificado de firma de la organización, la TSA y `otherRoot` | 24 de 70 |
+| Más certificados de prueba (revocado, expirado, sin no repudio), documentos recibidos, TSL vencida y `pin-incorrecto` habilitado | 37 de 70 |
+
+Solo con el certificado de la organización: TSL vigente, de otro firmante y alterada; raíz no listada; opción de
+política inexistente; contingencia vencida; registros de auditoría; sin registro no se firma; transacción no definida;
+clave en el módulo; módulo no declarado; PFX; visor; datos de validación con la TSA; XML y CMS; sello de otra
+autoridad. En la verificación: documento válido, alterado y sin firmas; raíz no listada; TSL de otro firmante; opción
+de política inexistente; auditoría; visor.
+
+No se ejecutan fuera del Sandbox, porque dependen de una falla que ninguna EC o TSA produce a pedido: CRL de clave
+ajena, vencida o sin próxima actualización; OCSP no autorizado; revocación no disponible y la contingencia que la
+cubre; EC emisora revocada o expirada; RSA 1024; SHA-1 en la cadena; TSA revocada, expirada o con el sello alterado.
+Tampoco los tres escenarios de la firma remota: este modo describe un HSM.
+
+En `evidencias-produccion/`, además de lo que lista la sección 6: `00-entorno/`, con la versión de la herramienta, las
+extensiones, el módulo y los certificados que contiene (titular, vigencia, huella) y el certificado de la primera
+firma realizada, que es el perfil del certificado que el Anexo B pide adjuntar; y `MANIFIESTO.sha256`, con el resumen
+de cada archivo.
+
+Precauciones:
+
+- **Son firmas reales**, hechas con la clave de la organización, sobre los documentos de prueba del guion ("Factura
+  F001-123 - documento de prueba"). Cada una queda en el registro de auditoría de la propia ejecución, que es parte
+  de la evidencia.
+- **`pin-incorrecto`** cuenta para el bloqueo del token: ejecútelo una vez, a propósito, o déjelo con el ensayo.
+- **Clave extraíble**: no se crea una en un HSM de producción para mostrar el rechazo. Queda con el ensayo.
+- **Red**: el servidor debe alcanzar la TSL del INDECOPI, la CRL o el OCSP de la EC y la TSA. El escenario de la TSL
+  alterada descarga la lista con Python; sin salida hacia ella, dé una copia en `trustedList.copy`.
+- **No ensayado**: un HSM real y un servicio remoto real. Contra la TSL real del INDECOPI se ensayó lo que no depende
+  de un certificado peruano: descargada, la lista se acepta; alterada o con otro firmante, se rechaza; y un
+  certificado ajeno a ella no firma.
 
 ## 10. Completar el Anexo B
 
 Use `evidencias/informe.es.html`: la tabla "Por ítem del Anexo B" da, para cada ítem, los escenarios y el resultado;
 cada escenario tiene el comando y su salida. La correspondencia completa, con las pruebas, está en
-[`playbooks/indecopi-checklist.md`](../playbooks/indecopi-checklist.md) (tabla "Shown by the accredited package
+[`playbooks/indecopi-checklist.md`](../../playbooks/indecopi-checklist.md) (tabla "Shown by the accredited package
 itself"). Los datos del alcance (a–k) están en [`acreditacion/alcance.md`](acreditacion/alcance.md).
 
 Ítems a declarar **no aplicables o a cargo del operador**, con su sustento:
@@ -245,6 +316,8 @@ itself"). Los datos del alcance (a–k) están en [`acreditacion/alcance.md`](ac
 | `Error (UntrustedRoot)` en la vía PKCS#11 | Falta el certificado de una EC emisora y no se pudo descargar (el mensaje dice cuál): `--chain archivo`, o `tools/stack/softhsm-provision.sh --force` en el ensayo |
 | Escenarios `(pkcs11)` omitidos | `SOFTHSM2_CONF` no está exportada o el token no fue aprovisionado |
 | `Unknown option --…` en `simplesign iofe` | El comando no tiene esa opción; una opción desconocida es un error, a propósito |
+| `Refused (ModuleMismatch)` en producción | El fabricante y el modelo declarados en `module` no son los que informa el token: verifique con `simplesign pkcs11 list --lib <controlador>` |
+| Un escenario esperado figura como "no ejecutado en este entorno" | El motivo lo acompaña: falta la clave, el documento o la copia que pide en el archivo del entorno (`--list` los muestra todos) |
 | El Sandbox se reinició y el token "no coincide" | Cada Sandbox `--ephemeral` tiene una PKI nueva: aprovisione de nuevo |
 
 ## 13. Orden sugerido de la presentación

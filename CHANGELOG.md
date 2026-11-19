@@ -29,7 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`IofeTrust.ListFile(path, trustedListSigners)`** (`SimpleSign.Peru.Iofe.Accredited`): a copy of the trusted list
   kept as a file, read and checked when the agent or the viewer is created, not before.
 
+- **The IOFE audit script runs in a real environment** (`src/Extensions/Peru/Iofe/tools/auditoria/auditoria.py
+  --entorno file`): the operator's HSM, INDECOPI's own list and the certificates of a real CA instead of a Sandbox,
+  described by a file (`entorno.ejemplo.json`; the PIN stays in an environment variable). The same 70 scenarios and
+  checks; each is first gone through without running a command, so what the environment cannot show — a failure of a
+  CA or a TSA, a certificate nobody issued — is reported as not run there, with the reason, and nothing is signed for
+  a scenario that would stop halfway. `--list` shows that beforehand; `--ensayo folder` names, for those scenarios,
+  the result of a Sandbox run, as a rehearsal. A wrong trusted list is shown with INDECOPI's own: another signer
+  certificate, or a copy changed after it was signed. The evidence gains `00-entorno/` (tool, extensions, the module
+  and its certificates, the certificate that signed) and `MANIFIESTO.sha256`. With the signing certificate alone 24
+  scenarios run; with test certificates from the CA, 37. The audit walk-through has the steps.
+
 ### Changed
+
+- **IOFE documentation: English is the main text, Spanish its translation, and there is none in Portuguese.** Under
+  `src/Extensions/Peru/Iofe/docs/` the accreditation manuals are now `accreditation/` (English) and
+  `es/acreditacion/` (Spanish, the version handed to INDECOPI), and the audit walk-through is `audit-walkthrough.md`
+  and `es/guion-de-auditoria.md`; the Portuguese walk-through is gone. The audit script writes its report in English
+  and Spanish (`informe.en.*`, `informe.es.*`), prints in English unless `--lang es`, and its catalog
+  (`escenarios.json`) carries the titles in those two languages.
 
 - **The text beside a stamp's QR code keeps the proportion it has without one.** The QR code makes the stamp at
   least 80pt tall, and the text stayed at 7pt/6pt in its top corner. It is now enlarged to the stamp's height, as the

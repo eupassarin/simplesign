@@ -476,7 +476,7 @@ simplesign iofe sign factura.pdf -o factura-firmada.pdf \
 `iofe verify` returns 0 when every signature is valid and 1 when the document is rejected, with the notice to the
 sender written to `--notice`. `--trust-root`, or `--tsl` with `--tsl-signer`, replace INDECOPI's trusted list;
 `--contingency` with `--contingency-until` declares a contingency. The manuals are in
-[`src/Extensions/Peru/Iofe/docs/acreditacion/`](../../src/Extensions/Peru/Iofe/docs/acreditacion/manual-de-usuario.md).
+[`src/Extensions/Peru/Iofe/docs/accreditation/`](../../src/Extensions/Peru/Iofe/docs/accreditation/user-manual.md).
 
 ## Network
 

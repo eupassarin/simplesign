@@ -1,7 +1,7 @@
 # Scope of the accreditation
 
-The data annex B of the guide asks to be recorded in the audit report. (English translation of
-[`alcance.md`](../alcance.md); the Spanish text is the one handed to INDECOPI.)
+The data annex B of the guide asks to be recorded in the audit report. (In Spanish, the version handed to INDECOPI:
+[`alcance.md`](../es/acreditacion/alcance.md).)
 
 | | Data | Value |
 |---|---|---|
@@ -14,7 +14,7 @@ The data annex B of the guide asks to be recorded in the audit report. (English 
 | g | Does it perform cryptographic-module functions? | No. The private-key operation is done in the operator's cryptographic module, through PKCS#11, or in that of a declared remote signing service (Cloud Signature Consortium API v2). The library computes the hash (SHA-256 or stronger) with `System.Security.Cryptography`, and the hash is all it sends |
 | h | Does it make copies of the private key? | No. The library does not read, export or store the key, refuses a key the module reports as extractable and does not accept PKCS#12 (PFX) files |
 | i | Format of the document to sign | PDF; XML; any file, for a CMS signature |
-| j | Tools of the test environment | SimpleSign Sandbox (a test PKI with CRL, OCSP, TSA, a trusted list and a remote signing service); the script `tools/auditoria/auditoria.py`, which runs `simplesign iofe` for each item of annex B and keeps the evidence ([audit walk-through](../../audit-walkthrough.md)); SoftHSM2 as the test PKCS#11 module. The SimpleSign TestBench (playbook `indecopi-guia-v4`) uses the general signers and is complementary material |
+| j | Tools of the test environment | SimpleSign Sandbox (a test PKI with CRL, OCSP, TSA, a trusted list and a remote signing service); the script `tools/auditoria/auditoria.py`, which runs `simplesign iofe` for each item of annex B and keeps the evidence ([audit walk-through](../audit-walkthrough.md)), against the Sandbox or, with `--entorno`, in the real environment: the operator's HSM, INDECOPI's list and the real CA; SoftHSM2 as the test PKCS#11 module. The SimpleSign TestBench (playbook `indecopi-guia-v4`) uses the general signers and is complementary material |
 | k | Does it request time-stamps? | Yes, optionally (RFC 3161), with the checks of section 4.4 |
 
 ## Types of application

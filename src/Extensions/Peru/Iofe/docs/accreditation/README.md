@@ -2,8 +2,8 @@
 
 Documentation of SimpleSign's accreditable configuration for Peru's Infraestructura Oficial de Firma Electrónica
 (IOFE), under the *Guía de Acreditación de Aplicaciones de Software*, version 4.0 (INDECOPI, 2016), for these types
-of application. English translation of [`../README.md`](../README.md); **the Spanish text is the one handed to
-INDECOPI.**
+of application. These manuals are also in Spanish, the version handed to INDECOPI:
+[`es/acreditacion/`](../es/acreditacion/README.md). The English text is the main one; the Spanish is its translation.
 
 | Section of the guide | Type | Component |
 |---|---|---|
@@ -23,10 +23,9 @@ contradicts Req. 15.
 | [Security configuration](security-configuration.md) | The users of the accredited application | Section 5 |
 
 What shows each item of annex B is in
-[`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../../../playbooks/indecopi-checklist.md). The
-[audit walk-through](../../audit-walkthrough.md) ([português](../../roteiro-de-auditoria.md),
-[español](../../guion-de-auditoria.md)) says how to produce and present that evidence with the accredited
-configuration.
+[`src/Extensions/Peru/Iofe/playbooks/indecopi-checklist.md`](../../playbooks/indecopi-checklist.md). The
+[audit walk-through](../audit-walkthrough.md) ([español](../es/guion-de-auditoria.md)) says how to produce and
+present that evidence with the accredited configuration.
 
 INDECOPI grants the accreditation to a product and its operation. This package is the software part; the manuals say
 what stays with the operator (the certification of the cryptographic module or the accreditation of the remote

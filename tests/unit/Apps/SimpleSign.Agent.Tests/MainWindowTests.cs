@@ -48,6 +48,11 @@ public sealed class MainWindowTests
         services.Log.Add("Agent", "https://portal.example.com: listed 3 certificate(s)");
         services.Log.Add("Agent", "https://evil.example.com: access refused", isError: true);
 
+        // The first inventory builds the ICP-Brasil framework and checks each certificate's chain against its
+        // intermediates, which has taken more than 30 seconds on a cold, busy Windows runner. Done once here, with no
+        // limit, the window's own inventory finds both ready, and the wait below is only the window's.
+        (await controller.InventoryAsync(CancellationToken.None)).Certificates.Count.ShouldBe(3);
+
         L.Use(language);
         Application.Current!.RequestedThemeVariant = theme == "dark" ? ThemeVariant.Dark : ThemeVariant.Light;
         var window = new MainWindow(controller);

@@ -1,6 +1,7 @@
 # Manual de administración
 
 Para quien instala, configura y opera una solución construida sobre `SimpleSign.Peru.Iofe.Accredited`.
+(Traducción al español de [`administration-manual.md`](../../accreditation/administration-manual.md), que es el texto principal. Esta versión es la que se entrega al INDECOPI.)
 
 ## 1. Requisitos
 
