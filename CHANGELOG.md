@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests
+
+- **The ETSI conformance corpus has several signatures in one file, and each sample is validated by SimpleSign
+  first.** Eight more samples (40 in all): a PDF with three signatures, a certified PDF signed again, two PDF
+  signatures raised together to B-LTA, a B-LTA PDF signed again at B-LTA, a CAdES co-signed at B-T and at B-LTA,
+  and an XML with two signatures at B-T and at B-LTA. `EtsiCorpusTests` now also checks, in CI, that every
+  signature of every sample is intact and valid for SimpleSign's validators and that each sample holds the
+  signatures it should. That check found `OfflinePki`'s leaf CRL dated a minute before the ECDSA signer it covers
+  and its time-stamps dated 2024-01-01; both are dated now.
+
 ## [0.15.0] - 2026-11-19
 
 ### Removed

@@ -36,8 +36,13 @@ public enum EtsiFormat
 /// not: it holds what <paramref name="Level"/> requires, SimpleSign reports it as not baseline, and the checker must
 /// fail it (<c>known-issues.json</c> lists the failure).
 /// </param>
+/// <param name="Signatures">
+/// How many signatures it holds, made by signers: PDF signatures (document time-stamps aside), CMS SignerInfos,
+/// XML signatures (counter-signatures aside, which sit under the signature they sign).
+/// </param>
 public sealed record EtsiSample(
-    string Id, EtsiFormat Format, AdesBaselineLevel Level, string Description, Func<OfflinePki, Task<byte[]>> Sign, bool IsBaseline = true)
+    string Id, EtsiFormat Format, AdesBaselineLevel Level, string Description, Func<OfflinePki, Task<byte[]>> Sign, bool IsBaseline = true,
+    int Signatures = 1)
 {
     /// <summary>The file name the checker receives; it accepts only these extensions.</summary>
     public string FileName => Id + Format switch
@@ -89,8 +94,7 @@ public static class EtsiCorpus
         Pades("pades-b-t-certified", AdesBaselineLevel.Timestamped, "certification (DocMDP P=2)",
             (pki, s) => s.AsCertification(CertificationLevel.FormFilling).WithLevel(pki.Level("T")).SignAsync()),
         Pades("pades-b-t-two-signatures", AdesBaselineLevel.Timestamped, "RSA then ECDSA, each B-T",
-            async (pki, s) => await PadesSigner.Document(await s.WithLevel(pki.Level("T")).SignAsync())
-                .WithCertificate(pki.Ecdsa, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("T")).SignAsync()),
+            async (pki, s) => await AddPdfSignatureAsync(pki, pki.Ecdsa, "T", await s.WithLevel(pki.Level("T")).SignAsync())) with { Signatures = 2 },
         Pades("pades-b-lta-augmented", AdesBaselineLevel.Archive, "B-B raised to B-LTA by PadesAugmenter",
             async (pki, s) => (await PadesAugmenter.Document(await s.SignAsync()).ToLevel(AdesBaselineLevel.Archive)
                 .WithTimestamp(pki.Timestamp).WithHttpClientProvider(pki.Http).AugmentAsync()).Document),
@@ -98,6 +102,19 @@ public static class EtsiCorpus
             async (pki, s) => (await PadesAugmenter.Document(await s.WithLevel(pki.Level("LTA")).SignAsync()).RenewArchive()
                 .WithTimestamp(pki.Timestamp).WithHttpClientProvider(pki.Http).AugmentAsync()).Document),
         Pades("pades-b-t-deferred", AdesBaselineLevel.Timestamped, "two-phase (DeferredSigner)", (pki, _) => PadesDeferredAsync(pki)),
+
+        // Several signatures in one PDF: each in its own incremental update, none breaking the ones before.
+        Pades("pades-b-t-three-signatures", AdesBaselineLevel.Timestamped, "RSA, ECDSA, RSA, each B-T",
+            async (pki, s) => await AddPdfSignatureAsync(pki, pki.Pki.Leaf, "T",
+                await AddPdfSignatureAsync(pki, pki.Ecdsa, "T", await s.WithLevel(pki.Level("T")).SignAsync()))) with { Signatures = 3 },
+        Pades("pades-b-t-certified-then-signed", AdesBaselineLevel.Timestamped, "certified (DocMDP P=2), then signed (ECDSA), each B-T",
+            async (pki, s) => await AddPdfSignatureAsync(pki, pki.Ecdsa, "T",
+                await s.AsCertification(CertificationLevel.FormFilling).WithLevel(pki.Level("T")).SignAsync())) with { Signatures = 2 },
+        Pades("pades-b-lta-two-signatures", AdesBaselineLevel.Archive, "RSA and ECDSA B-T, then raised together to B-LTA",
+            async (pki, s) => (await PadesAugmenter.Document(await AddPdfSignatureAsync(pki, pki.Ecdsa, "T", await s.WithLevel(pki.Level("T")).SignAsync()))
+                .ToLevel(AdesBaselineLevel.Archive).WithTimestamp(pki.Timestamp).WithHttpClientProvider(pki.Http).AugmentAsync()).Document) with { Signatures = 2 },
+        Pades("pades-b-lta-signed-twice", AdesBaselineLevel.Archive, "B-LTA (RSA), then another B-LTA (ECDSA) over it",
+            async (pki, s) => await AddPdfSignatureAsync(pki, pki.Ecdsa, "LTA", await s.WithLevel(pki.Level("LTA")).SignAsync())) with { Signatures = 2 },
 
         // ── CAdES ──────────────────────────────────────────────────────────
         Cades("cades-b-b", AdesBaselineLevel.Basic, "RSA, enveloping", (pki, s) => s.SignAsync()),
@@ -121,6 +138,12 @@ public static class EtsiCorpus
             async (pki, s) => (await CadesAugmenter.Signature(await s.WithLevel(pki.Level("LTA")).SignAsync()).RenewArchive()
                 .WithTimestamp(pki.Timestamp).WithHttpClientProvider(pki.Http).AugmentAsync()).Signature),
         Cades("cades-b-t-deferred", AdesBaselineLevel.Timestamped, "two-phase (CadesDeferredSigner)", (pki, _) => CadesDeferredAsync(pki)),
+        Cades("cades-b-t-cosigned", AdesBaselineLevel.Timestamped, "RSA, co-signed by ECDSA (two SignerInfos), each B-T",
+            async (pki, s) => await CadesSigner.CoSign(await s.WithLevel(pki.Level("T")).SignAsync())
+                .WithCertificate(pki.Ecdsa, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("T")).SignAsync()) with { Signatures = 2 },
+        Cades("cades-b-lta-cosigned", AdesBaselineLevel.Archive, "RSA B-LTA, co-signed by ECDSA B-LTA",
+            async (pki, s) => await CadesSigner.CoSign(await s.WithLevel(pki.Level("LTA")).SignAsync())
+                .WithCertificate(pki.Ecdsa, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("LTA")).SignAsync()) with { Signatures = 2 },
 
         // ── XAdES ──────────────────────────────────────────────────────────
         Xades("xades-b-b-enveloped", AdesBaselineLevel.Basic, "RSA, enveloped", (pki, s) => s.SignAsync()),
@@ -142,6 +165,12 @@ public static class EtsiCorpus
             async (pki, s) => (await XadesAugmenter.Document(await s.WithLevel(pki.Level("LTA")).SignAsync()).RenewArchive()
                 .WithTimestamp(pki.Timestamp).WithHttpClientProvider(pki.Http).AugmentAsync()).Document),
         Xades("xades-b-t-deferred", AdesBaselineLevel.Timestamped, "two-phase (XadesDeferredSigner)", (pki, _) => XadesDeferredAsync(pki)),
+        Xades("xades-b-t-two-signatures", AdesBaselineLevel.Timestamped, "two enveloped signatures (RSA, ECDSA), each B-T",
+            async (pki, s) => await XadesSigner.Document(await s.WithLevel(pki.Level("T")).SignAsync())
+                .WithCertificate(pki.Ecdsa, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("T")).SignAsync()) with { Signatures = 2 },
+        Xades("xades-b-lta-two-signatures", AdesBaselineLevel.Archive, "two enveloped signatures (RSA, ECDSA), each B-LTA",
+            async (pki, s) => await XadesSigner.Document(await s.WithLevel(pki.Level("LTA")).SignAsync())
+                .WithCertificate(pki.Ecdsa, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("LTA")).SignAsync()) with { Signatures = 2 },
     ];
 
     /// <summary>The id of every sample, for a theory.</summary>
@@ -177,6 +206,10 @@ public static class EtsiCorpus
 
     private static PadesSignerBuilder Pdf(OfflinePki pki) =>
         PadesSigner.Document(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "xref-stream.pdf")));
+
+    /// <summary>Signs <paramref name="pdf"/> again, at <paramref name="level"/>, in a new incremental update.</summary>
+    private static Task<byte[]> AddPdfSignatureAsync(OfflinePki pki, X509Certificate2 signer, string level, byte[] pdf) =>
+        PadesSigner.Document(pdf).WithCertificate(signer, pki.Chain).WithHttpClientProvider(pki.Http).WithLevel(pki.Level(level)).SignAsync();
 
     private static async Task<byte[]> PadesDeferredAsync(OfflinePki pki)
     {

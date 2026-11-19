@@ -25,7 +25,9 @@ public sealed class OfflinePki : IDisposable
         Tsa = Pki.IssueTimestampingCertificate();
         (Ecdsa, string ecdsaKey) = Pki.IssueEcdsaSigner();
 
-        byte[] leafCrl = Pki.BuildLeafCrl();
+        // After every certificate the intermediate issues, the ECDSA signer and the TSA included (a minute after the
+        // others): validation refuses revocation data older than the certificate it is about (EN 319 102-1).
+        byte[] leafCrl = Pki.BuildLeafCrl(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddDays(30));
         byte[] intermediateCrl = Pki.BuildIntermediateCrl();
         var tokens = new TimestampTokenOptions { TsaCertificate = Tsa, ExtraCertificates = [Pki.IntermediateCa] };
         _http = new HttpClient(new MockHttpHandler(async request =>
@@ -33,7 +35,9 @@ public sealed class OfflinePki : IDisposable
             if (request.Method == HttpMethod.Post)
             {
                 byte[] query = await request.Content!.ReadAsByteArrayAsync();
-                var reply = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(TimestampTestResponseBuilder.CreateForRequest(query, tokens)) };
+                // Dated now, when the TSA and the signers are valid (the builder's default is 2024-01-01).
+                var token = TimestampTestResponseBuilder.CreateForRequest(query, tokens with { GenTime = DateTimeOffset.UtcNow });
+                var reply = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(token) };
                 reply.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
                 return reply;
             }
