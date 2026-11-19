@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-19
+
 ### Removed
 
 - **The IOFE accredited configuration moved to [its own repository](https://github.com/eupassarin/simplesign-iofe-accredited)**, with its history:
@@ -17,7 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SimpleSign.Peru.Iofe.Accredited.Cli`, from that repository (`simplesign extension install
   SimpleSign.Peru.Iofe.Accredited.Cli`), with the same options. `SimpleSign.Peru.Iofe.Cli` keeps `--profile iofe`, the
   `iofe` and `iofe-agent` policy presets and `--tsl-profile iofe`, and with this release the two extensions go
-  together; with an older one the CLI lists the `iofe` group twice.
+  together; with an older one the CLI lists the `iofe` group twice. **Breaking** for whoever runs those commands with
+  `SimpleSign.Peru.Iofe.Cli` alone: install `SimpleSign.Peru.Iofe.Accredited.Cli` (1.0.0 is on nuget.org).
+
+### Fixed
+
+- **Revocation data past its nextUpdate gives INDETERMINATE/TRY_LATER**, as EN 319 102-1 §5.2.5.4 and §5.2.6.4 1a)
+  say, instead of CERTIFICATE_CHAIN_GENERAL_FAILURE as if there were none. Expired data still never counts: a
+  certificate known only from it stays unknown, and it is not among the data used; what changes is that it is recorded
+  and the failure of `RevocationDataAvailable` (and `AcceptableRevocationDataFound`) says when it expired. New:
+  `ChainRevocationResult.ExpiredDataNextUpdate`, set when every certificate whose status is unknown had only expired
+  data (`CheckAsync`, `CheckCurrentAsync`). PAdES, CAdES and XAdES alike; DSS, with `RevocationFreshness` at IGNORE,
+  still accepts such a signature, a known difference (`docs/policies/compatibility.md`).
 
 ## [0.14.0] - 2026-11-19
 
