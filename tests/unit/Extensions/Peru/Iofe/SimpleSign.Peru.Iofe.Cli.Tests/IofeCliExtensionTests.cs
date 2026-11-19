@@ -134,11 +134,12 @@ public sealed class IofeCliExtensionTests : IDisposable
         var (tsl, signer) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddDays(-1));
 
         // --profile iofe gives the policy (TLNotExpired FAIL); the explicit --tsl replaces INDECOPI's list.
-        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
+        // Without network INDECOPI's list is not downloaded and a warning says so, on stderr: stdout stays JSON.
+        var run = await IofeCli.RunCapturedAsync("validate", signed, "--no-revocation", "--no-system-roots",
             "--tsl", tsl, "--tsl-signer", signer, "--profile", "iofe", "--json");
 
-        exit.ShouldBe(1, output);
-        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..]);
+        run.Exit.ShouldBe(1, run.Stdout + run.Stderr);
+        using var json = JsonDocument.Parse(run.Stdout);
         json.RootElement.GetProperty("signatures")[0].GetProperty("subIndication").GetString().ShouldBe("TRY_LATER");
     }
 
@@ -178,14 +179,16 @@ public sealed class IofeCliExtensionTests : IDisposable
         var (tsl, _) = WriteTrustedList(nextUpdate: DateTimeOffset.UtcNow.AddMonths(6));
 
         // --tsl-profile iofe checks the list against INDECOPI's bundled signer: this one is signed by another key.
-        var (exit, output) = await RunAsync("validate", signed, "--no-revocation", "--no-system-roots",
+        var run = await IofeCli.RunCapturedAsync("validate", signed, "--no-revocation", "--no-system-roots",
             "--tsl", tsl, "--tsl-profile", "iofe", "--json");
 
-        exit.ShouldBe(1, output);
-        // The warning is one long line that the console wraps: compare without the line breaks.
-        string.Join(' ', output.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).ShouldContain("No anchor comes from it");
-        using var json = JsonDocument.Parse(output[output.IndexOf('{', StringComparison.Ordinal)..(output.LastIndexOf('}') + 1)]);
-        json.RootElement.GetProperty("signatures")[0].GetProperty("indication").GetString().ShouldBe("Indeterminate", output);
+        run.Exit.ShouldBe(1, run.Stdout + run.Stderr);
+        // The warning goes to stderr, so stdout is the JSON document alone.
+        run.Stderr.ShouldContain("TSL: ");
+        run.Stderr.ShouldContain("No anchor comes from it.");
+        run.Stdout.ShouldNotContain("No anchor comes from it");
+        using var json = JsonDocument.Parse(run.Stdout);
+        json.RootElement.GetProperty("signatures")[0].GetProperty("indication").GetString().ShouldBe("Indeterminate", run.Stdout);
     }
 
     private async Task<string> SignAsync(string relativeOutput)
