@@ -26,6 +26,8 @@ applied them to a file that was already signed, and the CLI had no command for i
 - A level lower than the one the file has changes nothing. A level that cannot be reached throws `SigningException`
   with `SigningErrorReason.LevelNotAchievable` (no TSA, revocation data that cannot all be collected); B-LTA of a
   detached CAdES or XAdES signature needs its data and throws `ArgumentException` without it.
+- Each time-stamp an augmenter obtains is checked as a signer checks it (`TimestampAcceptance`): `TimestampOptions.ExpectedTsaCertificate`
+  is enforced (`TimestampUntrusted`), and `WithSigningPolicy`/`WithTrustAnchors`/`WithChainRevocationChecker` apply the policy's `Timestamp` constraints to the TSA.
 - The PAdES conformance detector counts a document time-stamp after a signature as its B-T time-stamp, and requires a
   further one for B-LTA when the signature has no signature time-stamp of its own.
 - CLI: `simplesign augment <file> --level BT|BLT|BLTA --tsa URL [--data] [--signature-id] [--renew] [--json]`, the
