@@ -39,8 +39,12 @@ scripts/tests/pkcs11.sh
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
 
+# Adobe's real AATL against the bundled Adobe root (network)
+dotnet test tests/unit/Extensions/Adobe/Aatl/SimpleSign.Adobe.Aatl.Tests --filter "Category=Integration"
+
 # CLI tests (the CLI and its extension mechanism; each extension's are next to its framework's:
-# tests/unit/Extensions/{Brazil/SimpleSign.Brazil.Cli.Tests, Europe/Eidas/SimpleSign.Europe.Eidas.Cli.Tests, Peru/Iofe/SimpleSign.Peru.Iofe.Cli.Tests})
+# tests/unit/Extensions/{Brazil/SimpleSign.Brazil.Cli.Tests, Europe/Eidas/SimpleSign.Europe.Eidas.Cli.Tests, Peru/Iofe/SimpleSign.Peru.Iofe.Cli.Tests,
+# Adobe/Aatl/SimpleSign.Adobe.Aatl.Cli.Tests})
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests
 
 # TestBench tests need a running Sandbox (skipped without one; CI starts it)
@@ -81,6 +85,11 @@ src/
 │   │   ├── docs/eidas.md
 │   │   ├── playbooks/                          eidas-checklist.md, eidas-baseline.json
 │   │   └── tools/eidas.py                      writes that playbook
+│   ├── Adobe/Aatl/                           everything of the Adobe Approved Trust List lives here (ADR 0031)
+│   │   ├── SimpleSign.Adobe.Aatl/              the AATL: Adobe's signed list read at run time (not bundled), its anchors with their
+│   │   │                                       certificate policy restrictions (IConstrainedTrustAnchorProvider), the aatl profile and policies
+│   │   ├── SimpleSign.Adobe.Aatl.Cli/          the CLI extension: --profile aatl, aatl policies
+│   │   └── docs/aatl.md
 │   └── Peru/Iofe/                            everything of Peru/IOFE/INDECOPI lives here
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 │       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe
@@ -164,11 +173,15 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 // One profile sets the policies; others add trust only: IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create())
 // CLI: --profile iofe [--trust-profile gov-br] [--sandbox URL]; `simplesign profiles` lists them
 // eidas also qualifies each signature: results[0].Qualification?.Level is QESig, AdESig-QC… (ISignatureQualifier)
+// What Acrobat trusts, without a national framework (ADR 0031): anchors only, no legal level
+var aatl = await AatlProfile.LoadAsync();   // SimpleSign.Adobe.Aatl; CLI: --profile aatl
 ```
 
 ### Extension Points (interfaces)
 - `ITrustAnchorProvider` — custom trust roots
 - `ITimedTrustAnchorProvider` — the anchors at a given time (trusted-list service history, ADR 0026)
+- `IConstrainedTrustAnchorProvider` — anchors that can refuse a chain that reached them (`WhyRefused`), asked by the validators and before
+  signing: the AATL's certificate policy restrictions. A profile's reach the validators as `ValidationOptions.ConstrainedTrustAnchors` (ADR 0031)
 - `IHttpClientProvider` — custom HTTP for TSA/OCSP/CRL
 - `ICertificateCache` — cert caching
 - `IChainValidationProvider` — custom chain logic
@@ -226,10 +239,14 @@ SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension eac
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
 
+SimpleSign.Adobe.Aatl (the Adobe Approved Trust List; one ICountryExtension)
+  └── depends on SimpleSign.Core + SimpleSign.PAdES — public API only; downloads Adobe's list at run time, bundles only the Adobe root
+
 SimpleSign.Cli.Extensibility (the contract of CLI extensions)
   └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli
 
-SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli (CLI extensions, not libraries: each package carries cli-extension/)
+SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli / SimpleSign.Adobe.Aatl.Cli
+(CLI extensions, not libraries: each package carries cli-extension/)
   └── depend on their framework's packages + SimpleSign.Cli.Extensibility; SimpleSign.Cli references none of them, nor any framework
 
 SimpleSign.CAdES / SimpleSign.XAdES

@@ -72,6 +72,8 @@ jobs:
             src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj
             src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas.Cli/SimpleSign.Europe.Eidas.Cli.csproj
             src/Extensions/Europe/Eidas/SimpleSign.Europe.Eidas/SimpleSign.Europe.Eidas.csproj
+            src/Extensions/Adobe/Aatl/SimpleSign.Adobe.Aatl/SimpleSign.Adobe.Aatl.csproj
+            src/Extensions/Adobe/Aatl/SimpleSign.Adobe.Aatl.Cli/SimpleSign.Adobe.Aatl.Cli.csproj
             src/Signers/SimpleSign.Signers.Pkcs11/SimpleSign.Signers.Pkcs11.csproj
             src/Signers/SimpleSign.Signers.Cloud/SimpleSign.Signers.Cloud.csproj
             src/Extras/SimpleSign.HtmlToPdf/SimpleSign.HtmlToPdf.csproj

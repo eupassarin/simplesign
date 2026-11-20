@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The Adobe Approved Trust List as a trust profile** (ADR 0031): `SimpleSign.Adobe.Aatl` (`AatlProfile`), and
+  `--profile aatl` with the extension `SimpleSign.Adobe.Aatl.Cli`. It answers what most people outside a national
+  framework ask — will Acrobat trust this signature? — and gives trust anchors and nothing else: no legal level.
+  - Adobe's list — a signed PDF that embeds the identities — is downloaded at run time (`AatlSource` keeps it current,
+    refuses a copy signed before the one served, keeps the last good one); it is not bundled. Its signature must cover
+    the whole file and chain to the bundled Adobe Root CA G2, and nothing but the signature may be in its `/Contents`.
+  - The anchors are the trusted roots the list does not remove. Half of them are trusted only for certain certificate
+    policies, and refuse a signer certificate that asserts none of them, as Acrobat does: ICP-Brasil's root is there for
+    A3 and A4 certificates only.
+  - The `aatl` policies: validation with the signing-certificate reference at WARN (Acrobat signs
+    `adbe.pkcs7.detached` without it), signing that requires the chain to reach an accepting anchor.
+  - Not affiliated with or endorsed by Adobe. The list has no history: an authority taken out of it stops being
+    trusted for earlier signatures too.
+- **`IConstrainedTrustAnchorProvider`** (`SimpleSign.Core`): a trust anchor provider that can refuse a chain that
+  reached one of its anchors (`WhyRefused`). The PAdES, CAdES and XAdES validators and the checks made before signing
+  ask it; the anchor nearest to the signer decides; a chain is not refused when another provider of the same profile
+  gives the anchor without conditions (`WithTrustFrom` stays a union). `ValidationOptions.ConstrainedTrustAnchors` and
+  `TrustProfile.ConstrainedTrustAnchors` carry them. The chain of a time-stamp's TSA is not asked about.
+- **`PdfEmbeddedFiles.Read`** (`SimpleSign.PAdES`): the files embedded in a PDF (the catalog's `/Names /EmbeddedFiles`
+  name tree), decoded. A file larger than 64 MB decoded, more than 1024 files, an unsupported filter or an encrypted
+  document is refused.
+
 ### Changed
 
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no

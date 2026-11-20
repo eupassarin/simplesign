@@ -295,6 +295,7 @@ profile of a trust framework comes with its [extension](#extensions):
 | `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `eidas` | `eidas` | The EU LOTL and its national lists, checked against the signers bundled with `SimpleSign.Europe.Eidas` (pivot LOTLs followed); `validate` shows each signature's qualification (QESig, AdESig-QC…) — see [eidas.md](../../src/Extensions/Europe/Eidas/docs/eidas.md) |
 | `icp-brasil` (`SimpleSign.Brazil.Cli`) | `icp-brasil` | `icp-brasil` | The AC Raiz roots and the ICP-Brasil chain validation |
 | `gov-br` (`SimpleSign.Brazil.Cli`) | — (Gov.br signs on its own service) | `govbr` | The Gov.br roots and their chain validation |
+| `aatl` (`SimpleSign.Adobe.Aatl.Cli`) | `aatl` | `aatl` | The anchors of the Adobe Approved Trust List, downloaded from Adobe and checked against the Adobe root bundled with `SimpleSign.Adobe.Aatl`, each with its certificate policy restrictions — see [aatl.md](../../src/Extensions/Adobe/Aatl/docs/aatl.md) |
 | `sandbox` | `default` | `default` | A running SimpleSign Sandbox's LOTL (`--sandbox URL`) |
 
 ```bash
@@ -324,6 +325,7 @@ writes it out):
 | `minimal` | Only the dates of the signing certificate (tests and migrations) |
 | `iofe` (`SimpleSign.Peru.Iofe.Cli`) | INDECOPI's guide v4.0: `strict`, CRLs with nextUpdate, no SHA-1 in the chain, the signer and every TSA chained to a trust anchor, TSA valid and not revoked |
 | `eidas` (`SimpleSign.Europe.Eidas.Cli`) | `strict`, the signer and every TSA chained to a trust anchor (the EU lists), TSA valid and not revoked, a warning on a non-qualified certificate (QcCompliance) |
+| `aatl` (`SimpleSign.Adobe.Aatl.Cli`) | `default`, and the signer chained to an anchor of the Adobe Approved Trust List that accepts its certificate (the list's certificate policy restrictions) |
 
 What the policy checks against comes from these options:
 
@@ -406,6 +408,7 @@ packages installed into the CLI that add commands, `--profile` names, policy pre
 simplesign extension install SimpleSign.Brazil.Cli         # ICP-Brasil, Gov.br, Lei 14.063
 simplesign extension install SimpleSign.Europe.Eidas.Cli   # EU (eIDAS)
 simplesign extension install SimpleSign.Peru.Iofe.Cli      # Peru (IOFE)
+simplesign extension install SimpleSign.Adobe.Aatl.Cli     # the Adobe Approved Trust List
 simplesign extension list
 simplesign extension remove iofe
 ```
@@ -443,6 +446,13 @@ More in the [ICP-Brasil article](../../src/Extensions/Brazil/docs/icp-brasil.md)
 
 With `SimpleSign.Europe.Eidas.Cli` installed: `--profile eidas` (the EU LOTL and its lists; `validate` shows each
 signature's qualification) and the `eidas` policies. More in the [eIDAS article](../../src/Extensions/Europe/Eidas/docs/eidas.md).
+
+### AATL (Adobe Approved Trust List)
+
+With `SimpleSign.Adobe.Aatl.Cli` installed: `--profile aatl` (the anchors Acrobat trusts for signatures, downloaded from
+Adobe, each with its certificate policy restrictions; `--trust-profile aatl` adds them to another profile's) and the
+`aatl` policies. It says whom Acrobat trusts, not what a signature is in a country's law. More in the
+[AATL article](../../src/Extensions/Adobe/Aatl/docs/aatl.md).
 
 ### IOFE (Peru)
 

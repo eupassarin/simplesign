@@ -69,6 +69,7 @@ without the policy that was asked for.
 |---|---|---|
 | `SimpleSign.Brazil.Cli` | `brasil` | Brazil: `--profile icp-brasil` and `gov-br`, the `icp-brasil` and `govbr` policies, `simplesign brasil sign` (`--icp-policy`, `--aea`, `--health-document`), `brasil timestamp verify`, and the ICP-Brasil and Gov.br chain validation, the Lei 14.063 level and the signer's manifest in `validate` and `inspect` — see [ICP-Brasil](../../src/Extensions/Brazil/docs/icp-brasil.md) |
 | `SimpleSign.Europe.Eidas.Cli` | `eidas` | EU (eIDAS): `--profile eidas` (the EU LOTL, the qualification of each signature) and the `eidas` policies — see [eIDAS](../../src/Extensions/Europe/Eidas/docs/eidas.md) |
+| `SimpleSign.Adobe.Aatl.Cli` | `aatl` | The Adobe Approved Trust List: `--profile aatl` (the anchors Acrobat trusts, with the list's certificate policy restrictions) and the `aatl` policies — see [AATL](../../src/Extensions/Adobe/Aatl/docs/aatl.md) |
 | `SimpleSign.Peru.Iofe.Cli` | `iofe` | Peru (IOFE): `--profile iofe`, the `iofe` and `iofe-agent` policies, `--tsl-profile iofe` — see [IOFE](../../src/Extensions/Peru/Iofe/docs/iofe.md). |
 
 ## Writing one
