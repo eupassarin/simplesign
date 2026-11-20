@@ -31,7 +31,9 @@ public sealed class PlaybookPoliciesTests
         "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage = indecopi-guia-v4:v-key-usage; "
         + "TrustedLists/TLNotExpired = indecopi-guia-v4:v-tsl-expired; TrustedLists/TLWellSigned = indecopi-guia-v4:v-tsl-wrong-signer; "
         + "TrustedLists/TLVersion = indecopi-guia-v4:v-tsl-ok")]
-    [InlineData("icp-brasil", "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage = icp-brasil-pades:v-key-usage")]
+    [InlineData("icp-brasil",
+        "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage = icp-brasil-pades:v-key-usage; "
+        + "SignatureConstraints/SignedAttributes/CertDigestPresent = govbr-pades:v-portal-icp-policy")]
     [InlineData("govbr",
         "SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage = govbr-pades:v-key-usage; "
         + "SignatureConstraints/SignedAttributes/CertDigestPresent = govbr-pades:v-portal")]

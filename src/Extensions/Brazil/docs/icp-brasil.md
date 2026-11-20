@@ -51,14 +51,18 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 simplesign validate signed.pdf --profile icp-brasil --trust-profile gov-br
 ```
 
-Gov.br's portal signs in `adbe.pkcs7.detached` without a signing-certificate attribute (ESS signing-certificate-v2).
-The ICP-Brasil policy requires that attribute, as the ICP-Brasil signature policies do, so under it a signature from
-the portal is INDETERMINATE (NO_SIGNING_CERTIFICATE_FOUND). The Gov.br policy only warns about it: to accept the
-portal's signatures next to ICP-Brasil's, let Gov.br's profile set the policy and add ICP-Brasil's trust.
+Many signers (Adobe Reader, Gov.br's portal…) write `adbe.pkcs7.detached` without a signing-certificate attribute
+(ESS signing-certificate-v2). The ICP-Brasil and Gov.br policies only warn about it, as the ITI's VALIDAR accepts such
+signatures: the signer is identified by the CMS signer identifier, and a reference that is present must still match
+the certificate. Either profile accepts the other's signatures once its trust is added.
 
 ```bash
+simplesign validate signed.pdf --profile icp-brasil --trust-profile gov-br
 simplesign validate signed.pdf --profile gov-br --trust-profile icp-brasil
 ```
+
+The ICP-Brasil signature policies (AD-RB…) do mandate the attribute: a signature that declares one of them and lacks
+it shows the policy as `Invalid`, with the missing attribute among the warnings.
 
 #### Testing with the Sandbox
 

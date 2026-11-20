@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (its `Timestamp` constraints: the TSA chains to a trust anchor, is valid at the genTime, is not revoked),
   `WithTrustAnchors` and `WithChainRevocationChecker`. Without them nothing else changes: the `Timestamp` constraints of
   `SigningPolicy.Default` are IGNORE.
+- **The ICP-Brasil validation policy accepts a signature without a signing-certificate attribute, as VALIDAR does**:
+  `IcpBrasilPolicies.Validation` (`--profile icp-brasil`, `--policy icp-brasil`) failed every `adbe.pkcs7.detached`
+  signature without ESS signing-certificate-v2 (Adobe Reader, Gov.br's portal…) with INDETERMINATE /
+  NO_SIGNING_CERTIFICATE_FOUND, where the ITI's VALIDAR approves them. `SigningCertificatePresent` and
+  `CertDigestPresent` now only warn, as in `GovBrPolicies.Validation`; `CertDigestMatch` stays FAIL. A signature that
+  declares an ICP-Brasil signature policy (AD-RB…) and lacks the attribute still shows that policy as `Invalid`.
 
 ### Tests
 
