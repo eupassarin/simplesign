@@ -6,10 +6,24 @@
 #
 #   pwsh -File tools/stack/testbench.ps1                          (SANDBOX_URL, default http://localhost:5300)
 #   pwsh -File tools/stack/testbench.ps1 --port 5200 --no-browser (extra arguments go to the TestBench)
+#   pwsh -File tools/stack/testbench.ps1 -Pfx my.pfx[,other.p12] [-PfxPasswordFile FILE] [TestBench args]
+#
+# -Pfx imports your own PFX into the token first (softhsm-provision.ps1 -Pfx), labelled with its file name; it is
+# imported again on every run, so it comes back after the token is rebuilt. Its password, never on the command line:
+#   -PfxPasswordFile FILE       the file's first line
+#   $env:PFX_PASSWORD = '...'   the environment (for every PFX)
+#   (neither)                   asked in the terminal, without echo
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'PfxPasswordFile', Justification = 'The path of a file, not the password.')]
+param(
+    [string[]]$Pfx = @(),
+    [string]$PfxPasswordFile,
+    [switch]$Help,
+    [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest = @()
+)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($args -contains '-Help' -or $args -contains '--help' -or $args -contains '-h') {
+if ($Help -or $Rest -contains '--help') {
     foreach ($line in Get-Content -LiteralPath $PSCommandPath | Select-Object -Skip 1) {
         if ($line -notmatch '^#') { break }
         $line -replace '^# ?', ''
@@ -19,13 +33,23 @@ if ($args -contains '-Help' -or $args -contains '--help' -or $args -contains '-h
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $conf = Join-Path $repoRoot '.softhsm/softhsm2.conf'
+$sandbox = if ($env:SANDBOX_URL) { $env:SANDBOX_URL } else { 'http://localhost:5300' }
+# pwsh -File passes "a.pfx,b.p12" as one string.
+$Pfx = @($Pfx | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+
+if ($Pfx) {
+    $env:SANDBOX_URL = $sandbox
+    $provision = @{ Pfx = $Pfx }
+    if ($PfxPasswordFile) { $provision.PfxPasswordFile = $PfxPasswordFile }
+    & (Join-Path $PSScriptRoot 'softhsm-provision.ps1') @provision
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+}
+elseif (-not (Test-Path -LiteralPath $conf)) {
+    Write-Warning 'No SoftHSM token yet (run tools/stack/up.ps1 or softhsm-provision.ps1): the TestBench starts without the PKCS#11 credential.'
+}
 if (Test-Path -LiteralPath $conf) {
     $env:SOFTHSM2_CONF = $conf
 }
-else {
-    Write-Warning 'No SoftHSM token yet (run tools/stack/up.ps1 or softhsm-provision.ps1): the TestBench starts without the PKCS#11 credential.'
-}
 
-$sandbox = if ($env:SANDBOX_URL) { $env:SANDBOX_URL } else { 'http://localhost:5300' }
-& dotnet run --project (Join-Path $repoRoot 'src/Apps/Development/SimpleSign.TestBench') -- --sandbox $sandbox @args
+& dotnet run --project (Join-Path $repoRoot 'src/Apps/Development/SimpleSign.TestBench') -- --sandbox $sandbox @Rest
 exit $LASTEXITCODE

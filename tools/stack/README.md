@@ -32,8 +32,8 @@ Each script has a PowerShell version beside it, with the same options, environme
 |---|---|
 | `tools/stack/up.sh [--fresh] [--no-dss]` | `pwsh -File tools/stack/up.ps1 [-Fresh] [-NoDss]` |
 | `tools/stack/down.sh [--drop-pki] [--volumes]` | `pwsh -File tools/stack/down.ps1 [-DropPki] [-Volumes]` |
-| `tools/stack/testbench.sh [args]` | `pwsh -File tools/stack/testbench.ps1 [args]` |
-| `tools/stack/softhsm-provision.sh [--force]` | `pwsh -File tools/stack/softhsm-provision.ps1 [-Force]` |
+| `tools/stack/testbench.sh [--pfx FILE]... [--pfx-password-file FILE] [args]` | `pwsh -File tools/stack/testbench.ps1 [-Pfx FILE[,FILE]] [-PfxPasswordFile FILE] [args]` |
+| `tools/stack/softhsm-provision.sh [--force] [--pfx FILE]... [--pfx-password-file FILE]` | `pwsh -File tools/stack/softhsm-provision.ps1 [-Force] [-Pfx FILE[,FILE]] [-PfxPasswordFile FILE]` |
 | `scripts/tests/pkcs11.sh` | `pwsh -File scripts/tests/pkcs11.ps1` |
 
 ```powershell
@@ -96,7 +96,28 @@ Compose alone.
 The certificates are the Sandbox's own: revoking `signer` in the Sandbox's UI makes the token's
 `signer` revoked too.
 
-Environment: `SANDBOX_URL`, `SOFTHSM_TOKEN_LABEL`, `SOFTHSM_PIN`, `SOFTHSM_SO_PIN`, `SOFTHSM2_MODULE`.
+Environment: `SANDBOX_URL`, `SOFTHSM_TOKEN_LABEL`, `SOFTHSM_PIN`, `SOFTHSM_SO_PIN`, `SOFTHSM2_MODULE`, `PFX_PASSWORD`.
+
+### Your own PFX
+
+To try a certificate of your own as an A3 token, give its PFX to `testbench.sh`:
+
+```bash
+tools/stack/testbench.sh --pfx ~/certs/my.pfx                              # asks for the password
+PFX_PASSWORD='...' tools/stack/testbench.sh --pfx a.pfx --pfx b.p12        # one password for every PFX
+tools/stack/testbench.sh --pfx a.pfx --pfx-password-file ~/certs/a.pass    # the file's first line
+```
+
+The password is never an argument (it would stay in the shell history and in `ps`). It comes from, in this order:
+`--pfx-password-file` (its first line), `PFX_PASSWORD` (an empty value is an empty password), or a prompt in the
+terminal, without echo. With none of them and no terminal, the script stops. OpenSSL reads it from its environment
+(`-passin env:`), not from its command line; the PowerShell scripts read the PFX with .NET.
+
+The leaf certificate and its key go into the same token, `SimpleSign Sandbox`, under the PFX's file name (`my.pfx` →
+label `my`), with the SHA-1 of the certificate as CKA_ID. The chain is not imported: it comes from the AIA. Importing
+the same certificate again replaces it, so `--pfx` can stay on every run. Rebuilding the token (a new Sandbox root,
+`--force`) drops it, and the next `testbench.sh --pfx` brings it back. `softhsm-provision.sh --pfx` does the same
+without starting the TestBench. A wrong password stops the script before the TestBench starts.
 
 ## The Sandbox container
 
