@@ -21,7 +21,7 @@ import type {
   PolicyView,
 } from "./types"
 
-import type { DssComparison, DssPolicyView, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunKind, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
+import type { AugmentFacts, DssComparison, DssPolicyView, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunKind, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
 
 export class ApiError extends Error {}
 
@@ -108,6 +108,8 @@ export const api = {
     run: (id: string) => request<RunView | undefined>("GET", `/api/runs/${id}`),
     eventsUrl: (id: string) => `/api/runs/${id}/events`,
     history: () => request<RunSummary[]>("GET", "/api/runs"),
+    /** The ICP-Brasil policy a signed file declares, before augmenting it. */
+    describeAugment: (fileId: string) => request<AugmentFacts>("POST", "/api/augment/describe", { fileId }),
     /** A stored validation report (SimpleSign's or DSS's JSON), read for the report viewer. */
     report: (id: string) => request<ReportView>("GET", `/api/reports/${encodeURIComponent(id)}`),
   },

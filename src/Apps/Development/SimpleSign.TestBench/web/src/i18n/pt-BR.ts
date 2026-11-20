@@ -596,6 +596,20 @@ export const ptBR: Messages = {
     summary: "{size} KB · estendido em {sign} ms, validado em {validate} ms, {total} ms no total",
     initial: "Nível antes",
     again: "Estender de novo",
+    icp: {
+      declares: "Declara {policy}",
+      keeps: "A assinatura declara {policy} ({oid}) num atributo assinado: o augment só acrescenta dados não assinados e nunca a muda, então o resultado continua {policy} e é validado contra ela.",
+      recommended: "Traz o que {policy} exige",
+      strip: "Política → a ICP-Brasil que o arquivo declara (o augment a mantém)",
+      notes: {
+        missingSignatureTimestamp: "{policy} exige um carimbo de tempo da assinatura no CMS, e esta não tem. Só quem assina o põe: o augmenter adiciona carimbos de documento, então nenhum nível resolve isso.",
+        addsSignatureTimestamp: "{policy} exige um carimbo de tempo da assinatura, e esta não tem: B-T o adiciona.",
+        needsArchive: "{policy} exige um DSS com os certificados e os dados de revogação (VRI) e um carimbo de documento depois da assinatura: B-LTA adiciona os dois.",
+        pbadArtifacts: "AD-RA também exige a PA, a LPA e a assinatura da LPA no DSS (PBAD_*), que o augmenter não adiciona: só assinar em AD-RA os grava.",
+        cadesReferences: "{policy} exige as referências completas (CompleteCertificateRefs, CompleteRevocationRefs) e o carimbo delas, que o augmenter não adiciona.",
+        cadesArchiveV2: "AD-RA exige archive-time-stamp v2 (id-aa-48); o augmenter adiciona archive-time-stamp v3.",
+      },
+    },
   },
   report: {
     title: "Relatório de validação",

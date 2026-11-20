@@ -118,7 +118,8 @@ public sealed record RunView(
     string Engine = RunEngines.Library,
     IReadOnlyList<CliStep>? Cli = null,
     string? EtsiReportId = null,
-    string? InitialLevel = null);
+    string? InitialLevel = null,
+    IcpPolicyFacts? DeclaredPolicy = null);
 
 /// <summary>A row of the run history.</summary>
 public sealed record RunSummary(string Id, string Format, string Status, DateTimeOffset StartedAt, long TotalMs, bool Success, string? RequestedLevel, string? AchievedLevel, string? Overall, string? FileName, string? Error, string Kind = RunKinds.Sign, string Engine = RunEngines.Library);
@@ -413,6 +414,8 @@ internal sealed class RunService(
         };
         IHttpClientProvider http = sandbox is { IsConnected: true } ? sandbox : DefaultHttpClientProvider.Instance;
         var timestamp = TimestampOf(options.Timestamp ?? new TimestampChoice(), http);
+        // The ICP-Brasil policy is a signed attribute: augmenting keeps it, so the result says which it is.
+        var declared = (await AugmentFactsReader.DescribeAsync(file.Content)).IcpPolicy;
         var watch = Stopwatch.StartNew();
         byte[] output;
         AdesBaselineLevel initial, reached;
@@ -463,6 +466,7 @@ internal sealed class RunService(
             RequestedLevel = LevelName(target),
             AchievedLevel = LevelName(reached),
             InitialLevel = LevelName(initial),
+            DeclaredPolicy = declared,
             SignMs = watch.ElapsedMilliseconds,
             Code = AugmentCode.For(run.Format, file.FileName, options.Level, options.Renew, data is not null),
         };

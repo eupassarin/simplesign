@@ -252,6 +252,8 @@ export interface RunView {
   achievedLevel?: string | null
   /** The level the signature had before an augmentation. */
   initialLevel?: string | null
+  /** The ICP-Brasil policy the augmented signature declares (kept by the augmentation). */
+  declaredPolicy?: IcpPolicyFacts | null
   warnings: string[]
   signMs: number
   validateMs: number
@@ -412,4 +414,24 @@ export function hasPath(options: Options, path: string): boolean {
 /** The value as the conditions and choices compare it: enum names as they are, booleans as "true"/"false". */
 export function asText(value: unknown): string {
   return value === null || value === undefined ? "" : String(value)
+}
+
+/** The ICP-Brasil policy a signature declares, and what augmenting does for it (IcpPolicyFacts in Runs/AugmentFacts.cs). */
+export interface IcpPolicyFacts {
+  name: string
+  oid: string
+  version?: string | null
+  format: string
+  hasSignatureTimestamp: boolean
+  /** The level that brings what the policy requires and the augmenter can add. */
+  recommended?: "BT" | "BLT" | "BLTA" | null
+  notes: IcpPolicyNote[]
+}
+
+export type IcpPolicyNote = "missingSignatureTimestamp" | "addsSignatureTimestamp" | "needsArchive" | "pbadArtifacts" | "cadesReferences" | "cadesArchiveV2"
+
+/** What the Augment tab knows about a signed file before raising it (AugmentFacts). */
+export interface AugmentFacts {
+  format: Format
+  icpPolicy?: IcpPolicyFacts | null
 }
