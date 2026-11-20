@@ -5,6 +5,12 @@
 #
 #   pwsh -File tools/stack/softhsm-provision.ps1           (tools/stack/up.ps1 calls it)
 #   pwsh -File tools/stack/softhsm-provision.ps1 -Force    (rebuild the token even if the Sandbox root did not change)
+#   pwsh -File tools/stack/softhsm-provision.ps1 -Pfx my.pfx[,other.p12] [-PfxPasswordFile FILE]
+#                                                          (also import your own PFX files; testbench.ps1 -Pfx does it)
+#
+# A PFX goes into the same token, labelled with its file name (my.pfx -> "my"), its CKA_ID the SHA-1 of its
+# certificate; importing it again replaces it. Rebuilding the token drops it. Its password, never on the command
+# line: the first line of -PfxPasswordFile, else PFX_PASSWORD (for every PFX), else asked in the terminal.
 #
 # Needs SoftHSM2 (softhsm2-util and its PKCS#11 module) and OpenSC (pkcs11-tool):
 #   Windows: SoftHSM2 for Windows (https://github.com/disig/SoftHSM2-for-Windows/releases, into C:\SoftHSM2)
@@ -14,9 +20,12 @@
 #
 # The token is kept in <repo>/.softhsm (its own softhsm2.conf), the same folder softhsm-provision.sh uses.
 # Environment: SANDBOX_URL (http://localhost:5300), SOFTHSM_TOKEN_LABEL ("SimpleSign Sandbox"), SOFTHSM_PIN (1234),
-# SOFTHSM_SO_PIN (0000), SOFTHSM2_MODULE (found automatically).
+# SOFTHSM_SO_PIN (0000), SOFTHSM2_MODULE (found automatically), PFX_PASSWORD.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'PfxPasswordFile', Justification = 'The path of a file, not the password.')]
 param(
     [switch]$Force,
+    [string[]]$Pfx = @(),
+    [string]$PfxPasswordFile,
     [switch]$Help,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
@@ -54,6 +63,16 @@ function Find-Tool {
 
 if ($Help) { Show-Help; exit 0 }
 if ($Rest) { [Console]::Error.WriteLine("Unknown option: $($Rest -join ' ')"); exit 2 }
+# pwsh -File passes "a.pfx,b.p12" as one string.
+# Its own name: PowerShell names are case-insensitive, and the Sandbox loop below has a $pfx of its own.
+$pfxFiles = @($Pfx | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+foreach ($file in $pfxFiles) {
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { [Console]::Error.WriteLine("No such PFX file: $file"); exit 2 }
+}
+if ($PfxPasswordFile -and -not (Test-Path -LiteralPath $PfxPasswordFile -PathType Leaf)) {
+    [Console]::Error.WriteLine("No such password file: $PfxPasswordFile")
+    exit 2
+}
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $sandboxUrl = (($env:SANDBOX_URL, 'http://localhost:5300') | Where-Object { $_ } | Select-Object -First 1).TrimEnd('/')
@@ -125,10 +144,86 @@ Set-Content -LiteralPath $conf -Encoding ascii -Value @(
 )
 $env:SOFTHSM2_CONF = $conf
 
+$work = Join-Path ([IO.Path]::GetTempPath()) "simplesign-softhsm-$([guid]::NewGuid().ToString('N'))"
+# Keys are exported once, in memory; on Windows an ephemeral key set keeps them out of the user's key store.
+$flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+if ($IsWindows) { $flags = $flags -bor [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet }
+
+function Get-PrivateKeyOf {
+    param([Security.Cryptography.X509Certificates.X509Certificate2]$Certificate)
+    $key = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($Certificate)
+    if (-not $key) { $key = [Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($Certificate) }
+    $key
+}
+
+# The password of a PFX: the first line of -PfxPasswordFile, else PFX_PASSWORD, else asked in the terminal.
+function Get-PfxPassword {
+    param([string]$File)
+    if ($PfxPasswordFile) { return [string](Get-Content -LiteralPath $PfxPasswordFile -TotalCount 1) }
+    if (Test-Path Env:PFX_PASSWORD) { return $env:PFX_PASSWORD }
+    if (-not [Console]::IsInputRedirected) {
+        $secure = Read-Host -AsSecureString -Prompt "Password of $(Split-Path -Leaf $File)"
+        return [Net.NetworkCredential]::new('', $secure).Password
+    }
+    [Console]::Error.WriteLine("No password for ${File}: set PFX_PASSWORD, pass -PfxPasswordFile, or run in a terminal.")
+    exit 1
+}
+
+# Your own PFX: its leaf certificate and key, labelled with the file name; the chain comes from the AIA.
+function Import-Pfx {
+    param([string]$File)
+    $password = Get-PfxPassword $File
+    $label = [IO.Path]::GetFileNameWithoutExtension($File)
+    $collection = [Security.Cryptography.X509Certificates.X509Certificate2Collection]::new()
+    $key = $null
+    try {
+        try { $collection.Import([IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $File).Path), $password, $flags) }
+        catch { Write-Verbose "Cannot import ${File}: $($_.Exception.Message)" }
+        $certificate = $collection | Where-Object HasPrivateKey | Select-Object -First 1
+        if ($certificate) { $key = Get-PrivateKeyOf $certificate }
+        if (-not $key) {
+            [Console]::Error.WriteLine("Cannot read ${File}: wrong password, or no RSA or ECDSA certificate with its key in it.")
+            exit 1
+        }
+        $id = $certificate.Thumbprint.ToLowerInvariant()
+        $keyFile = Join-Path $work 'pfx.key.der'
+        $certFile = Join-Path $work 'pfx.cert.der'
+        [IO.File]::WriteAllBytes($keyFile, $key.ExportPkcs8PrivateKey())
+        [IO.File]::WriteAllBytes($certFile, $certificate.RawData)
+        # Imported again: the objects of the same certificate are replaced.
+        foreach ($type in 'privkey', 'cert') {
+            try {
+                Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
+                    '--delete-object', '--type', $type, '--id', $id) | Out-Null
+            }
+            catch { Write-Verbose "No $type with CKA_ID $id on the token yet." }
+        }
+        foreach ($object in @(@('privkey', $keyFile), @('cert', $certFile))) {
+            Invoke-Native $pkcs11Tool @('--module', $module, '--token-label', $tokenLabel, '--login', '--pin', $pin,
+                '--write-object', $object[1], '--type', $object[0], '--id', $id, '--label', $label) | Out-Null
+        }
+        Write-Host ('  {0,-22} {1}' -f $label, $certificate.Subject)
+    }
+    finally {
+        Remove-Item -LiteralPath (Join-Path $work 'pfx.key.der') -Force -ErrorAction SilentlyContinue
+        if ($key) { $key.Dispose() }
+        $collection | ForEach-Object { $_.Dispose() }
+    }
+}
+
+function Import-OwnPfx {
+    if (-not $pfxFiles) { return }
+    Write-Host "-> $($pfxFiles.Count) PFX file(s) on `"$tokenLabel`":"
+    New-Item -ItemType Directory -Force -Path $work | Out-Null
+    try { foreach ($file in $pfxFiles) { Import-Pfx $file } }
+    finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
 if (-not $Force -and (Test-Path -LiteralPath $marker) -and (Get-Content -LiteralPath $marker -Raw).Trim() -eq $root) {
     $slots = & $softhsmUtil @utilModule --show-slots 2>$null
     if ($LASTEXITCODE -eq 0 -and ($slots | Select-String -SimpleMatch "Label:" | Where-Object { $_ -match [regex]::Escape($tokenLabel) })) {
         Write-Host "SoftHSM token `"$tokenLabel`" already holds the certificates of the Sandbox root $root; nothing to do (-Force rebuilds it)."
+        Import-OwnPfx
         Write-Host "`$env:SOFTHSM2_CONF = `"$conf`""
         exit 0
     }
@@ -140,11 +235,7 @@ Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $tokens | Out-Null
 Invoke-Native $softhsmUtil ($utilModule + @('--init-token', '--free', '--label', $tokenLabel, '--so-pin', $soPin, '--pin', $pin)) | Out-Null
 
-$work = Join-Path ([IO.Path]::GetTempPath()) "simplesign-softhsm-$([guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $work | Out-Null
-# Keys are exported once, in memory; on Windows an ephemeral key set keeps them out of the user's key store.
-$flags = [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
-if ($IsWindows) { $flags = $flags -bor [Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet }
 $imported = @()
 # The signer whose key is also imported a second time, as extractable, under the label "extractable".
 $extractableOf = 'rsa-2048'
@@ -162,8 +253,7 @@ try {
         # The leaf certificate: the one with the private key.
         $certificate = $collection | Where-Object HasPrivateKey | Select-Object -First 1
         if (-not $certificate) { throw "The PFX of $($entry.id) has no private key." }
-        $key = [Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($certificate)
-        if (-not $key) { $key = [Security.Cryptography.X509Certificates.ECDsaCertificateExtensions]::GetECDsaPrivateKey($certificate) }
+        $key = Get-PrivateKeyOf $certificate
         if (-not $key) { throw "The key of $($entry.id) is neither RSA nor ECDSA." }
         $keyFile = Join-Path $work "$($entry.id).key.der"
         $certFile = Join-Path $work "$($entry.id).cert.der"
@@ -211,4 +301,5 @@ finally {
 Set-Content -LiteralPath $marker -Encoding ascii -Value $root -NoNewline
 Write-Host "-> $($imported.Count) key pair(s) and $cas CA certificate(s) on `"$tokenLabel`" (PIN $pin, SO PIN $soPin), module ${module}:"
 $imported | ForEach-Object { Write-Host $_ }
+Import-OwnPfx
 Write-Host "`$env:SOFTHSM2_CONF = `"$conf`""
