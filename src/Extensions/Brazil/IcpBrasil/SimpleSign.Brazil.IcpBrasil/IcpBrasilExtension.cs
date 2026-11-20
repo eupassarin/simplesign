@@ -189,19 +189,17 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
 
         var errors = new List<string>(result.Errors);
         errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)));
-        if (context.Signature is { } signature)
+        IReadOnlyList<string>? policyErrors = null;
+        if (CheckPolicy(context) is { Status: not IcpBrasilPolicyStatus.None } policy)
         {
-            var signingTime = context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow;
-            var signerRoot = IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates);
-            var policy = context.Pdf is { } pdf
-                ? IcpBrasilPolicyValidator.Validate(signature, signingTime, signerRoot, pdf)
-                : IcpBrasilPolicyValidator.Validate(signature, signingTime, expectedFormat: null, signerRoot);
-            if (policy.Status != IcpBrasilPolicyStatus.None)
+            metadata["BR.SignaturePolicy"] = policy.Policy is { } p
+                ? $"{p.Info.Format} {p.Info.Policy} {p.Info.Version}".TrimEnd()
+                : policy.Reference!.Oid;
+            metadata["BR.SignaturePolicyStatus"] = policy.Status.ToString();
+            policyErrors = PolicyRuleErrors(policy);
+            if (policy.Status == IcpBrasilPolicyStatus.Unknown)
             {
-                metadata["BR.SignaturePolicy"] = policy.Policy is { } p
-                    ? $"{p.Info.Format} {p.Info.Policy} {p.Info.Version}".TrimEnd()
-                    : policy.Reference!.Oid;
-                metadata["BR.SignaturePolicyStatus"] = policy.Status.ToString();
+                // A policy outside the embedded LPA, whose rules cannot be checked.
                 errors.AddRange(policy.Errors.Select(e => $"Signature policy: {e}"));
             }
         }
@@ -223,6 +221,46 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             Metadata = metadata,
             RevocationStatus = result.RevocationStatus,
             Errors = errors,
+            SignaturePolicyErrors = policyErrors,
         };
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string>? CheckSignaturePolicy(ChainValidationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return CheckPolicy(context) is { } policy ? PolicyRuleErrors(policy) : null;
+    }
+
+    /// <summary>
+    /// The signature checked against the ICP-Brasil policy it declares: a CMS signature (with its PDF structures when it
+    /// is a PDF's) or a XAdES one; null without a signature.
+    /// </summary>
+    private static IcpBrasilPolicyValidationResult? CheckPolicy(ChainValidationContext context)
+    {
+        var signerRoot = IcpBrasilChainValidator.FindBundledRoot(context.Certificate, context.Certificates);
+        if (context.Signature is { } signature)
+        {
+            var signingTime = context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow;
+            return context.Pdf is { } pdf
+                ? IcpBrasilPolicyValidator.Validate(signature, signingTime, signerRoot, pdf)
+                : IcpBrasilPolicyValidator.Validate(signature, signingTime, expectedFormat: null, signerRoot);
+        }
+
+        if (context.Xml is { } xml)
+        {
+            var signingTime = context.ValidationTime ?? xml.SigningTime ?? DateTimeOffset.UtcNow;
+            return IcpBrasilPolicyValidator.Validate(xml.SignaturePolicy, signingTime, xml.HasSignatureTimestamp, IcpBrasilPolicyFormat.Xades, signerRoot);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The rules broken, when the signature declares an ICP-Brasil policy of the embedded LPA: a constraint of the
+    /// signature (SignatureConstraints/PolicyRules), not an error of the chain. Null for no policy, one outside
+    /// ICP-Brasil, or one whose rules are not known (Unknown).
+    /// </summary>
+    private static IReadOnlyList<string>? PolicyRuleErrors(IcpBrasilPolicyValidationResult policy) =>
+        policy.Status is IcpBrasilPolicyStatus.Valid or IcpBrasilPolicyStatus.Invalid ? policy.Errors : null;
 }

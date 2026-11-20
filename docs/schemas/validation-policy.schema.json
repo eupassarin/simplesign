@@ -457,6 +457,9 @@
         "PolicyHashMatch": {
           "$ref": "#/$defs/LevelConstraint"
         },
+        "PolicyRules": {
+          "$ref": "#/$defs/LevelConstraint"
+        },
         "AcceptableFormats": {
           "$ref": "#/$defs/MultiValuesConstraint"
         },

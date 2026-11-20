@@ -1,8 +1,20 @@
+using System.Formats.Asn1;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.RegularExpressions;
 using Shouldly;
+using SimpleSign.CAdES;
+using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
 using SimpleSign.PAdES;
+using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
+using SimpleSign.XAdES;
 
 namespace SimpleSign.Brazil.IcpBrasil.Tests;
 
@@ -57,6 +69,263 @@ public sealed class IcpBrasilPoliciesTests : IDisposable
     [Fact]
     public void Validation_SigningCertificateReference_MustStillMatch() =>
         IcpBrasilPolicies.Validation.Find("SignatureConstraints/SignedAttributes/CertDigestMatch").ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Fail);
+
+    [Fact]
+    public void Validation_PolicyRules_IsFail() =>
+        IcpBrasilPolicies.Validation.Find("SignatureConstraints/PolicyRules").ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Fail);
+
+    [Fact]
+    public async Task Validation_ConformantAdRb_IsValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] signed = await SignAdRb(pki);
+
+        var result = await Validate(pki, signed);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, Report(result));
+        result.ChainValidationMetadata!["BR.SignaturePolicyStatus"].ShouldBe("Valid");
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public async Task Validation_AdRbWithoutSigningCertificateAttribute_IsNotValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] signed = WithoutSigningCertificateV2(await SignAdRb(pki), pki);
+
+        var result = await Validate(pki, signed);
+
+        // DOC-ICP-15.03 mandates signing-certificate-v2: the policy the signature declares is broken. Not a chain
+        // failure: the chain is still trusted.
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate, Report(result));
+        result.SubIndication.ShouldBe(SignatureSubIndication.SigConstraintsFailure);
+        result.ChainValidationMetadata!["BR.SignaturePolicyStatus"].ShouldBe("Invalid");
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Failed
+            && c.Message.Contains(SigningCertificateV2, StringComparison.Ordinal));
+        result.Warnings.ShouldNotContain(w => w.Contains("Signature policy:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validation_NoSignaturePolicy_PolicyRulesDoesNotApply()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(pki.Leaf, [pki.Ac, pki.Root])
+            .SignAsync();
+
+        var result = await Validate(pki, signed);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, Report(result));
+        result.ChainValidationMetadata!.ContainsKey("BR.SignaturePolicyStatus").ShouldBeFalse();
+        result.Constraints.ShouldNotContain(c => c.Id == PolicyRules);
+    }
+
+    [Fact]
+    public async Task Validation_ConformantCadesAdRb_IsValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] p7s = await SignCadesAdRb(pki);
+
+        var result = ValidateCades(pki, p7s);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public async Task Validation_CadesAdRbWithoutSigningCertificateAttribute_IsNotValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] p7s = CadesWithoutSigningCertificateV2(await SignCadesAdRb(pki), pki);
+
+        var result = ValidateCades(pki, p7s);
+
+        // The chain is trusted; the policy the signature declares (DOC-ICP-15.03 mandates signing-certificate-v2) is broken.
+        result.IsCertificateChainValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.SubIndication.ShouldBe(SignatureSubIndication.SigConstraintsFailure);
+        result.IsValid.ShouldBeFalse();
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Failed
+            && c.Message.Contains(SigningCertificateV2, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validation_CadesWithoutSignaturePolicy_PolicyRulesDoesNotApply()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        byte[] p7s = await CadesSigner.Document(s_content).WithCertificate(pki.Leaf, [pki.Ac, pki.Root]).SignAsync();
+
+        var result = ValidateCades(pki, p7s);
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.Constraints.ShouldNotContain(c => c.Id == PolicyRules);
+    }
+
+    [Fact]
+    public async Task Validation_ConformantXadesAdRb_IsValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        var policy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades);
+
+        var result = ValidateXades(pki, await SignXades(pki, policy.ToReference()));
+
+        result.Indication.ShouldBe(SignatureIndication.Valid, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public async Task Validation_XadesAdRtWithoutTimestamp_IsNotValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        var policy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRt, IcpBrasilPolicyFormat.Xades);
+
+        var result = ValidateXades(pki, await SignXades(pki, policy.ToReference()));
+
+        result.IsCertificateChainValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.SubIndication.ShouldBe(SignatureSubIndication.SigConstraintsFailure);
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Failed
+            && c.Message.Contains("timestamp", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validation_XadesWithWrongPolicyHash_IsNotValid()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+        var policy = IcpBrasilSignaturePolicies.Current(IcpBrasilPolicy.AdRb, IcpBrasilPolicyFormat.Xades);
+
+        var result = ValidateXades(pki, await SignXades(pki, policy.ToReference() with { Hash = new byte[32] }));
+
+        result.Indication.ShouldBe(SignatureIndication.Indeterminate, Report(result.Indication, result.SubIndication, result.Constraints));
+        result.Constraints.ShouldContain(c => c.Id == PolicyRules && c.Status == ConstraintStatus.Failed
+            && c.Message.Contains("sigPolicyHash", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Validation_XadesWithPolicyOutsideIcpBrasil_PolicyRulesDoesNotApply()
+    {
+        using var pki = TestPki.Create(leafExpired: false);
+
+        var result = ValidateXades(pki, await SignXades(pki, new SignaturePolicyReference("1.2.3.4.5", "2.16.840.1.101.3.4.2.1", new byte[32])));
+
+        result.Constraints.ShouldNotContain(c => c.Id == PolicyRules);
+    }
+
+    private static readonly byte[] s_content = "contrato de prestação de serviços"u8.ToArray();
+
+    private static Task<byte[]> SignCadesAdRb(TestPki pki) =>
+        CadesSigner.Document(s_content)
+            .WithCertificate(pki.Leaf, [pki.Ac, pki.Root])
+            .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb)
+            .SignAsync();
+
+    private static CadesValidationResult ValidateCades(TestPki pki, byte[] p7s) =>
+        new CadesSignatureValidator(new ValidationOptions { Profile = IcpProfile(pki), CheckRevocation = false }).Validate(p7s, s_content);
+
+    private static Task<byte[]> SignXades(TestPki pki, SignaturePolicyReference reference) =>
+        XadesSigner.Document("<?xml version=\"1.0\"?><contrato><id>1</id></contrato>"u8.ToArray())
+            .WithCertificate(pki.Leaf, [pki.Ac, pki.Root])
+            .WithSignaturePolicy(reference)
+            .SignAsync();
+
+    private static XadesValidationResult ValidateXades(TestPki pki, byte[] xml) =>
+        new XadesSignatureValidator(new ValidationOptions { Profile = IcpProfile(pki), CheckRevocation = false }).Validate(xml);
+
+    private static Core.Extensions.TrustProfile IcpProfile(TestPki pki) =>
+        IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { AdditionalRoots = [pki.Root] });
+
+    private static string Report(SignatureIndication indication, SignatureSubIndication? subIndication, IEnumerable<ValidationConstraintResult> constraints) =>
+        $"{indication}/{subIndication}: " + string.Join("; ", constraints
+            .Where(c => c.Status == ConstraintStatus.Failed).Select(c => $"{c.Id}: {c.Message}"));
+
+    /// <summary>The same detached CMS made again with the signed attributes of the original but the ESS signing-certificate-v2.</summary>
+    private static byte[] CadesWithoutSigningCertificateV2(byte[] p7s, TestPki pki)
+    {
+        var original = new SignedCms(new ContentInfo(s_content), detached: true);
+        original.Decode(p7s);
+        var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, pki.Leaf)
+        {
+            DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"),
+            IncludeOption = X509IncludeOption.EndCertOnly,
+        };
+        signer.Certificates.Add(pki.Ac);
+        foreach (var attribute in original.SignerInfos[0].SignedAttributes)
+        {
+            if (attribute.Oid.Value is "1.2.840.113549.1.9.3" or "1.2.840.113549.1.9.4" or SigningCertificateV2)
+            {
+                continue;
+            }
+
+            signer.SignedAttributes.Add(new AsnEncodedData(attribute.Oid, attribute.Values[0].RawData));
+        }
+
+        var cms = new SignedCms(new ContentInfo(s_content), detached: true);
+        cms.ComputeSignature(signer);
+        return cms.Encode();
+    }
+
+    private const string PolicyRules = "SignatureConstraints/PolicyRules";
+    private const string SigningCertificateV2 = "1.2.840.113549.1.9.16.2.47";
+
+    private static Task<byte[]> SignAdRb(TestPki pki) =>
+        PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(pki.Leaf, [pki.Ac, pki.Root])
+            .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRb)
+            .SignAsync();
+
+    private static async Task<SignatureValidationResult> Validate(TestPki pki, byte[] signed)
+    {
+        var icp = IcpBrasilProfile.Create(new IcpBrasilExtensionOptions { AdditionalRoots = [pki.Root] });
+        var validator = new PdfSignatureValidator(new ValidationOptions { Profile = icp, CheckRevocation = false });
+        await using var stream = new MemoryStream(signed, writable: false);
+        return (await validator.ValidateAsync(stream)).Single();
+    }
+
+    private static string Report(SignatureValidationResult result) =>
+        $"{result.Indication}/{result.SubIndication}: " + string.Join("; ", result.Constraints
+            .Where(c => c.Status == ConstraintStatus.Failed).Select(c => $"{c.Id}: {c.Message}"));
+
+    /// <summary>
+    /// The same PDF, its CMS made again with the signed attributes of the original but the ESS signing-certificate-v2:
+    /// what Adobe Reader or Gov.br would write, yet still declaring the ICP-Brasil policy.
+    /// </summary>
+    private static byte[] WithoutSigningCertificateV2(byte[] pdf, TestPki pki)
+    {
+        string text = Encoding.Latin1.GetString(pdf);
+        var range = Regex.Match(text, @"/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]");
+        int[] r = [.. Enumerable.Range(1, 4).Select(i => int.Parse(range.Groups[i].Value, CultureInfo.InvariantCulture))];
+        byte[] content = [.. pdf.AsSpan(r[0], r[1]), .. pdf.AsSpan(r[2], r[3])];
+        int hexStart = r[0] + r[1] + 1;
+        int hexLength = r[2] - 1 - hexStart;
+        byte[] contents = Convert.FromHexString(text.AsSpan(hexStart, hexLength));
+        AsnDecoder.ReadEncodedValue(contents, AsnEncodingRules.BER, out _, out _, out int cmsLength);
+
+        var original = new SignedCms();
+        original.Decode(contents.AsSpan(0, cmsLength));
+        var signer = new CmsSigner(SubjectIdentifierType.IssuerAndSerialNumber, pki.Leaf)
+        {
+            DigestAlgorithm = new Oid("2.16.840.1.101.3.4.2.1"),
+            IncludeOption = X509IncludeOption.EndCertOnly,
+        };
+        signer.Certificates.Add(pki.Ac);
+        foreach (var attribute in original.SignerInfos[0].SignedAttributes)
+        {
+            if (attribute.Oid.Value is "1.2.840.113549.1.9.3" or "1.2.840.113549.1.9.4" or SigningCertificateV2)
+            {
+                continue;
+            }
+
+            signer.SignedAttributes.Add(new AsnEncodedData(attribute.Oid, attribute.Values[0].RawData));
+        }
+
+        var cms = new SignedCms(new ContentInfo(content), detached: true);
+        cms.ComputeSignature(signer);
+        string hex = Convert.ToHexString(cms.Encode());
+        hex.Length.ShouldBeLessThanOrEqualTo(hexLength);
+        byte[] result = [.. pdf];
+        Encoding.Latin1.GetBytes(hex.PadRight(hexLength, '0')).CopyTo(result, hexStart);
+        return result;
+    }
 
     [Fact]
     public void Policies_ToJson_RoundTrip()

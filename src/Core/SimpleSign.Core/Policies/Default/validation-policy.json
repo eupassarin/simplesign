@@ -8,6 +8,7 @@
       "AcceptablePolicies": { "Level": "FAIL", "Id": [ "ANY_POLICY", "NO_POLICY" ] },
       "PolicyAvailable": { "Level": "INFORM" },
       "PolicyHashMatch": { "Level": "WARN" },
+      "PolicyRules": { "Level": "FAIL" },
       "AcceptableFormats": { "Level": "FAIL", "Id": [ "*" ] },
       "BasicSignatureConstraints": {
         "ReferenceDataExistence": { "Level": "FAIL" },

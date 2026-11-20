@@ -66,6 +66,13 @@ internal sealed record ValidationFacts
     /// <summary>Whether the policy document's hash matches the one in the signature; null: not established.</summary>
     public bool? PolicyHashMatches { get; init; }
 
+    /// <summary>
+    /// The rules of the signature policy the signature names that it does not meet (empty: it meets them all), as a
+    /// chain validation provider that knows the policy checked them (<see cref="Extensions.ChainValidationResult.SignaturePolicyErrors"/>);
+    /// null: not checked.
+    /// </summary>
+    public IReadOnlyList<string>? SignaturePolicyErrors { get; init; }
+
     /// <summary>The trusted lists the trust anchors come from, for the TrustedLists constraints; null when none.</summary>
     public IReadOnlyList<Extensions.TrustedListInfo>? TrustedLists { get; init; }
 
@@ -1133,6 +1140,11 @@ internal static class ValidationPolicyEvaluator
                 Check(SignatureContext + "/PolicyHashMatch", matches, "The signature policy's hash matches.", "The signature policy's hash does not match.",
                     SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
             }
+
+            Fact(SignatureContext + "/PolicyRules", facts.SignaturePolicyErrors is { } policyErrors ? policyErrors.Count == 0 : null,
+                "The signature meets the rules of the signature policy it names.",
+                $"The signature does not meet the rules of the signature policy it names: {string.Join(" ", facts.SignaturePolicyErrors ?? [])}",
+                SignatureIndication.Indeterminate, SignatureSubIndication.SigConstraintsFailure);
         }
 
         private void EvaluateSignedAttributes(string path)
