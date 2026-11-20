@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
+  longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
+  constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a
+  policy used outside its period, a signed attribute the policy mandates missing (the ESS signing-certificate-v2 of
+  DOC-ICP-15.03), a PAdES policy without the PBAD.PAdES SubFilter, AD-RT and above without a signature timestamp. The
+  chain stays trusted: it is not a chain failure. A signature that declares no policy, or one outside ICP-Brasil, is not
+  concerned, and a policy outside the embedded LPA (`Unknown`) still only warns. New: `ChainValidationResult.SignaturePolicyErrors`,
+  the rules of the declared policy a chain validation provider found broken (empty: all met; null: not checked), and
+  `PolicyRules` in the validation policy, FAIL in `ValidationPolicy.Default` and `IcpBrasilPolicies.Validation` (WARN
+  brings back the old outcome). A SimpleSign element: DSS has none, so the TestBench leaves it out of the policy it sends
+  to DSS. PAdES only: the CAdES and XAdES validators do not run chain validation providers.
+
 ### Fixed
 
 - **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and

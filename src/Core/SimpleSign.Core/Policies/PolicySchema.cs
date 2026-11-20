@@ -106,7 +106,7 @@ internal static class PolicySchema
         Add("SigningTimestampConstraints", "ProspectiveCertificateChain:L NotExpired:L NotRevoked:L RevocationDataAvailable:L");
         Add("SigningCaCertificateConstraints", "NotExpired:L RevocationDataAvailable:L NotRevoked:L CRLNextUpdatePresent:L Cryptographic:C");
         Add("SignatureConstraints",
-            "StructuralValidation:L AcceptablePolicies:M PolicyAvailable:L SignaturePolicyStorePresent:L PolicyHashMatch:L " +
+            "StructuralValidation:L AcceptablePolicies:M PolicyAvailable:L SignaturePolicyStorePresent:L PolicyHashMatch:L PolicyRules:L " +
             "AcceptableFormats:M FullScope:L BasicSignatureConstraints:BasicSignatureConstraints " +
             "SignedAttributes:SignedAttributesConstraints UnsignedAttributes:UnsignedAttributesConstraints");
         Add("SignedAttributesConstraints",

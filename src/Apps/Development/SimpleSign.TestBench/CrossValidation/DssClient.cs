@@ -206,7 +206,7 @@ internal sealed partial class DssClient(DocumentStore documents) : IDisposable
     {
         policy ??= SimpleSign.Core.Policies.ValidationPolicy.Default;
         return new DssPolicyView(policy.Name ?? "SimpleSign", DssPolicyConverter.ToConstraintXml(policy.ToJson(), DssPolicyConverter.NotInDss63),
-            [.. DssPolicyConverter.NotInDss63.Order(StringComparer.Ordinal)]);
+            [.. DssPolicyConverter.NotInDss.Union(DssPolicyConverter.NotInDss63).Order(StringComparer.Ordinal)]);
     }
 
     /// <summary>The setup tools/dss wrote when DSS started; null when the server has none (a DSS started another way) or it cannot be read.</summary>

@@ -51,7 +51,7 @@ public static class PolicyCoverage
 
     private static readonly HashSet<string> s_signature = new(StringComparer.Ordinal)
     {
-        "AcceptablePolicies", "PolicyHashMatch", "PolicyAvailable", "SignaturePolicyStorePresent", "AcceptableFormats", "FullScope", "StructuralValidation",
+        "AcceptablePolicies", "PolicyHashMatch", "PolicyRules", "PolicyAvailable", "SignaturePolicyStorePresent", "AcceptableFormats", "FullScope", "StructuralValidation",
     };
 
     private static readonly HashSet<string> s_signedAttributes = new(StringComparer.Ordinal)

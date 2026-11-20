@@ -37,7 +37,16 @@ public sealed class DssPolicyConverterTests
 
         string back = DssPolicyConverter.FromConstraintXml(DssPolicyConverter.ToConstraintXml(json));
 
-        ValidationPolicy.FromJson(back).ToJson().ShouldBe(json);
+        // What DSS does not have (PolicyRules) is not sent to it, so it does not come back.
+        ValidationPolicy.FromJson(back).ToJson().ShouldBe(ValidationPolicy.Default.With("SignatureConstraints/PolicyRules", null).ToJson());
+    }
+
+    [Fact]
+    public void ToConstraintXml_SimpleSignOnlyElements_AreLeftOut()
+    {
+        var xml = XDocument.Parse(DssPolicyConverter.ToConstraintXml(ValidationPolicy.Default.ToJson()));
+
+        xml.Descendants().ShouldNotContain(e => DssPolicyConverter.NotInDss.Contains(e.Name.LocalName));
     }
 }
 

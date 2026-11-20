@@ -7,7 +7,8 @@ so a policy can be translated in either direction and the verdicts of both valid
 ## Translation rules
 
 - **Names:** every element keeps the DSS name except the root (`ValidationConstraints` ↔ `ConstraintsParameters`) and
-  the trusted lists group (`TrustedLists` ↔ `eIDAS`).
+  the trusted lists group (`TrustedLists` ↔ `eIDAS`). `SignatureConstraints/PolicyRules` is SimpleSign's own: it is
+  left out of the XML.
 - **JSON ↔ XML:** one JSON property per XML element; XML attributes (`Level`, `Unit`, `Value`, `Format`, `UpdateDate`,
   `LevelAfterUpdate`, `Size`, `Date`) are properties; repeated `Id` and `Algo` elements are arrays; an `Algo`'s text
   is its `Value` (a bare string when it has no attribute).
@@ -45,6 +46,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `AcceptablePolicies`, `PolicyHashMatch` | same | evaluated |  |
+| `PolicyRules` | — | evaluated | SimpleSign only: the signature meets the rules of the signature policy it names, as a chain validation provider that knows the policy checked them (`ChainValidationResult.SignaturePolicyErrors`; ICP-Brasil's PAs, PAdES). Left out of the XML sent to DSS. |
 | `PolicyAvailable` | same | evaluated | CAdES policy store; ICP-Brasil downloads the policies of the LPA. |
 | `SignaturePolicyStorePresent` | same | evaluated | `CadesSignaturePolicyStore.Read`. |
 | `AcceptableFormats` | same | evaluated | Detected level (e.g. require B-LT for archiving). |

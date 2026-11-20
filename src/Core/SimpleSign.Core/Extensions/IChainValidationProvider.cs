@@ -160,4 +160,14 @@ public sealed class ChainValidationResult
 
     /// <summary>The revocation status of the chain, when the provider checked it.</summary>
     public ChainRevocationStatus RevocationStatus { get; init; }
+
+    /// <summary>
+    /// The rules of the signature policy that the signature names (<see cref="ChainValidationContext.Signature"/>) and
+    /// does not meet, when the provider checked the signature against that policy: empty when it meets them all; null
+    /// when the provider did not check (no signature, no policy, or a policy it does not know). Validators report it as
+    /// the <c>SignatureConstraints/PolicyRules</c> constraint of the validation policy, whatever <see cref="IsTrusted"/>
+    /// says: a signature that breaks the policy it declares is not a chain failure. Keep these out of
+    /// <see cref="Errors"/>.
+    /// </summary>
+    public IReadOnlyList<string>? SignaturePolicyErrors { get; init; }
 }

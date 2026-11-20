@@ -126,6 +126,7 @@ internal static class PolicyGuide
         ["PolicyAvailable"] = new("The signature policy document can be obtained.", "O documento da política de assinatura pode ser obtido.", "EN 319 102-1 §5.2.3"),
         ["SignaturePolicyStorePresent"] = new("The signature carries the policy document (signature policy store).", "A assinatura carrega o documento da política (signature policy store).", "EN 319 122-1 §5.2.10"),
         ["PolicyHashMatch"] = new("The hash of the policy document matches the one in the signature.", "O hash do documento da política confere com o da assinatura.", "EN 319 102-1 §5.2.3"),
+        ["PolicyRules"] = new("The signature meets the rules of the signature policy it names (mandated attributes, timestamp, hash, period), as checked by the provider that knows the policy (ICP-Brasil). SimpleSign only, not in DSS.", "A assinatura cumpre as regras da política de assinatura que declara (atributos obrigatórios, carimbo do tempo, hash, período), conforme verificado pelo provedor que conhece a política (ICP-Brasil). Só do SimpleSign, não existe no DSS.", "EN 319 102-1 §5.2.8 · DOC-ICP-15.03"),
         ["AcceptableFormats"] = new("The signature format (for example PAdES-BASELINE-B) is one of the listed ones.", "O formato da assinatura (por exemplo PAdES-BASELINE-B) é um dos listados."),
         ["FullScope"] = new("The signature covers the whole document.", "A assinatura cobre o documento inteiro."),
 

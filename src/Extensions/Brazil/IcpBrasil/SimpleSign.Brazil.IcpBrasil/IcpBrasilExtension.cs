@@ -189,6 +189,7 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
 
         var errors = new List<string>(result.Errors);
         errors.AddRange(result.Warnings.Where(w => w.Contains("Revocation status", StringComparison.Ordinal)));
+        IReadOnlyList<string>? policyErrors = null;
         if (context.Signature is { } signature)
         {
             var signingTime = context.ValidationTime ?? signature.SigningTime ?? DateTimeOffset.UtcNow;
@@ -202,7 +203,17 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
                     ? $"{p.Info.Format} {p.Info.Policy} {p.Info.Version}".TrimEnd()
                     : policy.Reference!.Oid;
                 metadata["BR.SignaturePolicyStatus"] = policy.Status.ToString();
-                errors.AddRange(policy.Errors.Select(e => $"Signature policy: {e}"));
+                if (policy.Status is IcpBrasilPolicyStatus.Valid or IcpBrasilPolicyStatus.Invalid)
+                {
+                    // The signature declares an ICP-Brasil policy we know: breaking it is a constraint of the
+                    // signature (SignatureConstraints/PolicyRules), not an error of the chain.
+                    policyErrors = policy.Errors;
+                }
+                else
+                {
+                    // Unknown: a policy outside the embedded LPA, whose rules cannot be checked.
+                    errors.AddRange(policy.Errors.Select(e => $"Signature policy: {e}"));
+                }
             }
         }
 
@@ -223,6 +234,7 @@ internal sealed class IcpBrasilChainValidationProvider : IChainValidationProvide
             Metadata = metadata,
             RevocationStatus = result.RevocationStatus,
             Errors = errors,
+            SignaturePolicyErrors = policyErrors,
         };
     }
 }
