@@ -1,4 +1,4 @@
-# ADR 0031: The Adobe Approved Trust List, and Trust Anchors with Conditions
+# ADR 0031: Generic Trust Sources — the AATL, a Trusted List as a Profile, and Anchors with Conditions
 
 **Status:** Accepted.
 
@@ -6,8 +6,13 @@
 A country entered SimpleSign as a whole trust framework: a package, policies, a CLI extension, a checklist and a
 playbook (ICP-Brasil, eIDAS, IOFE). That is right where the law asks for interpretation, and it does not scale to the
 rest of the world. To validate, most organizations ask one thing — does this certificate come from an authority I should
-trust? — and outside a national framework the criterion people use is "Acrobat accepts it": the Adobe Approved Trust
-List (AATL), the list that makes Acrobat show a signature as trusted.
+trust? — and two sources answer it without a framework's package:
+
+- **Adobe's Approved Trust List (AATL)**, the list that makes Acrobat show a signature as trusted. Outside a national
+  framework, "Acrobat accepts it" is the criterion people use.
+- **A trusted list in the ETSI TS 119 612 format** that a country or an organization publishes on its own, outside the
+  EU list of trusted lists. The reader existed (`TrustedList`), and the CLI read one with `--tsl`; a list kept current
+  and a profile over it did not, outside the IOFE package.
 
 Reading the real AATL showed something no extension point could express: half of its anchors are trusted **only for
 signer certificates of certain certificate policies** (ICP-Brasil's root for A3 and A4 certificates, for one). A trust
@@ -29,6 +34,12 @@ the chain is known, so it could not apply a rule that belongs to the anchor the 
   - The chain of a time-stamp's TSA is **not** asked about.
 - **`PdfEmbeddedFiles` (`SimpleSign.PAdES`)** reads the files embedded in a PDF. The AATL is distributed as a signed PDF
   with an attachment, and extensions use the public API only.
+- **`TrustedListSource` and `TrustedListProfile` (`SimpleSign.XAdES`)**: any ETSI TS 119 612 list kept current (each
+  copy checked against the operator's certificate, swapped in one step, cached, a copy with a lower sequence number
+  refused) and made a `TrustProfile` — the default policies, the list as the only trust, the system's roots not trusted.
+  The CLI has `--profile tsl` for the list of `--tsl` (or the Sandbox's with `--sandbox`). `IofeTrustedListSource` is its
+  specific form and is unchanged. **There is no catalog of countries**: the caller gives the list's location and the
+  certificate it is signed with.
 - **`SimpleSign.Adobe.Aatl`** (`src/Extensions/Adobe/Aatl`) reads the AATL.
   - The PDF's signature must verify, **cover the whole file** and chain to the bundled Adobe root — never to the
     system's roots. The one place a signature does not cover, its own `/Contents`, must hold the signature's hexadecimal
@@ -45,9 +56,12 @@ the chain is known, so it could not apply a rule that belongs to the anchor the 
 
 **Consequences:**
 
-- The AATL covers the countries without a framework's package. A package remains for the countries whose law needs it.
-- **The profile gives trust, not a legal level.** No qualifier, no national policy: a signature trusted under `aatl`
-  chains to an authority Adobe admitted to its program, and nothing more is said.
+- The AATL and a country's own trusted list cover the countries without a framework's package. A package remains for
+  the countries whose law needs it.
+- **These profiles give trust, not a legal level.** No qualifier, no national policy: a signature trusted under `aatl`
+  or `tsl` chains to a recognised authority, and nothing more is said.
+- A trusted list's signer has to be found and kept by the caller: when the operator changes its key, the list stops
+  verifying (it fails closed) until the caller has the new certificate. There is no pivot, as the EU LOTL has.
 - **The AATL has no history.** It is not an `ITimedTrustAnchorProvider`: an authority taken out of it stops being
   trusted for the signatures it vouched for before. It has no expiry date either.
 - **The AATL's format is not documented by Adobe.** It was read from the list of 2026-11-12. `ImportAction` 3 is read
@@ -72,3 +86,6 @@ the chain is known, so it could not apply a rule that belongs to the anchor the 
   only one that runs, so it would shadow the chain validation of a framework combined with the AATL.
 - *Bundle the AATL in the package.* Rejected: it would redistribute Adobe's file, and a bundled copy is stale the day
   Adobe removes an authority.
+- *A catalog of national trusted lists (a name for each country's list and signer).* Left out: no operator we looked
+  at publishes its signing certificate apart from the list, so each entry would rest on a certificate taken from the
+  list itself, to be replaced whenever the country changes its key.

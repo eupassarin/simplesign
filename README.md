@@ -136,6 +136,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](src/Extensions/Brazil/docs/icp-brasil.md) | Brazilian PKI: chain validation, roots, policies, ACT time-stamps |
+| [A trusted list as a profile](docs/articles/inspection-validation.md#a-trusted-list-as-a-trust-profile) | Any ETSI TS 119 612 list, kept current, as the whole trust of a validation |
 | [AATL](src/Extensions/Adobe/Aatl/docs/aatl.md) | The Adobe Approved Trust List as a trust profile: whom Acrobat trusts, and its certificate policy restrictions |
 | [eIDAS (EU)](src/Extensions/Europe/Eidas/docs/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |
 | [IOFE (Peru)](src/Extensions/Peru/Iofe/docs/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |

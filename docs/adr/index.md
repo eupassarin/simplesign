@@ -33,4 +33,4 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0028: Two-Phase Signing Across Formats](0028-two-phase-signing-across-formats.md)
 - [ADR 0029: Trust Profiles and Signature Qualification](0029-trust-profiles-and-signature-qualification.md)
 - [ADR 0030: CLI Extensions](0030-cli-extensions.md)
-- [ADR 0031: The Adobe Approved Trust List, and Trust Anchors with Conditions](0031-the-aatl-and-anchors-with-conditions.md)
+- [ADR 0031: Generic Trust Sources — the AATL, a Trusted List as a Profile, and Anchors with Conditions](0031-generic-trust-sources.md)

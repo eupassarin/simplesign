@@ -62,9 +62,9 @@ src/
 ├── Core/
 │   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), hashing, signing/validation policies, trust store
 ├── Formats/
-│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser
+│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser (PdfEmbeddedFiles reads attachments)
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList)
+│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
 │   └── SimpleSign/             Meta-package
 ├── Extensions/                 trust frameworks and what goes with each (code, CLI extension, docs, playbooks, tools; ADR 0030)
 │   ├── CliExtension.targets                  what makes a project a CLI extension (manifest, packaging), imported by the three *.Cli projects
@@ -102,7 +102,7 @@ src/
 ├── Extras/
 │   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 └── Apps/
-    ├── SimpleSign.Cli/                CLI tool; references no trust framework (its own profile is `sandbox`): each comes as an extension
+    ├── SimpleSign.Cli/                CLI tool; references no trust framework (its own profiles are `sandbox` and `tsl`, any trusted list of --tsl): each comes as an extension
     ├── SimpleSign.Cli.Extensibility/  the contract of a CLI extension (ICliExtension), installed with `simplesign extension install`
     ├── SimpleSign.Agent/              Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
     └── Development/                   tools for developing and testing, not for end users
@@ -173,8 +173,9 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 // One profile sets the policies; others add trust only: IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create())
 // CLI: --profile iofe [--trust-profile gov-br] [--sandbox URL]; `simplesign profiles` lists them
 // eidas also qualifies each signature: results[0].Qualification?.Level is QESig, AdESig-QC… (ISignatureQualifier)
-// What Acrobat trusts, without a national framework (ADR 0031): anchors only, no legal level
-var aatl = await AatlProfile.LoadAsync();   // SimpleSign.Adobe.Aatl; CLI: --profile aatl
+// Trust without a national framework (ADR 0031): anchors only, no legal level
+var aatl = await AatlProfile.LoadAsync();   // what Acrobat trusts — SimpleSign.Adobe.Aatl; CLI: --profile aatl
+var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Location = url, List = new() { SignerCertificates = [signer] } });   // any trusted list; CLI: --profile tsl --tsl URL --tsl-signer CERT
 ```
 
 ### Extension Points (interfaces)
@@ -193,7 +194,7 @@ var aatl = await AatlProfile.LoadAsync();   // SimpleSign.Adobe.Aatl; CLI: --pro
 - `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
 - `ISignatureAuditSink` — a record of every signature made or refused (`AuditChain`, `JsonLinesAuditSink`)
 - `IPolicyProvider` / `ISignaturePolicyDocumentProvider` — the validation policy, and policy documents
-- `DirectoryTrustAnchorProvider`, `TrustedList` — ready-made `ITrustAnchorProvider`s
+- `DirectoryTrustAnchorProvider`, `TrustedList`, `TrustedListSource` (a list kept current) — ready-made `ITrustAnchorProvider`s
 
 ### Error Handling
 - `SigningException` — signing failures; `Reason` (`SigningErrorReason`) says which check of the `SigningPolicy` refused the certificate, key or algorithm (`KeyUsageNotPermitted`, `KeyTooWeak`, `ChainCertificateNotValid`, `CertificateRevoked`…)

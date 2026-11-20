@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `adbe.pkcs7.detached` without it), signing that requires the chain to reach an accepting anchor.
   - Not affiliated with or endorsed by Adobe. The list has no history: an authority taken out of it stops being
     trusted for earlier signatures too.
+- **Any trusted list as a trust profile**: `TrustedListSource` and `TrustedListProfile` (`SimpleSign.XAdES`). An ETSI
+  TS 119 612 list — a country's, an organization's — kept current (each copy checked against the operator's
+  certificate, swapped in one step, cached, a copy with a lower sequence number refused) and made a `TrustProfile`: the
+  default policies, the list as the only trust, the operating system's roots not trusted. The CLI has `--profile tsl`
+  for the list of `--tsl` (with `--tsl-signer`), or the Sandbox's with `--sandbox`. Trust anchors only: no legal level.
 - **`IConstrainedTrustAnchorProvider`** (`SimpleSign.Core`): a trust anchor provider that can refuse a chain that
   reached one of its anchors (`WhyRefused`). The PAdES, CAdES and XAdES validators and the checks made before signing
   ask it; the anchor nearest to the signer decides; a chain is not refused when another provider of the same profile
