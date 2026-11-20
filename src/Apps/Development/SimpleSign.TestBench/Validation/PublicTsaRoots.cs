@@ -16,8 +16,10 @@ internal static class PublicTsaRoots
 
     private static readonly Lazy<IReadOnlyList<(string Name, X509Certificate2 Certificate)>> s_files = new(Load);
 
+    private static readonly Lazy<IReadOnlyList<X509Certificate2>> s_certificates = new(() => [.. s_files.Value.Select(f => f.Certificate)]);
+
     /// <summary>The roots, read once from the assembly's embedded copies.</summary>
-    public static IReadOnlyList<X509Certificate2> Certificates => [.. s_files.Value.Select(f => f.Certificate)];
+    public static IReadOnlyList<X509Certificate2> Certificates => s_certificates.Value;
 
     /// <summary>The roots with the name of their file in <see cref="Folder"/> (e.g. <c>FreeTSA-RootCA.crt</c>).</summary>
     public static IReadOnlyList<(string Name, X509Certificate2 Certificate)> Files => s_files.Value;
