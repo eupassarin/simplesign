@@ -861,7 +861,7 @@ public sealed partial class CadesSignerBuilder
 
             return EmbeddedRevocationEvidence.CoversAll(
                 certificates, embedded.OcspResponses, embedded.Crls,
-                DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient());
+                DateTimeOffset.UtcNow, RevocationEvidence.CollectedEvidenceOcspClient());
         }
         finally
         {

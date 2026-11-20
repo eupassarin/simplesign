@@ -94,6 +94,49 @@ public sealed class OcspClientClockSkewTests
     }
 
     [Fact]
+    public void CheckEmbeddedOcspResponse_NextUpdateSecondsBeforeValidationTime_ReturnsUnknown()
+    {
+        using var pki = new SyntheticPki();
+        using var httpClient = new HttpClient();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        byte[] response = OcspResponseFactory.Build(
+            pki.Leaf, pki.IntermediateCa, pki.IntermediateCa, now.AddSeconds(-3), now.AddSeconds(-2));
+
+        new OcspClient(httpClient).CheckEmbeddedOcspResponse(pki.Leaf, pki.IntermediateCa, response, now)
+            .ShouldBeNull();
+    }
+
+    /// <summary>
+    /// RENIEC's responder gives nextUpdate = thisUpdate + 1 s: checked a few seconds after it was collected, the
+    /// response still covers the certificate, as the B-LT check of a signer or augmenter needs.
+    /// </summary>
+    [Fact]
+    public void CheckEmbeddedOcspResponse_OneSecondWindowCheckedSecondsAfterCollection_ReturnsGood()
+    {
+        using var pki = new SyntheticPki();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        byte[] response = OcspResponseFactory.Build(
+            pki.Leaf, pki.IntermediateCa, pki.IntermediateCa, now.AddSeconds(-3), now.AddSeconds(-2));
+
+        RevocationEvidence.CollectedEvidenceOcspClient()
+            .CheckEmbeddedOcspResponse(pki.Leaf, pki.IntermediateCa, response, now)
+            .ShouldBe(true);
+    }
+
+    [Fact]
+    public void CheckEmbeddedOcspResponse_CollectedEvidenceNextUpdateBeyondTolerance_ReturnsUnknown()
+    {
+        using var pki = new SyntheticPki();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        byte[] response = OcspResponseFactory.Build(
+            pki.Leaf, pki.IntermediateCa, pki.IntermediateCa, now.AddHours(-1), now.AddMinutes(-10));
+
+        RevocationEvidence.CollectedEvidenceOcspClient()
+            .CheckEmbeddedOcspResponse(pki.Leaf, pki.IntermediateCa, response, now)
+            .ShouldBeNull();
+    }
+
+    [Fact]
     public void ClockSkewTolerance_Negative_Throws()
     {
         using var httpClient = new HttpClient();
