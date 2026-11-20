@@ -676,6 +676,19 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             TrustedLists = _options.TrustedLists,
             Timestamps = TimestampTokens(cmsData, tsValid, tsaTrusted, archiveToken, archiveTsValid, archiveV3, trustAnchors, contentTimestampToken, contentTsValid),
             PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
+            // The rules of the signature policy the signer names, as the profile's chain validation provider knows them
+            // (the ICP-Brasil PAs): breaking them is SignatureConstraints/PolicyRules, not a chain failure.
+            SignaturePolicyErrors = _options.CheckSignaturePolicy(new ChainValidationContext
+            {
+                Certificate = cmsData.SignerCertificate!,
+                Certificates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+                ValidationTime = provenTime,
+                IsValidationTimeFromTimestamp = provenTime is not null,
+                EmbeddedCrls = embedded.Crls,
+                EmbeddedOcsps = embedded.Ocsps,
+                CheckRevocation = false,
+                Signature = cmsData,
+            }, warnings),
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);

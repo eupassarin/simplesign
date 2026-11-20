@@ -45,6 +45,20 @@ public interface IChainValidationProvider
         ArgumentNullException.ThrowIfNull(context);
         return ValidateAsync(context.Certificate, context.Certificates, cancellationToken);
     }
+
+    /// <summary>
+    /// Checks the signature of <paramref name="context"/> (<see cref="ChainValidationContext.Signature"/>, or
+    /// <see cref="ChainValidationContext.Xml"/> for a XAdES signature) against the signature policy it names, without
+    /// validating the chain: the rules of that policy the signature does not meet, empty when it meets them all, null
+    /// when this provider does not check (no signature, no policy, or a policy it does not know). The CAdES and XAdES
+    /// validators call it for the first provider of <see cref="Validation.ValidationOptions.Profile"/> that
+    /// <see cref="CanValidate"/> the signer, and report it as the <c>SignatureConstraints/PolicyRules</c> constraint, as
+    /// the PAdES validator does with <see cref="ChainValidationResult.SignaturePolicyErrors"/>. The default
+    /// implementation returns null.
+    /// </summary>
+    /// <param name="context">The signer, the time of validation and the signature.</param>
+    /// <returns>The rules not met; empty when all are; null when not checked.</returns>
+    IReadOnlyList<string>? CheckSignaturePolicy(ChainValidationContext context) => null;
 }
 
 /// <summary>
@@ -82,6 +96,25 @@ public sealed class ChainValidationContext
 
     /// <summary>What the PDF holds around the signature, when it is a PDF signature; null otherwise.</summary>
     public PdfSignatureFacts? Pdf { get; init; }
+
+    /// <summary>What a XAdES signature declares that signature policies look at, when it is one; null otherwise.</summary>
+    public XmlSignatureFacts? Xml { get; init; }
+}
+
+/// <summary>
+/// What a XAdES signature declares that signature policies (the ICP-Brasil XML PAs) look at: its
+/// SignaturePolicyIdentifier, its claimed signing time and whether it carries a signature time-stamp.
+/// </summary>
+public sealed record XmlSignatureFacts
+{
+    /// <summary>The SignaturePolicyIdentifier/SignaturePolicyId; null when the signature names no policy.</summary>
+    public SignaturePolicyReference? SignaturePolicy { get; init; }
+
+    /// <summary>The SigningTime signed property, when present.</summary>
+    public DateTimeOffset? SigningTime { get; init; }
+
+    /// <summary>The signature carries a SignatureTimeStamp.</summary>
+    public bool HasSignatureTimestamp { get; init; }
 }
 
 /// <summary>
@@ -160,4 +193,14 @@ public sealed class ChainValidationResult
 
     /// <summary>The revocation status of the chain, when the provider checked it.</summary>
     public ChainRevocationStatus RevocationStatus { get; init; }
+
+    /// <summary>
+    /// The rules of the signature policy that the signature names (<see cref="ChainValidationContext.Signature"/>) and
+    /// does not meet, when the provider checked the signature against that policy: empty when it meets them all; null
+    /// when the provider did not check (no signature, no policy, or a policy it does not know). Validators report it as
+    /// the <c>SignatureConstraints/PolicyRules</c> constraint of the validation policy, whatever <see cref="IsTrusted"/>
+    /// says: a signature that breaks the policy it declares is not a chain failure. Keep these out of
+    /// <see cref="Errors"/>.
+    /// </summary>
+    public IReadOnlyList<string>? SignaturePolicyErrors { get; init; }
 }

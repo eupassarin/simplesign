@@ -647,6 +647,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             EmbeddedOcsps = [.. embeddedOcsps, .. fetchedOcsps, .. chainOcsps],
             Timestamps = TimestampFacts(cmsData.SignatureTimestampToken, timestamp, documentTimestamp),
             PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
+            SignaturePolicyErrors = chainValidationResult?.SignaturePolicyErrors,
         }.WithCms(cmsData, _options.TrustedRoots, field.PdfSigningTime), _options.PolicyFor(cmsData.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
 
@@ -1290,7 +1291,9 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     /// Runs registered <see cref="IChainValidationProvider"/> instances against the signer certificate.
     /// Returns the result from the first matching provider (by <see cref="IChainValidationProvider.CanValidate"/>).
     /// Non-trusted results add provider errors to <paramref name="errors"/>; trusted results with errors
-    /// add them as <paramref name="warnings"/>. Provider failures are logged and surfaced as warnings.
+    /// add them as <paramref name="warnings"/>. Provider failures are logged and surfaced as warnings. The result's
+    /// <see cref="ChainValidationResult.SignaturePolicyErrors"/> are not errors of the chain: the caller gives them to the
+    /// policy evaluation (<c>SignatureConstraints/PolicyRules</c>).
     /// </summary>
     private async Task<ChainValidationResult?> RunChainValidationProvidersAsync(
         CmsSignedData cmsData,

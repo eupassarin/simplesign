@@ -608,6 +608,22 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : null,
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : null,
             Timestamps = XadesTimestampTokens(sigElement, ns, tsValid, tsaTrusted, archiveTsValid, trustAnchors, dataTsValid),
+            // The rules of the signature policy the signer names, as the profile's chain validation provider knows them
+            // (the ICP-Brasil XML PAs): breaking them is SignatureConstraints/PolicyRules, not a chain failure.
+            SignaturePolicyErrors = signerCert is null ? null : _options.CheckSignaturePolicy(new Core.Extensions.ChainValidationContext
+            {
+                Certificate = signerCert,
+                Certificates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+                ValidationTime = provenTime,
+                IsValidationTimeFromTimestamp = provenTime is not null,
+                CheckRevocation = false,
+                Xml = new Core.Extensions.XmlSignatureFacts
+                {
+                    SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
+                    SigningTime = extraction.SigningTime,
+                    HasSignatureTimestamp = extraction.HasSignatureTimeStamp,
+                },
+            }, warnings),
         };
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);

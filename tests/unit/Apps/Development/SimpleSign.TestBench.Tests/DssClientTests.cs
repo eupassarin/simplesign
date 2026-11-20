@@ -248,7 +248,8 @@ public sealed class DssClientTests
 
         policy.Name.ShouldNotBeNullOrEmpty();
         policy.ConstraintXml.ShouldBe(DssPolicyConverter.ToConstraintXml(SimpleSign.Core.Policies.ValidationPolicy.Default.ToJson(), DssPolicyConverter.NotInDss63));
-        policy.NotInDss.ShouldBe(DssPolicyConverter.NotInDss63.Order(StringComparer.Ordinal));
+        policy.NotInDss.ShouldBe(DssPolicyConverter.NotInDss.Union(DssPolicyConverter.NotInDss63).Order(StringComparer.Ordinal));
+        policy.NotInDss.ShouldContain("PolicyRules");
         foreach (string element in policy.NotInDss)
         {
             policy.ConstraintXml.ShouldNotContain("<" + element);

@@ -62,7 +62,8 @@ simplesign validate signed.pdf --profile gov-br --trust-profile icp-brasil
 ```
 
 The ICP-Brasil signature policies (AD-RB…) do mandate the attribute: a signature that declares one of them and lacks
-it shows the policy as `Invalid`, with the missing attribute among the warnings.
+it breaks the policy it declares, and fails `SignatureConstraints/PolicyRules` under either profile
+([Check a signature against its policy](#check-a-signature-against-its-policy)).
 
 #### Testing with the Sandbox
 
@@ -367,7 +368,28 @@ signatures it also checks the PDF structures of the table above (filter and sub-
 and document timestamp for AD-RC/AD-RA; the policy artifacts for AD-RA). The
 ICP-Brasil provider runs it during PDF validation and reports `BR.SignaturePolicy` and
 `BR.SignaturePolicyStatus` (`Valid`, `Invalid`, `Unknown`, `NotIcpBrasil`) in
-`ChainValidationMetadata`; failures are listed in the warnings.
+`ChainValidationMetadata`. A signature that breaks the policy it declares (`Invalid`) is not valid:
+the `SignatureConstraints/PolicyRules` constraint fails with the broken rules, INDETERMINATE
+(SIG_CONSTRAINTS_FAILURE), while the chain stays trusted. An AD-RB signature without the ESS
+signing-certificate-v2 attribute that DOC-ICP-15.03 mandates is one such. The level is FAIL in
+`IcpBrasilPolicies.Validation` and in SimpleSign's default policy; set it to WARN to only report it. A
+signature that declares no policy (`None`) or one outside ICP-Brasil (`NotIcpBrasil`) is not
+concerned; a policy outside the embedded LPA (`Unknown`) cannot be checked and only warns.
+
+The CAdES and XAdES validators apply the same constraint when `ValidationOptions.Profile` is
+ICP-Brasil's (or carries its chain validation): they ask the profile's provider for the policy verdict
+alone (`IChainValidationProvider.CheckSignaturePolicy`), at the time of a trusted signature timestamp or
+else the claimed signing time. A `.p7s` declaring AD-RB without signing-certificate-v2 is then
+INDETERMINATE as a PDF would be. For XAdES the provider checks what the reference allows (hash,
+period, timestamp, XAdES format, accepted root), not the attribute and algorithm rules of the XML PA.
+These validators do not run the provider's chain validation and report no `BR.*` metadata.
+
+```csharp
+var icp = IcpBrasilProfile.Create();
+var cades = new CadesSignatureValidator(new ValidationOptions { Profile = icp }).Validate(p7s, data);
+var xades = new XadesSignatureValidator(new ValidationOptions { Profile = icp }).Validate(xml);
+// cades.Constraints / xades.Constraints: SignatureConstraints/PolicyRules
+```
 
 ```csharp
 var check = IcpBrasilPolicyValidator.Validate(cms, signingTime, IcpBrasilPolicyFormat.Pades);
@@ -381,7 +403,8 @@ ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-tim
 are verified by `CadesSignatureValidator`.
 
 For XAdES, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
-checks the hash, signing period, timestamp and format.
+checks the hash, signing period, timestamp and format; `XadesSignatureValidator` does it for you under the
+ICP-Brasil profile (above).
 
 ### DocMDP (certification)
 

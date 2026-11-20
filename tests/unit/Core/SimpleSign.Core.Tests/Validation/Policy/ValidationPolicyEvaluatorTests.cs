@@ -255,6 +255,57 @@ public sealed class ValidationPolicyEvaluatorTests : IDisposable
     }
 
     [Fact]
+    public void Evaluate_SignaturePolicyRulesBroken_IndeterminateSigConstraintsFailure()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with
+            {
+                SignaturePolicyKnown = true,
+                SignaturePolicyOid = "2.16.76.1.7.1.11.1.3",
+                SignaturePolicyErrors = ["Signature policy: AD-RB requires the signed attribute 1.2.840.113549.1.9.16.2.47."],
+            },
+            ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Indeterminate);
+        evaluation.SubIndication.ShouldBe(SignatureSubIndication.SigConstraintsFailure);
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/PolicyRules" && c.Status == ConstraintStatus.Failed
+            && c.Message.Contains("1.2.840.113549.1.9.16.2.47", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Evaluate_SignaturePolicyRulesMet_Passes()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { SignaturePolicyKnown = true, SignaturePolicyOid = "2.16.76.1.7.1.11.1.3", SignaturePolicyErrors = [] },
+            ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+        evaluation.Constraints.ShouldContain(c => c.Id == "SignatureConstraints/PolicyRules" && c.Status == ConstraintStatus.Passed);
+    }
+
+    [Fact]
+    public void Evaluate_SignaturePolicyRulesNotChecked_NotReported()
+    {
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { SignaturePolicyKnown = true, SignaturePolicyOid = "1.2.3.4" }, ValidationPolicy.Default);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+        evaluation.Constraints.ShouldNotContain(c => c.Id == "SignatureConstraints/PolicyRules");
+    }
+
+    [Fact]
+    public void Evaluate_SignaturePolicyRulesBrokenAtWarn_ValidWithWarning()
+    {
+        var policy = ValidationPolicy.Default.With("SignatureConstraints/PolicyRules", new PolicyConstraint(ConstraintLevel.Warn));
+
+        var evaluation = ValidationPolicyEvaluator.Evaluate(
+            Facts() with { SignaturePolicyKnown = true, SignaturePolicyOid = "2.16.76.1.7.1.11.1.3", SignaturePolicyErrors = ["Broken."] }, policy);
+
+        evaluation.Indication.ShouldBe(SignatureIndication.Valid);
+        evaluation.Warnings.ShouldContain(w => w.Contains("Broken.", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Evaluate_ExpiredIntermediate_FailsInShellAndPassesInChain()
     {
         var now = DateTimeOffset.UtcNow;

@@ -59,12 +59,26 @@ internal static class DssPolicyConverter
         "AuthorityKeyIdentifierPresent", "SubjectKeyIdentifierPresent", "SigningTimeInCertRange",
     };
 
-    /// <summary>The DSS <c>constraint.xml</c> of a SimpleSign validation policy, for the current DSS schema or, with <paramref name="omit"/>, an older one.</summary>
+    /// <summary>
+    /// Elements of SimpleSign's format that DSS does not have (docs/policies/compatibility.md): always left out of the XML,
+    /// so DSS does not evaluate them.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> NotInDss = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "PolicyRules",
+    };
+
+    /// <summary>
+    /// The DSS <c>constraint.xml</c> of a SimpleSign validation policy, for the current DSS schema or, with
+    /// <paramref name="omit"/>, an older one. The elements of <see cref="NotInDss"/> are left out.
+    /// </summary>
     internal static string ToConstraintXml(string json, IReadOnlySet<string>? omit = null)
     {
         using var document = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
         var root = document.RootElement.GetProperty(Root);
-        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element(Root, root, omit));
+        var left = new HashSet<string>(NotInDss, StringComparer.Ordinal);
+        left.UnionWith(omit ?? new HashSet<string>());
+        var xml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), Element(Root, root, left));
         // Written as UTF-8 bytes, so the declaration says UTF-8 (a StringBuilder would declare UTF-16).
         using var stream = new MemoryStream();
         using (var writer = XmlWriter.Create(stream, new XmlWriterSettings { Indent = true, Encoding = new UTF8Encoding(false) }))
