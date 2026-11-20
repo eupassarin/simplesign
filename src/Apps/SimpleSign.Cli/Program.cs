@@ -89,9 +89,9 @@ internal static partial class Program
             config.AddCommand<AugmentCommand>("augment")
                 .WithDescription("Raise an existing signature (PDF, CMS or XML) to B-T, B-LT or B-LTA");
             config.AddCommand<ValidateCommand>("validate")
-                .WithDescription("Validate PDF signatures");
+                .WithDescription("Validate the signatures of a PDF");
             config.AddCommand<ValidateDirCommand>("validate-dir")
-                .WithDescription("Validate all PDFs in a directory (bulk)");
+                .WithDescription("Validate every PDF of a directory (bulk)");
             config.AddCommand<InspectCommand>("inspect")
                 .WithDescription("Inspect signature metadata (no validation)");
             config.AddCommand<ExtractCommand>("extract")
@@ -107,6 +107,7 @@ internal static partial class Program
 
             config.AddBranch("cades", cades =>
             {
+                cades.SetDescription("Sign data and validate detached signatures with CAdES (CMS/PKCS#7)");
                 cades.AddCommand<CadesSignCommand>("sign")
                     .WithDescription("Sign data with CAdES (CMS/PKCS#7)");
                 cades.AddCommand<CadesValidateCommand>("validate")
@@ -115,6 +116,7 @@ internal static partial class Program
 
             config.AddBranch("timestamp", timestamp =>
             {
+                timestamp.SetDescription("Create and verify standalone RFC 3161 timestamps (.tst)");
                 timestamp.AddCommand<TimestampCreateCommand>("create")
                     .WithDescription("Create a standalone RFC 3161 timestamp (.tst) for a file or a hash");
                 timestamp.AddCommand<TimestampVerifyCommand>("verify")
@@ -123,6 +125,7 @@ internal static partial class Program
 
             config.AddBranch("pkcs11", pkcs11 =>
             {
+                pkcs11.SetDescription("PKCS#11 tokens and HSMs: list the drivers, tokens and certificates");
                 pkcs11.AddCommand<Pkcs11ListCommand>("list")
                     .WithDescription("List the tokens and certificates of a PKCS#11 driver, or of every installed driver");
                 pkcs11.AddCommand<Pkcs11DriversCommand>("drivers")
@@ -131,18 +134,21 @@ internal static partial class Program
 
             config.AddBranch("psc", psc =>
             {
+                psc.SetDescription("ICP-Brasil cloud certificate providers (PSC): log in and list certificates");
                 psc.AddCommand<PscCertificatesCommand>("certificates")
                     .WithDescription("Log in to an ICP-Brasil cloud certificate provider (PSC) and list its certificates");
             });
 
             config.AddBranch("csc", csc =>
             {
+                csc.SetDescription("Cloud Signature Consortium (CSC v2) services: list credentials");
                 csc.AddCommand<CscListCommand>("list")
                     .WithDescription("List the credentials of a Cloud Signature Consortium (CSC v2) service");
             });
 
             config.AddBranch("xades", xades =>
             {
+                xades.SetDescription("Sign and validate XML documents with XAdES");
                 xades.AddCommand<XadesSignCommand>("sign")
                     .WithDescription("Sign an XML document with XAdES");
                 xades.AddCommand<XadesValidateCommand>("validate")
@@ -151,6 +157,7 @@ internal static partial class Program
 
             config.AddBranch("policy", policy =>
             {
+                policy.SetDescription("Validation and signing policy files: export the defaults or their JSON Schema");
                 policy.AddCommand<PolicyExportCommand>("export")
                     .WithDescription("Write the default validation or signing policy as JSON");
                 policy.AddCommand<PolicySchemaCommand>("schema")
@@ -159,12 +166,14 @@ internal static partial class Program
 
             config.AddBranch("audit", audit =>
             {
+                audit.SetDescription("Check audit trails written by --audit-log");
                 audit.AddCommand<AuditVerifyCommand>("verify")
                     .WithDescription("Check the hash chain of an audit trail written by --audit-log");
             });
 
             config.AddBranch("extension", extension =>
             {
+                extension.SetDescription("Install, list and remove CLI extensions (trust profiles, policies, commands)");
                 extension.AddCommand<ExtensionInstallCommand>("install")
                     .WithDescription("Install an extension from a NuGet package: more trust profiles, policies and commands");
                 extension.AddCommand<ExtensionListCommand>("list")

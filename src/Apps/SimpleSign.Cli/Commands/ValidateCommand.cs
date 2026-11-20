@@ -15,8 +15,8 @@ using Spectre.Console.Cli;
 
 namespace SimpleSign.Cli.Commands;
 
-/// <summary>Validate PDF signatures.</summary>
-[Description("Validate PDF signatures")]
+/// <summary>Validate the signatures of a PDF.</summary>
+[Description("Validate the signatures of a PDF")]
 internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
 {
     private readonly IHttpClientProvider _httpClientProvider;
