@@ -226,6 +226,7 @@ public static partial class OptionSchema
             [
                 V("SandboxRoot", "Sandbox root", "The root of the sandbox PKI, as a bare trust anchor."),
                 V("SandboxTrustedList", "Sandbox trusted list", "The sandbox's trusted list, its signature checked against the operator's certificate: its CA and TSA services become the anchors. A list that is expired or signed by another key refuses the signature."),
+                V("PublicTsas", "Public TSA roots", "The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA): without them a policy that checks the TSA's chain (ICP-Brasil, IOFE…) refuses their timestamps (TimestampUntrusted)."),
             ]),
         O("common.signing.profile", "crypto", s_all, "choice", "signingControls.profile", "Trust profile",
             "A trust framework as one setting (the Profile menu of the top bar): its trust anchors are added and its policy is the one the policy field names (the menu sets it). Only one profile sets the policy; others can add their trust.",

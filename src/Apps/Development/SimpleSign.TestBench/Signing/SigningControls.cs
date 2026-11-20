@@ -6,6 +6,7 @@ using SimpleSign.TestBench.Localization;
 using SimpleSign.TestBench.Runs;
 using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.TrustFrameworks;
+using SimpleSign.TestBench.Validation;
 using SimpleSign.XAdES.TrustedLists;
 
 namespace SimpleSign.TestBench.Signing;
@@ -19,6 +20,8 @@ public enum SigningTrustChoice
     /// <summary>The Sandbox's trusted list (its CA and TSA services), checked against its operator's certificate.</summary>
     SandboxTrustedList,
 
+    /// <summary>The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach an anchor.</summary>
+    PublicTsas,
 }
 
 /// <summary>
@@ -67,12 +70,14 @@ internal sealed class SigningControls
     private readonly X509Certificate2? _trustedListSigner;
     private readonly SigningControlsOptions? _profile;
     private readonly string? _sandboxUrl;
+    private readonly bool _publicTsas;
 
     private SigningControls(
         IReadOnlyList<ITrustAnchorProvider> anchors, X509Certificate2? root, string? trustedListUrl, X509Certificate2? trustedListSigner,
         X509Certificate2? expectedTsa, string? expectedTsaId, RecordingAuditSink? audit, SigningControlsOptions? profile = null, string? sandboxUrl = null,
-        IReadOnlyList<ITrustAnchorProvider>? profileAnchors = null)
+        IReadOnlyList<ITrustAnchorProvider>? profileAnchors = null, bool publicTsas = false)
     {
+        _publicTsas = publicTsas;
         _profile = profile is { HasProfile: true } ? profile : null;
         ProfileAnchors = profileAnchors ?? [];
         _sandboxUrl = sandboxUrl;
@@ -146,7 +151,7 @@ internal sealed class SigningControls
             if (options.Trust.Contains(SigningTrustChoice.SandboxRoot))
             {
                 root = connection.Root;
-                anchors.Add(new FixedAnchors("Sandbox root", root));
+                anchors.Add(new FixedAnchors("Sandbox root", "SANDBOX", [root]));
             }
 
             if (options.Trust.Contains(SigningTrustChoice.SandboxTrustedList))
@@ -172,8 +177,14 @@ internal sealed class SigningControls
             }
         }
 
+        bool publicTsas = options.Trust.Contains(SigningTrustChoice.PublicTsas);
+        if (publicTsas)
+        {
+            anchors.Add(new FixedAnchors("Public TSA roots", "TSA", [.. PublicTsaRoots.Files.Select(f => f.Certificate)]));
+        }
+
         return new SigningControls(anchors, root, listUrl, listSigner, expected, options.ExpectedTsa, options.AuditLog ? new RecordingAuditSink() : null,
-            options, sandbox.Current?.Url.AbsoluteUri, profileAnchors);
+            options, sandbox.Current?.Url.AbsoluteUri, profileAnchors, publicTsas);
     }
 
     /// <summary>Whether the profile's own preset is the signing policy: the CLI then says <c>--profile</c> alone, without <c>--signing-policy</c>.</summary>
@@ -197,6 +208,7 @@ internal sealed class SigningControls
         [
             .. _root is null ? Array.Empty<string>() : ["new DirectoryTrustAnchorProvider(\"trust\") /* the Sandbox root */"],
             .. _trustedListUrl is null ? Array.Empty<string>() : [$"await TrustedList.DownloadAsync(new Uri({SigningPlan.Str(_trustedListUrl)}), new TrustedListOptions {{ SignerCertificates = [tlSigner] }})"],
+            .. _publicTsas ? [$"new DirectoryTrustAnchorProvider(\"tsa-roots\") /* the public TSAs' roots: {PublicTsaRoots.Folder} */"] : Array.Empty<string>(),
             .. _profile is { } p && !byProfile ? [$".. profile.TrustAnchorProviders /* {ProfileCode(p)} */"] : Array.Empty<string>(),
         ];
         return Anchors.Count == 0 || parts.Length == 0 ? null
@@ -234,6 +246,14 @@ internal sealed class SigningControls
         if (_root is not null)
         {
             line.Add("--trust", TrustFile);
+        }
+
+        if (_publicTsas)
+        {
+            foreach (var (name, _) in PublicTsaRoots.Files)
+            {
+                line.Add("--trust", PublicTsaFile(name));
+            }
         }
 
         if (_trustedListUrl is not null)
@@ -281,6 +301,14 @@ internal sealed class SigningControls
         if (_root is not null)
         {
             yield return new(TrustFile, _root.RawData);
+        }
+
+        if (_publicTsas)
+        {
+            foreach (var (name, certificate) in PublicTsaRoots.Files)
+            {
+                yield return new(PublicTsaFile(name), certificate.RawData);
+            }
         }
 
         if (_trustedListSigner is not null)
@@ -334,19 +362,22 @@ internal sealed class SigningControls
         }
     }
 
+    /// <summary>The file a CLI command reads for a public TSA's root (<c>--trust</c>).</summary>
+    private static string PublicTsaFile(string name) => $"tsa-root-{Path.GetFileNameWithoutExtension(name)}.cer";
+
     private static string Describe(SignatureAuditEvent e) =>
         $"{e.Format} {(e.Signed ? "signed" : "refused")} — {e.CertificateSubject} (serial {e.CertificateSerialNumber})"
         + (e.Reason is { } reason ? $", reason {reason}" : "")
         + (e.OutputSha256 is { } hash ? $", output SHA-256 {hash}" : "")
         + $", policy {e.PolicyName}";
 
-    private sealed class FixedAnchors(string name, X509Certificate2 root) : ITrustAnchorProvider
+    private sealed class FixedAnchors(string name, string region, IReadOnlyList<X509Certificate2> roots) : ITrustAnchorProvider
     {
-        public string RegionCode => "SANDBOX";
+        public string RegionCode => region;
 
         public string DisplayName => name;
 
-        public IReadOnlyList<X509Certificate2> GetTrustAnchors() => [root];
+        public IReadOnlyList<X509Certificate2> GetTrustAnchors() => roots;
     }
 }
 

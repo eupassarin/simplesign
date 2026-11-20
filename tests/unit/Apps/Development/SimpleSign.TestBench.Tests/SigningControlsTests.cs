@@ -1,8 +1,10 @@
 using Shouldly;
 using SimpleSign.TestBench.Policies;
 using SimpleSign.TestBench.Runs;
+using SimpleSign.TestBench.Sandbox;
 using SimpleSign.TestBench.Signing;
 using SimpleSign.TestBench.TrustFrameworks;
+using SimpleSign.TestBench.Validation;
 
 namespace SimpleSign.TestBench.Tests;
 
@@ -156,6 +158,24 @@ public sealed class SigningControlsTests(TestBenchFixture fixture) : IDisposable
         var (result, _) = await RunAsync(options, engine);
 
         result.Error.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ResolveAsync_PublicTsas_TrustsTheirRootsInTheLibraryTheCodeAndTheCli()
+    {
+        using var sandbox = new SandboxEnvironment(Path.Combine(Path.GetTempPath(), $"simplesign-sandbox-{Guid.NewGuid():N}.json"));
+
+        var controls = await SigningControls.ResolveAsync(new SigningControlsOptions { Trust = [SigningTrustChoice.PublicTsas] }, sandbox, default);
+
+        var anchors = controls.Anchors.SelectMany(a => a.GetTrustAnchors()).ToList();
+        anchors.Count.ShouldBe(PublicTsaRoots.Certificates.Count);
+        anchors.ShouldContain(c => c.Subject.Contains("Free TSA", StringComparison.Ordinal));
+        controls.TrustCode().ShouldNotBeNull().ShouldContain("tsa-roots");
+        var line = new CliLine("simplesign", "sign");
+        controls.Cli(line);
+        var files = controls.CliFiles().ToList();
+        files.Count.ShouldBe(PublicTsaRoots.Certificates.Count);
+        files.ShouldAllBe(f => line.Args.Contains(f.Key));
     }
 
     private SigningOptions Timestamped(TsaProvider tsa = TsaProvider.Sandbox) =>

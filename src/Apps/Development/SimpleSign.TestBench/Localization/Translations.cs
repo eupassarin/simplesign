@@ -845,6 +845,7 @@ internal static class Translations
         ["The roots the operating system trusts."] = "As raízes em que o sistema operacional confia.",
         ["Public TSA roots"] = "Raízes dos TSAs públicos",
         ["root.cer holds the roots to trust, the public TSAs' among them: copy them from src/Apps/Development/SimpleSign.TestBench/TsaRoots (the operating system usually trusts DigiCert's and Sectigo's, never FreeTSA's)."] = "O root.cer reúne as raízes confiáveis, entre elas as dos TSAs públicos: copie-as de src/Apps/Development/SimpleSign.TestBench/TsaRoots (o sistema operacional costuma confiar nas da DigiCert e da Sectigo, nunca na da FreeTSA).",
+        ["The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA): without them a policy that checks the TSA's chain (ICP-Brasil, IOFE…) refuses their timestamps (TimestampUntrusted)."] = "As raízes dos TSAs públicos oferecidos (DigiCert, Sectigo, FreeTSA): sem elas uma política que verifica a cadeia do TSA (ICP-Brasil, IOFE…) recusa os carimbos deles (TimestampUntrusted).",
         ["The roots of the public TSAs offered (DigiCert, Sectigo, FreeTSA), so their timestamps reach a trust anchor. DSS trusts the same roots."] = "As raízes dos TSAs públicos oferecidos (DigiCert, Sectigo, FreeTSA), para que os carimbos deles cheguem a uma âncora de confiança. O DSS confia nas mesmas raízes.",
 
         // ── TestBench ETSI only ────────────────────────────────────────

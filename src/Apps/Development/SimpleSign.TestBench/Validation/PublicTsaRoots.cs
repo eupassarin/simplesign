@@ -14,20 +14,25 @@ internal static class PublicTsaRoots
 
     private const string ResourcePrefix = "TsaRoots/";
 
-    private static readonly Lazy<IReadOnlyList<X509Certificate2>> s_certificates = new(Load);
+    private static readonly Lazy<IReadOnlyList<(string Name, X509Certificate2 Certificate)>> s_files = new(Load);
+
+    private static readonly Lazy<IReadOnlyList<X509Certificate2>> s_certificates = new(() => [.. s_files.Value.Select(f => f.Certificate)]);
 
     /// <summary>The roots, read once from the assembly's embedded copies.</summary>
     public static IReadOnlyList<X509Certificate2> Certificates => s_certificates.Value;
 
-    private static List<X509Certificate2> Load()
+    /// <summary>The roots with the name of their file in <see cref="Folder"/> (e.g. <c>FreeTSA-RootCA.crt</c>).</summary>
+    public static IReadOnlyList<(string Name, X509Certificate2 Certificate)> Files => s_files.Value;
+
+    private static List<(string Name, X509Certificate2 Certificate)> Load()
     {
         var assembly = typeof(PublicTsaRoots).Assembly;
-        var roots = new List<X509Certificate2>();
+        var roots = new List<(string Name, X509Certificate2 Certificate)>();
         foreach (string name in assembly.GetManifestResourceNames().Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal)).Order(StringComparer.Ordinal))
         {
             using var stream = assembly.GetManifestResourceStream(name)!;
             using var reader = new StreamReader(stream);
-            roots.Add(X509Certificate2.CreateFromPem(reader.ReadToEnd()));
+            roots.Add((name[ResourcePrefix.Length..], X509Certificate2.CreateFromPem(reader.ReadToEnd())));
         }
 
         return roots;
