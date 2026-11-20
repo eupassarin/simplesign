@@ -48,6 +48,16 @@ public sealed class IcpBrasilPoliciesTests : IDisposable
         keyUsage.Ids.ShouldBe(["digitalSignature", "nonRepudiation"], ignoreOrder: true);
     }
 
+    [Theory]
+    [InlineData("SignatureConstraints/SignedAttributes/SigningCertificatePresent")]
+    [InlineData("SignatureConstraints/SignedAttributes/CertDigestPresent")]
+    public void Validation_SigningCertificateAttributeMissing_OnlyWarns(string path) =>
+        IcpBrasilPolicies.Validation.Find(path).ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Warn);
+
+    [Fact]
+    public void Validation_SigningCertificateReference_MustStillMatch() =>
+        IcpBrasilPolicies.Validation.Find("SignatureConstraints/SignedAttributes/CertDigestMatch").ShouldNotBeNull().Level.ShouldBe(ConstraintLevel.Fail);
+
     [Fact]
     public void Policies_ToJson_RoundTrip()
     {

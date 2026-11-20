@@ -13,6 +13,7 @@ public static class IcpBrasilPolicies
     private const string Name = "ICP-Brasil";
 
     private static readonly PolicyConstraint Fail = new(ConstraintLevel.Fail);
+    private static readonly PolicyConstraint Warn = new(ConstraintLevel.Warn);
 
     /// <summary>
     /// Signing: the checks of <see cref="SigningPolicy.Default"/> (validity of the whole chain, key usage
@@ -39,11 +40,22 @@ public static class IcpBrasilPolicies
         .With("Timestamp/RevocationDataAvailable", Fail);
 
     /// <summary>
-    /// Validation: the constraints of <see cref="ValidationPolicy.Default"/>, and a signing certificate without
-    /// digitalSignature or nonRepudiation fails (ICP-Brasil signature certificates carry both).
+    /// Validation: the constraints of <see cref="ValidationPolicy.Default"/>, with two changes:
+    /// <list type="bullet">
+    /// <item>a signing certificate without digitalSignature or nonRepudiation fails (ICP-Brasil signature certificates
+    /// carry both);</item>
+    /// <item>a signature without a signing-certificate attribute (ESS signing-certificate-v2) only warns
+    /// (<c>SigningCertificatePresent</c> and <c>CertDigestPresent</c> at WARN), as on the ITI's VALIDAR: many signers
+    /// (Adobe Reader, the portal of Gov.br…) write <c>adbe.pkcs7.detached</c> without that attribute, and the signer
+    /// is identified by the CMS signer identifier. A reference that is present must still match the certificate
+    /// (<c>CertDigestMatch</c> stays FAIL). The ICP-Brasil signature policies (AD-RB…) mandate the attribute: a
+    /// signature that declares one and lacks it is reported by <see cref="IcpBrasilPolicyValidator"/>.</item>
+    /// </list>
     /// </summary>
     public static ValidationPolicy Validation { get; } = ValidationPolicy.Default
         .WithName(Name)
         .With("SignatureConstraints/BasicSignatureConstraints/SigningCertificate/KeyUsage",
-            Fail with { Ids = ["digitalSignature", "nonRepudiation"] });
+            Fail with { Ids = ["digitalSignature", "nonRepudiation"] })
+        .With("SignatureConstraints/SignedAttributes/SigningCertificatePresent", Warn)
+        .With("SignatureConstraints/SignedAttributes/CertDigestPresent", Warn);
 }
