@@ -39,6 +39,14 @@ internal static class RevocationEvidence
     /// <summary>An OCSP client used only to match responses to certificates (no network).</summary>
     internal static OcspClient MatchingOcspClient() => new(DefaultHttpClientProvider.Instance.GetClient());
 
+    /// <summary>
+    /// An OCSP client (no network) that checks responses collected moments ago against the current time, with the
+    /// tolerance of an online check (<see cref="OcspClient.DefaultClockSkewTolerance"/>): whether a signer or an
+    /// augmenter reached B-LT.
+    /// </summary>
+    internal static OcspClient CollectedEvidenceOcspClient() =>
+        new(DefaultHttpClientProvider.Instance.GetClient()) { EmbeddedClockSkewTolerance = OcspClient.DefaultClockSkewTolerance };
+
     /// <summary>The issuer (DER Name) and thisUpdate of a CRL.</summary>
     internal static (byte[] Issuer, DateTimeOffset ThisUpdate) ReadCrlIdentifier(byte[] crl)
     {

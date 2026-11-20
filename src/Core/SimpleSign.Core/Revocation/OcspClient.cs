@@ -53,6 +53,14 @@ public sealed class OcspClient : IOcspClient
     }
 
     /// <summary>
+    /// The tolerance of <see cref="CheckEmbeddedOcspResponse(X509Certificate2, X509Certificate2?, byte[], DateTimeOffset?)"/>:
+    /// zero, unless the responses were collected just now and are checked against the current time (the B-LT check of
+    /// a signer or augmenter, <see cref="RevocationEvidence.CollectedEvidenceOcspClient"/>). A responder whose
+    /// nextUpdate is a second after thisUpdate (RENIEC's) would otherwise have its response expire in between.
+    /// </summary>
+    internal TimeSpan EmbeddedClockSkewTolerance { get; init; }
+
+    /// <summary>
     /// Outbound URL policy applied to OCSP responder URLs. Default: <see cref="OutboundHttpPolicy.Default"/>.
     /// </summary>
     public OutboundHttpPolicy OutboundPolicy { get; init; } = OutboundHttpPolicy.Default;
@@ -172,7 +180,7 @@ public sealed class OcspClient : IOcspClient
             try
             {
                 (isValid, _) = ParseOcspResponseWithCertsCore(
-                    ocspResponseBytes, cert, responderCerts, _logger, issuerCert, signingTime);
+                    ocspResponseBytes, cert, responderCerts, _logger, issuerCert, signingTime, EmbeddedClockSkewTolerance);
             }
             finally
             {

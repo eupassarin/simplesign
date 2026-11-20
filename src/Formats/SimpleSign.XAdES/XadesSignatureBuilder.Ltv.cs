@@ -61,7 +61,7 @@ internal static partial class XadesSignatureBuilder
             }
 
             return EmbeddedRevocationEvidence.CoversAll(
-                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, RevocationEvidence.MatchingOcspClient());
+                certificates, ocspResponses, crls, DateTimeOffset.UtcNow, RevocationEvidence.CollectedEvidenceOcspClient());
         }
         finally
         {
