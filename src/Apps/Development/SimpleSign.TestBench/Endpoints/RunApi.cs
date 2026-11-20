@@ -54,6 +54,24 @@ internal static class RunApi
             }
         });
 
+        // The Augment tab: the ICP-Brasil policy a signed file declares, which augmenting keeps.
+        api.MapPost("/augment/describe", async (AugmentDescribeRequest body, DocumentStore documents, CancellationToken ct) =>
+        {
+            if (!documents.TryGet(body.FileId, out var file))
+            {
+                return Results.NotFound(new { error = L.T("Choose a file to augment.") });
+            }
+
+            try
+            {
+                return Results.Ok(await AugmentFactsReader.DescribeAsync(file!.Content, ct));
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         var runs = api.MapGroup("/runs");
         runs.MapGet("", (RunService service) => service.History());
         runs.MapPost("", (RunRequest body, RunService service) =>

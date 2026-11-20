@@ -282,7 +282,7 @@ export function ProfileMenu({ page, options, update, icpPolicies = true }: {
 }
 
 /** The strip under the top bar while a profile is on (or others' trust is added): what it changed, in one line. */
-export function ProfileStrip({ page, options, icpPolicies = true }: { page: ProfilePage; options: Options; icpPolicies?: boolean }) {
+export function ProfileStrip({ page, options, icpPolicies = true, notes = [] }: { page: ProfilePage; options: Options; icpPolicies?: boolean; notes?: string[] }) {
   const t = useT()
   const active = activeProfile(options)
   const extras = extraProfiles(options).filter((p) => p !== active?.profile)
@@ -291,7 +291,7 @@ export function ProfileStrip({ page, options, icpPolicies = true }: { page: Prof
     <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-1.5 text-xs">
       <ShieldCheck className="text-primary size-3.5 shrink-0" />
       {active && <span className="font-medium">{t("wb.profile.on", { name: `${profiles[active.profile].flag} ${profileTitle(active, t)}` })}</span>}
-      {active && <span className="text-muted-foreground">{effects(active, page, t, icpPolicies).join(" · ")}</span>}
+      {active && <span className="text-muted-foreground">{[...effects(active, page, t, icpPolicies), ...notes].join(" · ")}</span>}
       {extras.length > 0 && (
         <span className="text-muted-foreground">{t("wb.profile.alsoTrusted", { names: extras.map((p) => t(profiles[p].title)).join(", ") })}</span>
       )}

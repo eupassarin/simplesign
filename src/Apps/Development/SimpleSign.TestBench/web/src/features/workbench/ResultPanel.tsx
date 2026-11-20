@@ -137,7 +137,7 @@ function Summary({ run }: { run: RunView }) {
         <ShieldCheck className="text-success size-6" />
         <div className="min-w-0 flex-1">
           <p className="font-medium">
-            {formatTitle} · {validating ? run.fileName : augmenting ? `${run.initialLevel ?? "?"} → ${run.achievedLevel ?? run.requestedLevel}` : run.achievedLevel ?? run.requestedLevel}
+            {formatTitle} · {validating ? run.fileName : augmenting ? `${run.declaredPolicy ? `${run.declaredPolicy.name} · ` : ""}${run.initialLevel ?? "?"} → ${run.achievedLevel ?? run.requestedLevel}` : run.achievedLevel ?? run.requestedLevel}
             {run.engine === "cli" && <span className="ml-2"><Pill tone="info">{t("wb.engine.cli")}</Pill></span>}
           </p>
           <p className="text-muted-foreground text-xs">

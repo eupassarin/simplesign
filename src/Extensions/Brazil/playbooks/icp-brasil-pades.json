@@ -150,10 +150,10 @@
     {
       "id": "augment",
       "title": "Raising the level of an existing signature",
-      "description": "An AD-RT signature brought to B-LTA later (validation data and a document time-stamp), as AD-RC needs.",
+      "description": "An AD-RT signature brought to B-LTA later (validation data and a document time-stamp). The policy is a signed attribute: the result still declares AD-RT, and is validated against it; augmenting never turns AD-RT into AD-RC.",
       "steps": [
-        { "id": "aug-ad-rt", "kind": "augment", "title": "AD-RT to B-LTA", "tags": ["AD-RT", "AD-RC", "augment"], "engine": "library",
-          "description": "Raises the AD-RT signature to B-LTA afterwards (validation data and a document time-stamp), without signing again: what AD-RC needs, done later.",
+        { "id": "aug-ad-rt", "kind": "augment", "title": "AD-RT to B-LTA", "tags": ["AD-RT", "augment"], "engine": "library",
+          "description": "Raises the AD-RT signature to B-LTA afterwards (validation data and a document time-stamp), without signing again. It still declares AD-RT (2.16.76.1.7.1.12), now with long-term data: AD-RC can only be chosen when signing.",
           "options": { "fileId": "step:ad-rt", "level": "BLTA", "timestamp": { "provider": "Sandbox" } },
           "expect": { "outcome": "augmented", "level": "B-LTA", "indication": "TOTAL_PASSED" } }
       ]
@@ -166,7 +166,7 @@
         { "id": "v-real", "kind": "validate", "title": "Validate a real ICP-Brasil signature with the profile alone", "tags": ["icp-brasil", "real", "validation"],
           "description": "Only the AC Raiz roots and the ICP-Brasil chain validation are used: an intact signature by a valid, unrevoked ICP-Brasil certificate is accepted.",
           "options": { "fileId": "input:icp-signed", "settings": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } }, "expect": { "outcome": "valid", "indication": "TOTAL_PASSED" } },
-        { "id": "real-blta", "kind": "augment", "title": "Raise the real signature to B-LTA", "tags": ["icp-brasil", "real", "AD-RC", "augment"], "engine": "library",
+        { "id": "real-blta", "kind": "augment", "title": "Raise the real signature to B-LTA", "tags": ["icp-brasil", "real", "augment"], "engine": "library",
           "description": "Raises the uploaded ICP-Brasil signature to B-LTA with the Sandbox's TSA, validating it with the ICP-Brasil profile alone: a real signature can be preserved the same way.",
           "options": { "fileId": "input:icp-signed", "level": "BLTA", "timestamp": { "provider": "Sandbox" }, "validation": { "trust": [], "profile": "IcpBrasil", "trustProfiles": [], "policyId": "preset:validation:icp-brasil" } },
           "expect": { "outcome": "augmented", "level": "B-LTA" } },

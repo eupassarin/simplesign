@@ -598,6 +598,20 @@ export const en = {
     summary: "{size} KB · augmented in {sign} ms, validated in {validate} ms, {total} ms in all",
     initial: "Level before",
     again: "Augment again",
+    icp: {
+      declares: "Declares {policy}",
+      keeps: "The signature declares {policy} ({oid}) in a signed attribute: augmenting only adds unsigned data and never changes it, so the result is still {policy} and is validated against it.",
+      recommended: "Brings what {policy} needs",
+      strip: "Policy → the ICP-Brasil one the file declares (augmenting keeps it)",
+      notes: {
+        missingSignatureTimestamp: "{policy} requires a signature time-stamp in the CMS, and this signature has none. Only the signer adds it: the augmenter adds document time-stamps, so no level fixes this.",
+        addsSignatureTimestamp: "{policy} requires a signature time-stamp, and this signature has none: B-T adds it.",
+        needsArchive: "{policy} requires a DSS with the certificates and revocation data (VRI) and a document time-stamp after the signature: B-LTA adds both.",
+        pbadArtifacts: "AD-RA also requires the PA, the LPA and the LPA's signature in the DSS (PBAD_*), which the augmenter does not add: only signing under AD-RA writes them.",
+        cadesReferences: "{policy} requires the complete references (CompleteCertificateRefs, CompleteRevocationRefs) and their time-stamp, which the augmenter does not add.",
+        cadesArchiveV2: "AD-RA requires archive-time-stamp v2 (id-aa-48); the augmenter adds archive-time-stamp v3.",
+      },
+    },
   },
   report: {
     title: "Validation report",

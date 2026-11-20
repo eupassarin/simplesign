@@ -406,6 +406,48 @@ For XAdES, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSi
 checks the hash, signing period, timestamp and format; `XadesSignatureValidator` does it for you under the
 ICP-Brasil profile (above).
 
+### Raise an ICP-Brasil signature (augment)
+
+The policy is chosen when signing and cannot be changed afterwards. Its OID and `sigPolicyHash` are a
+signed attribute (`signature-policy-identifier`, or `SignaturePolicyIdentifier` in XAdES). The
+augmenters (`PadesAugmenter`, `CadesAugmenter`, `XadesAugmenter`, ADR 0025) add only unsigned data,
+so you raise a signature to a baseline level (B-T, B-LT, B-LTA), not from one policy to another:
+
+- An AD-RB raised to B-LTA still declares AD-RB, and stays valid under it, since no PA forbids
+  extra attributes.
+- An AD-RT raised to B-LTA is still AD-RT, now with long-term data. It is not AD-RC.
+
+What augmenting can do is add what the declared policy requires and the signature lacks:
+
+| Declared policy | What the augmenter adds for it | What it cannot add |
+|-----------------|--------------------------------|--------------------|
+| PAdES AD-RB | nothing is required; any level keeps AD-RB | — |
+| PAdES AD-RT | — | the signature timestamp in the CMS: `PadesAugmenter` adds *document* timestamps, so an AD-RT without it cannot be fixed |
+| PAdES AD-RC | B-LTA: DSS with `Certs`, `CRLs`/`OCSPs` and VRI, then a document timestamp after the signature | the signature timestamp, as for AD-RT |
+| PAdES AD-RA | the same as AD-RC | the `PBAD_*` policy artifacts in the DSS and VRI: only signing under AD-RA (`WithIcpBrasilPolicy`) writes them |
+| CAdES/XAdES AD-RT | B-T: the signature timestamp | — |
+| CAdES AD-RV/AD-RC | B-T: the signature timestamp | the complete references (`.2.21`, `.2.22`) and their timestamp (`.2.25`); AD-RC also needs `.2.23`/`.2.24` |
+| CAdES AD-RA | B-T: the signature timestamp | archive-time-stamp v2 (`.2.48`): `CadesAugmenter` adds archive-time-stamp v3 |
+
+Validate the result with the ICP-Brasil profile. `SignatureConstraints/PolicyRules` then checks it
+against the policy it declares, as for any other signature:
+
+```csharp
+var augmented = await PadesAugmenter.Document(signedPdf)
+    .WithTimestamp(new TimestampOptions(new Uri(actUrl)))
+    .ToLevel(AdesBaselineLevel.Archive)
+    .AugmentAsync();
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = IcpBrasilProfile.Create() })
+    .ValidateAsync(augmented.Document);
+```
+
+With the ICP-Brasil profile on, the TestBench's Augment tab works the same way:
+
+- it shows the policy the file declares and what the augmenter can or cannot add for it;
+- it selects the level that adds what the policy needs (B-LTA for a PAdES AD-RC or AD-RA, B-T for a
+  CAdES/XAdES AD-RT without a signature timestamp);
+- the levels themselves stay B-T, B-LT and B-LTA.
+
 ### DocMDP (certification)
 
 `AsCertification(...)` writes DocMDP the way the VALIDAR guide asks: a `/Reference` with
