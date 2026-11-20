@@ -374,8 +374,22 @@ the `SignatureConstraints/PolicyRules` constraint fails with the broken rules, I
 signing-certificate-v2 attribute that DOC-ICP-15.03 mandates is one such. The level is FAIL in
 `IcpBrasilPolicies.Validation` and in SimpleSign's default policy; set it to WARN to only report it. A
 signature that declares no policy (`None`) or one outside ICP-Brasil (`NotIcpBrasil`) is not
-concerned; a policy outside the embedded LPA (`Unknown`) cannot be checked and only warns. This is
-PDF validation only: the CAdES and XAdES validators do not run the provider.
+concerned; a policy outside the embedded LPA (`Unknown`) cannot be checked and only warns.
+
+The CAdES and XAdES validators apply the same constraint when `ValidationOptions.Profile` is
+ICP-Brasil's (or carries its chain validation): they ask the profile's provider for the policy verdict
+alone (`IChainValidationProvider.CheckSignaturePolicy`), at the time of a trusted signature timestamp or
+else the claimed signing time. A `.p7s` declaring AD-RB without signing-certificate-v2 is then
+INDETERMINATE as a PDF would be. For XAdES the provider checks what the reference allows (hash,
+period, timestamp, XAdES format, accepted root), not the attribute and algorithm rules of the XML PA.
+These validators do not run the provider's chain validation and report no `BR.*` metadata.
+
+```csharp
+var icp = IcpBrasilProfile.Create();
+var cades = new CadesSignatureValidator(new ValidationOptions { Profile = icp }).Validate(p7s, data);
+var xades = new XadesSignatureValidator(new ValidationOptions { Profile = icp }).Validate(xml);
+// cades.Constraints / xades.Constraints: SignatureConstraints/PolicyRules
+```
 
 ```csharp
 var check = IcpBrasilPolicyValidator.Validate(cms, signingTime, IcpBrasilPolicyFormat.Pades);
@@ -389,7 +403,8 @@ ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-tim
 are verified by `CadesSignatureValidator`.
 
 For XAdES, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
-checks the hash, signing period, timestamp and format.
+checks the hash, signing period, timestamp and format; `XadesSignatureValidator` does it for you under the
+ICP-Brasil profile (above).
 
 ### DocMDP (certification)
 

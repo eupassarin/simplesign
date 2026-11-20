@@ -46,7 +46,7 @@ Root: SimpleSign `ValidationConstraints` = DSS `ConstraintsParameters`.
 | Elements | Name in DSS | State | Why |
 |---|---|---|---|
 | `AcceptablePolicies`, `PolicyHashMatch` | same | evaluated |  |
-| `PolicyRules` | — | evaluated | SimpleSign only: the signature meets the rules of the signature policy it names, as a chain validation provider that knows the policy checked them (`ChainValidationResult.SignaturePolicyErrors`; ICP-Brasil's PAs, PAdES). Left out of the XML sent to DSS. |
+| `PolicyRules` | — | evaluated | SimpleSign only: the signature meets the rules of the signature policy it names, as a chain validation provider that knows the policy checked them (`ChainValidationResult.SignaturePolicyErrors` for PAdES, `IChainValidationProvider.CheckSignaturePolicy` for CAdES and XAdES; ICP-Brasil's PAs). Left out of the XML sent to DSS. |
 | `PolicyAvailable` | same | evaluated | CAdES policy store; ICP-Brasil downloads the policies of the LPA. |
 | `SignaturePolicyStorePresent` | same | evaluated | `CadesSignaturePolicyStore.Read`. |
 | `AcceptableFormats` | same | evaluated | Detected level (e.g. require B-LT for archiving). |

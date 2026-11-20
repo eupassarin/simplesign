@@ -91,6 +91,36 @@ public sealed class ValidationOptions
     internal SignatureQualification? Qualify(Extensions.SignatureQualificationContext context) =>
         SignatureQualifiers is { Count: > 0 } qualifiers ? qualifiers.Select(q => q.Qualify(context)).FirstOrDefault(q => q is not null) : null;
 
+    /// <summary>
+    /// The rules of the signature policy the signature names that it does not meet, as the first chain validation
+    /// provider of <see cref="Profile"/> that validates the signer says
+    /// (<see cref="Extensions.IChainValidationProvider.CheckSignaturePolicy"/>, the provider the PAdES validator would use);
+    /// null when none checks. A provider that fails adds a warning and checks nothing.
+    /// </summary>
+    internal IReadOnlyList<string>? CheckSignaturePolicy(Extensions.ChainValidationContext context, List<string> warnings)
+    {
+        foreach (var provider in Profile?.ChainValidationProviders ?? [])
+        {
+            if (!provider.CanValidate(context.Certificate))
+            {
+                continue;
+            }
+
+            try
+            {
+                return provider.CheckSignaturePolicy(context);
+            }
+            // S2221: intentional -- a provider's failure becomes a warning, as in the PAdES validator
+            catch (Exception ex)
+            {
+                warnings.Add($"Chain validation provider '{provider.GetType().Name}' could not check the signature policy: {ex.Message}");
+                return null;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>These options with the qualifiers of <paramref name="extensions"/> added (the country-extension constructors).</summary>
     internal ValidationOptions WithQualifiersFrom(IEnumerable<Extensions.ICountryExtension>? extensions)
     {

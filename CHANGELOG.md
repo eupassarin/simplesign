@@ -19,7 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the rules of the declared policy a chain validation provider found broken (empty: all met; null: not checked), and
   `PolicyRules` in the validation policy, FAIL in `ValidationPolicy.Default` and `IcpBrasilPolicies.Validation` (WARN
   brings back the old outcome). A SimpleSign element: DSS has none, so the TestBench leaves it out of the policy it sends
-  to DSS. PAdES only: the CAdES and XAdES validators do not run chain validation providers.
+  to DSS. `CadesSignatureValidator` and `XadesSignatureValidator` apply it too, under a profile whose chain validation
+  checks policies (ICP-Brasil's): new `IChainValidationProvider.CheckSignaturePolicy` (default: null, not checked), the
+  policy verdict without validating the chain, and `ChainValidationContext.Xml` (`XmlSignatureFacts`: the
+  SignaturePolicyIdentifier, signing time and signature time-stamp of a XAdES signature). For XAdES the ICP-Brasil
+  provider checks the hash, period, signature timestamp, format and root, not the XML PA's attribute rules.
 
 ### Fixed
 
