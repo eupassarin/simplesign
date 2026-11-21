@@ -74,6 +74,13 @@ public sealed class ValidationOptions
     public IReadOnlyList<Extensions.ITimedTrustAnchorProvider>? TimedTrustAnchors { get; init; }
 
     /// <summary>
+    /// Trust anchor providers that can refuse a chain that reaches one of their anchors (Adobe's AATL: an anchor trusted
+    /// only for certain certificate policies). The validators ask them once the signer's chain is built; a refused chain
+    /// is not trusted. A <see cref="Profile"/>'s are added. Null or empty: no anchor has conditions.
+    /// </summary>
+    public IReadOnlyList<Extensions.IConstrainedTrustAnchorProvider>? ConstrainedTrustAnchors { get; init; }
+
+    /// <summary>
     /// A trust profile (<c>IofeProfile</c>, <c>IcpBrasilProfile</c>, <c>GovBrProfile</c>): its anchors, trusted lists and
     /// chain validation are added to the validator's, and its validation policy applies while <see cref="Policy"/> is
     /// left at its default. A framework's profile also stops the operating system's roots from being trusted
@@ -145,6 +152,7 @@ public sealed class ValidationOptions
         IReadOnlyList<Extensions.ISignatureQualifier> qualifiers = [.. SignatureQualifiers ?? [], .. profile.SignatureQualifiers];
         var lists = profile.TrustAnchorProviders.OfType<Extensions.ITrustedListInfoProvider>().SelectMany(p => p.TrustedLists).ToList();
         var timed = profile.TrustAnchorProviders.OfType<Extensions.ITimedTrustAnchorProvider>().ToList();
+        var constrained = profile.ConstrainedTrustAnchors;
         return new ValidationOptions
         {
             CheckRevocation = CheckRevocation,
@@ -158,6 +166,7 @@ public sealed class ValidationOptions
             Level = Level,
             TrustedLists = lists.Count == 0 ? TrustedLists : [.. TrustedLists ?? [], .. lists],
             TimedTrustAnchors = timed.Count == 0 ? TimedTrustAnchors : [.. TimedTrustAnchors ?? [], .. timed],
+            ConstrainedTrustAnchors = constrained.Count == 0 ? ConstrainedTrustAnchors : [.. ConstrainedTrustAnchors ?? [], .. constrained],
             Profile = profile,
             SignatureQualifiers = qualifiers,
         };
@@ -176,6 +185,7 @@ public sealed class ValidationOptions
         Level = Level,
         TrustedLists = TrustedLists,
         TimedTrustAnchors = TimedTrustAnchors,
+        ConstrainedTrustAnchors = ConstrainedTrustAnchors,
         Profile = Profile,
         SignatureQualifiers = qualifiers,
     };

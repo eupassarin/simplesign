@@ -53,6 +53,22 @@ public sealed class XadesSignatureValidatorTests
     }
 
     [Fact]
+    public async Task Validate_AnchorWithConditionsRefusesTheChain_TheChainIsNotTrusted()
+    {
+        byte[] signed = await XadesSigner.Document(s_xmlBytes)
+            .WithCertificate(s_cert)
+            .SignAsync();
+        ValidationOptions Options(ConstrainedTrustAnchors anchors) => new() { CheckRevocation = false, ConstrainedTrustAnchors = [anchors] };
+
+        var accepted = new XadesSignatureValidator(Options(ConstrainedTrustAnchors.Accepting(s_cert))).Validate(signed, trustAnchors: [s_cert]);
+        var refused = new XadesSignatureValidator(Options(ConstrainedTrustAnchors.Refusing("not for this policy", s_cert))).Validate(signed, trustAnchors: [s_cert]);
+
+        accepted.IsCertificateChainValid.ShouldBeTrue(string.Join("; ", accepted.Errors));
+        refused.IsCertificateChainValid.ShouldBeFalse();
+        refused.Errors.ShouldContain(e => e.Contains("not for this policy", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Validate_DetachedSignature_ReturnsValid()
     {
         byte[] signed = await XadesSigner.Document(s_xmlBytes)

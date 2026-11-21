@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1861</NoWarn>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Shouldly" Version="4.3.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The list builder of the library's tests. -->
+    <Compile Include="..\SimpleSign.Adobe.Aatl.Tests\AatlListBuilder.cs" Link="AatlListBuilder.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The real command line, with the extension registered in memory. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Apps\SimpleSign.Cli\SimpleSign.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Extensions\Adobe\Aatl\SimpleSign.Adobe.Aatl.Cli\SimpleSign.Adobe.Aatl.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\..\shared\SimpleSign.TestHelpers\SimpleSign.TestHelpers.csproj" />
+  </ItemGroup>
+</Project>

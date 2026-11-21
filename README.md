@@ -32,6 +32,7 @@ dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
 dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
+dotnet add package SimpleSign.Adobe.Aatl       # the Adobe Approved Trust List: what Acrobat trusts
 dotnet add package SimpleSign.Signers.Pkcs11   # A3 tokens, smartcards, HSMs
 dotnet add package SimpleSign.Signers.Cloud    # cloud certificates (PSC, CSC v2)
 dotnet tool install -g SimpleSign.Cli          # command line
@@ -51,6 +52,8 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Peru.Iofe.Cli` | IOFE for the `simplesign` command line, as an extension: `simplesign extension install SimpleSign.Peru.Iofe.Cli` |
 | `SimpleSign.Brazil.Cli` | ICP-Brasil, Gov.br and Lei 14.063 for the command line, as an extension: `--profile icp-brasil`, `simplesign brasil sign` |
 | `SimpleSign.Europe.Eidas.Cli` | eIDAS for the command line, as an extension: `--profile eidas` |
+| `SimpleSign.Adobe.Aatl` | The Adobe Approved Trust List: the anchors Acrobat trusts, read from Adobe's signed list at run time, with its certificate policy restrictions. Not affiliated with Adobe |
+| `SimpleSign.Adobe.Aatl.Cli` | The AATL for the command line, as an extension: `--profile aatl` |
 | `SimpleSign.Europe.Eidas` | eIDAS (Regulation 910/2014): anchors from the EU list of trusted lists, and the qualification of a signature (QESig, AdESig-QC…) |
 | `SimpleSign.Signers.Pkcs11` | Sign through a token's PKCS#11 driver |
 | `SimpleSign.Signers.Cloud` | Sign with cloud certificates (ICP-Brasil PSCs, CSC API v2) |
@@ -133,6 +136,8 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
 | [ICP-Brasil](src/Extensions/Brazil/docs/icp-brasil.md) | Brazilian PKI: chain validation, roots, policies, ACT time-stamps |
+| [A trusted list as a profile](docs/articles/inspection-validation.md#a-trusted-list-as-a-trust-profile) | Any ETSI TS 119 612 list, kept current, as the whole trust of a validation |
+| [AATL](src/Extensions/Adobe/Aatl/docs/aatl.md) | The Adobe Approved Trust List as a trust profile: whom Acrobat trusts, and its certificate policy restrictions |
 | [eIDAS (EU)](src/Extensions/Europe/Eidas/docs/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |
 | [IOFE (Peru)](src/Extensions/Peru/Iofe/docs/iofe.md) | INDECOPI's trusted list kept current, the policies of INDECOPI's accreditation guide, its checklist and playbook |
 | [The apps](docs/articles/apps.md) | The CLI, the signing Agent, the TestBench and the Sandbox: what each is for |
@@ -147,6 +152,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 
 `ITrustAnchorProvider` (trust roots; `DirectoryTrustAnchorProvider` and `TrustedList` are ready-made),
 `ITimedTrustAnchorProvider` (the anchors at a given time, from a trusted list's service history),
+`IConstrainedTrustAnchorProvider` (anchors that can refuse a chain, as the AATL's policy restrictions do),
 `ITrustedListInfoProvider` (the list the anchors came from, for the `TrustedLists` constraints),
 `IChainValidationProvider` (chain rules), `IExternalSigner` (remote keys), `IHttpClientProvider` (TSA/OCSP/CRL HTTP),
 `IChainRevocationChecker` and `IRevocationCache` (revocation of a chain), `ISignatureAuditSink` (a record of every

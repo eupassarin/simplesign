@@ -46,6 +46,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
     private readonly HttpClient _httpClient;
     private readonly ILogger _logger;
     private readonly IReadOnlyList<ITrustAnchorProvider> _trustAnchorProviders;
+    private readonly IReadOnlyList<IConstrainedTrustAnchorProvider> _constrainedTrustAnchors;
     private readonly IReadOnlyList<IChainValidationProvider> _chainValidationProviders;
 
     /// <summary>
@@ -95,6 +96,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _timestampValidator = timestampValidator ?? new TimestampValidatorService();
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
         _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
     }
 
@@ -150,6 +152,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _timestampValidator = new TimestampValidatorService();
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
         _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
@@ -214,6 +217,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         _timestampValidator = new TimestampValidatorService();
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
+        _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
         _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
 
     }
@@ -1219,6 +1223,14 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
 
         bool chainBuilt = chain.Build(signerCert);
         reachesAnchor = CryptoUtility.ReachesTrustAnchor(chain, chainBuilt);
+
+        // An anchor with conditions (IConstrainedTrustAnchorProvider) may refuse the chain that reached it.
+        if (reachesAnchor && ConstrainedTrust.Refusal(chain, _constrainedTrustAnchors) is { } refusal)
+        {
+            errors.Add($"Chain: [{signerCert.Subject}] {refusal}");
+            reachesAnchor = false;
+            return false;
+        }
 
         foreach (var element in chain.ChainElements)
         {

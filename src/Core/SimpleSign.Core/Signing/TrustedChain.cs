@@ -68,6 +68,12 @@ internal static class TrustedChain
             ordered.Add(known.FirstOrDefault(c => raw.AsSpan().SequenceEqual(c.RawData)) ?? CertificateLoader.LoadCertificate(raw));
         }
 
+        if (Validation.ConstrainedTrust.Refusal(ordered, Validation.ConstrainedTrust.From(trustAnchors)) is { } refusal)
+        {
+            error = $"'{certificate.Subject}' chains to a trust anchor that does not accept it: {refusal}";
+            return null;
+        }
+
         error = null;
         return ordered;
     }

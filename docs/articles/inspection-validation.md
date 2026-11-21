@@ -229,6 +229,44 @@ Trust anchors can also come from a folder (`new DirectoryTrustAnchorProvider(dir
 manifest of the files' SHA-256) or from an ETSI trusted list (`TrustedList.Load(xml, new TrustedListOptions
 { SignerCertificates = [schemeOperator] })`), both `ITrustAnchorProvider`.
 
+### A trusted list as a trust profile
+
+Any trusted list (ETSI TS 119 612) — a country's, an organization's — can be the whole trust of a validation, given its
+location and the certificate it is signed with:
+
+```csharp
+var profile = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions
+{
+    Location = new Uri("https://example.test/tsl.xml"),
+    List = new TrustedListOptions { SignerCertificates = [schemeOperator] },
+    CacheFile = "/var/cache/app/tsl.xml",
+});
+var results = await new PdfSignatureValidator(new ValidationOptions { Profile = profile }).ValidateAsync(signed);
+```
+
+The profile has the default policies, the list as its only trust, and does not trust the operating system's roots. It
+gives trust, not a legal level: nothing says what a signature is in the country's law (for the EU, the eIDAS package
+qualifies each signature).
+
+`TrustedListSource` keeps the list current: `RefreshAsync` or `StartAutoRefresh` read it again; each copy is checked
+against the operator's certificate and swapped in one step; a copy that does not verify, or whose sequence number is
+lower than the one served, is refused and the last good one is kept (in `CacheFile` across restarts). After the list's
+NextUpdate it gives no anchors until a good copy is read, unless `TrustedListOptions.RejectExpired` is off — a validator
+may keep an expired list for its policy's `TLNotExpired` to judge. `TrustedListOptions.ServiceTypes` and
+`ActiveStatuses` say which services become anchors; a scheme outside the EU often names them under its own domain, and
+they are matched by the ending of the URI.
+
+When the operator changes its key, the list stops verifying until `SignerCertificates` has the new certificate: it
+fails closed. In the CLI: `simplesign validate contract.pdf --profile tsl --tsl URL --tsl-signer operator.cer`.
+
+### Trust anchors with conditions
+
+A trust anchor provider can refuse a chain that reached one of its anchors (`IConstrainedTrustAnchorProvider`): the
+Adobe Approved Trust List trusts half of its anchors only for signer certificates of certain certificate policies. The
+PAdES, CAdES and XAdES validators ask it once the signer's chain is built, and a refused chain is not trusted, with the
+provider's reason among the errors. A profile's constrained providers are applied with it; outside a profile, pass them
+as `ValidationOptions.ConstrainedTrustAnchors`. See [AATL](../../src/Extensions/Adobe/Aatl/docs/aatl.md).
+
 ### Trust anchors at a time, and past signature validation
 
 A trust anchor is not a permanent fact: a CA's service in a trusted list is granted at some point

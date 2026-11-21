@@ -52,8 +52,8 @@ The CLI targets **net8.0** and covers what the library does: `sign`, `sign-dir`,
 `html-to-pdf`.
 
 A whole trust framework comes from one flag: `--profile NAME` sets the trust anchors *and* the policies together
-(`simplesign profiles` lists them). `sandbox` is the CLI's own; `icp-brasil`, `gov-br`, `eidas` and `iofe` come with
-[extensions](cli-extensions.md), installed with `simplesign extension install PACKAGE`.
+(`simplesign profiles` lists them). `sandbox` and `tsl` (any trusted list, with `--tsl`) are the CLI's own; `icp-brasil`, `gov-br`,
+`eidas`, `iofe` and `aatl` come with [extensions](cli-extensions.md), installed with `simplesign extension install PACKAGE`.
 
 ```console
 $ simplesign --help

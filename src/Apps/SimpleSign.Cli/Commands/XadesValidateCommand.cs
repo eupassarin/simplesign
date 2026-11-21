@@ -113,6 +113,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 Verifier = settings.Verifier,
                 TrustedLists = settings.LoadedTrustedLists.Count > 0 ? settings.LoadedTrustedLists : null,
                 TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
+                ConstrainedTrustAnchors = settings.LoadedConstrainedAnchors.Count > 0 ? settings.LoadedConstrainedAnchors : null,
                 SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
             },
             logger: null,

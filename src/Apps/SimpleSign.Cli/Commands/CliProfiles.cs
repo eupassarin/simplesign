@@ -9,14 +9,18 @@ using SimpleSign.XAdES.TrustedLists;
 namespace SimpleSign.Cli.Commands;
 
 /// <summary>
-/// The trust profiles of <c>--profile</c> and <c>--trust-profile</c>: the one the CLI comes with (<c>sandbox</c>, for a
-/// running SimpleSign Sandbox) and those of the installed extensions (<see cref="ICliExtension.Profiles"/>): every
-/// trust framework — ICP-Brasil, Gov.br, eIDAS, IOFE — is an extension.
+/// The trust profiles of <c>--profile</c> and <c>--trust-profile</c>: the ones the CLI comes with (<c>sandbox</c>, for a
+/// running SimpleSign Sandbox, and <c>tsl</c>, for any trusted list given with <c>--tsl</c>) and those of the installed
+/// extensions (<see cref="ICliExtension.Profiles"/>): every trust framework — ICP-Brasil, Gov.br, eIDAS, IOFE — is an
+/// extension.
 /// </summary>
 internal static class CliProfiles
 {
     /// <summary>The Sandbox's profile name.</summary>
     internal const string Sandbox = "sandbox";
+
+    /// <summary>The profile of one trusted list (ETSI TS 119 612), the one of <c>--tsl</c>: its name.</summary>
+    internal const string TrustedList = TrustedListProfile.Name;
 
     private static readonly CliProfile[] s_builtIn =
     [
@@ -25,6 +29,12 @@ internal static class CliProfiles
             Name = Sandbox, Title = "SimpleSign Sandbox (test)",
             Trust = "the Sandbox's LOTL and trusted list (needs --sandbox URL)",
             LoadAsync = LoadSandboxAsync,
+        },
+        new()
+        {
+            Name = TrustedList, Title = "A trusted list (ETSI TS 119 612)",
+            Trust = "the list of --tsl URL|PATH, checked against --tsl-signer, and nothing else: not the system's roots (with --sandbox URL and no --tsl: the Sandbox's list)",
+            LoadAsync = LoadTrustedListAsync,
         },
     ];
 
@@ -59,7 +69,8 @@ internal static class CliProfiles
     /// <param name="trustProfiles">The <c>--trust-profile</c> values.</param>
     /// <param name="sandbox">The <c>--sandbox</c> URL.</param>
     /// <param name="signing">Whether the command signs.</param>
-    internal static string? Check(string? profile, IReadOnlyList<string> trustProfiles, string? sandbox, bool signing)
+    /// <param name="hasTrustedList">Whether <c>--tsl</c> was given.</param>
+    internal static string? Check(string? profile, IReadOnlyList<string> trustProfiles, string? sandbox, bool signing, bool hasTrustedList = false)
     {
         foreach (string? name in trustProfiles.Prepend(profile))
         {
@@ -74,6 +85,17 @@ internal static class CliProfiles
             {
                 return "The sandbox profile needs --sandbox URL (the running Sandbox).";
             }
+
+            if (string.Equals(name, TrustedList, StringComparison.OrdinalIgnoreCase) && sandbox is null && !hasTrustedList)
+            {
+                return "The tsl profile needs --tsl URL|PATH with --tsl-signer (the trusted list and the certificate it is signed with), or --sandbox URL.";
+            }
+        }
+
+        // --tsl replaces the trust of the profiles: asking for the list as extra trust would drop the main profile's.
+        if (hasTrustedList && trustProfiles.Any(name => string.Equals(name, TrustedList, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "--trust-profile tsl cannot be combined with --tsl, which replaces the profiles' trust: use --profile tsl.";
         }
 
         return signing && profile is not null && Find(profile)?.CannotSign is { } reason ? $"--profile {profile}: {reason}" : null;
@@ -124,6 +146,28 @@ internal static class CliProfiles
             Services = new TrustedListOptions { RejectExpired = context.Signing },
         }, context.Http, cancellationToken);
         return new TrustProfile(Sandbox, "SimpleSign Sandbox", SigningPolicy.Default, ValidationPolicy.Default, [set], []);
+    }
+
+    /// <summary>
+    /// The profile of one trusted list: the default policies, and no root of the operating system. Its list is the one of
+    /// <c>--tsl</c>, which the command reads itself (it replaces a profile's trust); without it, the Sandbox's.
+    /// </summary>
+    private static async Task<TrustProfile> LoadTrustedListAsync(CliProfileContext context, CancellationToken cancellationToken)
+    {
+        const string title = "Trusted list";
+        if (context.Sandbox is not { } url)
+        {
+            return new TrustProfile(TrustedList, title, SigningPolicy.Default, ValidationPolicy.Default, [], []);
+        }
+
+        // An expired list is kept for validation: the policy's TLNotExpired judges it.
+        var options = new TrustedListOptions
+        {
+            SignerCertificates = [await SignerAsync(context.Http, new Uri(url, "tl/tl-signer.pem"), cancellationToken)],
+            RejectExpired = context.Signing,
+        };
+        var list = await XAdES.TrustedLists.TrustedList.DownloadAsync(new Uri(url, "tl/tl.xml"), options, context.Http, cancellationToken: cancellationToken);
+        return TrustedListProfile.Create(list, TrustedList, title);
     }
 
 #pragma warning restore CA2000

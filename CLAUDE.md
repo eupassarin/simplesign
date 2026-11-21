@@ -39,8 +39,12 @@ scripts/tests/pkcs11.sh
 # Integration tests (requires network for TSA/OCSP)
 dotnet test tests/integration/SimpleSign.Integration.Tests
 
+# Adobe's real AATL against the bundled Adobe root (network)
+dotnet test tests/unit/Extensions/Adobe/Aatl/SimpleSign.Adobe.Aatl.Tests --filter "Category=Integration"
+
 # CLI tests (the CLI and its extension mechanism; each extension's are next to its framework's:
-# tests/unit/Extensions/{Brazil/SimpleSign.Brazil.Cli.Tests, Europe/Eidas/SimpleSign.Europe.Eidas.Cli.Tests, Peru/Iofe/SimpleSign.Peru.Iofe.Cli.Tests})
+# tests/unit/Extensions/{Brazil/SimpleSign.Brazil.Cli.Tests, Europe/Eidas/SimpleSign.Europe.Eidas.Cli.Tests, Peru/Iofe/SimpleSign.Peru.Iofe.Cli.Tests,
+# Adobe/Aatl/SimpleSign.Adobe.Aatl.Cli.Tests})
 dotnet test tests/unit/Apps/SimpleSign.Cli.Tests
 
 # TestBench tests need a running Sandbox (skipped without one; CI starts it)
@@ -58,9 +62,9 @@ src/
 ├── Core/
 │   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), hashing, signing/validation policies, trust store
 ├── Formats/
-│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser
+│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser (PdfEmbeddedFiles reads attachments)
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList)
+│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
 │   └── SimpleSign/             Meta-package
 ├── Extensions/                 trust frameworks and what goes with each (code, CLI extension, docs, playbooks, tools; ADR 0030)
 │   ├── CliExtension.targets                  what makes a project a CLI extension (manifest, packaging), imported by the three *.Cli projects
@@ -81,6 +85,11 @@ src/
 │   │   ├── docs/eidas.md
 │   │   ├── playbooks/                          eidas-checklist.md, eidas-baseline.json
 │   │   └── tools/eidas.py                      writes that playbook
+│   ├── Adobe/Aatl/                           everything of the Adobe Approved Trust List lives here (ADR 0031)
+│   │   ├── SimpleSign.Adobe.Aatl/              the AATL: Adobe's signed list read at run time (not bundled), its anchors with their
+│   │   │                                       certificate policy restrictions (IConstrainedTrustAnchorProvider), the aatl profile and policies
+│   │   ├── SimpleSign.Adobe.Aatl.Cli/          the CLI extension: --profile aatl, aatl policies
+│   │   └── docs/aatl.md
 │   └── Peru/Iofe/                            everything of Peru/IOFE/INDECOPI lives here
 │       ├── SimpleSign.Peru.Iofe/             IOFE (Peru): anchors from INDECOPI's trusted list, INDECOPI policies
 │       ├── SimpleSign.Peru.Iofe.Cli/         the CLI extension: --profile iofe, iofe policies, --tsl-profile iofe
@@ -93,7 +102,7 @@ src/
 ├── Extras/
 │   └── SimpleSign.HtmlToPdf/   HTML→PDF layout engine (independent, no signing)
 └── Apps/
-    ├── SimpleSign.Cli/                CLI tool; references no trust framework (its own profile is `sandbox`): each comes as an extension
+    ├── SimpleSign.Cli/                CLI tool; references no trust framework (its own profiles are `sandbox` and `tsl`, any trusted list of --tsl): each comes as an extension
     ├── SimpleSign.Cli.Extensibility/  the contract of a CLI extension (ICliExtension), installed with `simplesign extension install`
     ├── SimpleSign.Agent/              Avalonia tray app + window (pt-BR/en-US, TestBench look, Native AOT): local signing agent (HTTP on 127.0.0.1)
     └── Development/                   tools for developing and testing, not for end users
@@ -164,11 +173,16 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 // One profile sets the policies; others add trust only: IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create())
 // CLI: --profile iofe [--trust-profile gov-br] [--sandbox URL]; `simplesign profiles` lists them
 // eidas also qualifies each signature: results[0].Qualification?.Level is QESig, AdESig-QC… (ISignatureQualifier)
+// Trust without a national framework (ADR 0031): anchors only, no legal level
+var aatl = await AatlProfile.LoadAsync();   // what Acrobat trusts — SimpleSign.Adobe.Aatl; CLI: --profile aatl
+var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Location = url, List = new() { SignerCertificates = [signer] } });   // any trusted list; CLI: --profile tsl --tsl URL --tsl-signer CERT
 ```
 
 ### Extension Points (interfaces)
 - `ITrustAnchorProvider` — custom trust roots
 - `ITimedTrustAnchorProvider` — the anchors at a given time (trusted-list service history, ADR 0026)
+- `IConstrainedTrustAnchorProvider` — anchors that can refuse a chain that reached them (`WhyRefused`), asked by the validators and before
+  signing: the AATL's certificate policy restrictions. A profile's reach the validators as `ValidationOptions.ConstrainedTrustAnchors` (ADR 0031)
 - `IHttpClientProvider` — custom HTTP for TSA/OCSP/CRL
 - `ICertificateCache` — cert caching
 - `IChainValidationProvider` — custom chain logic
@@ -180,7 +194,7 @@ var results = await new PdfSignatureValidator(new ValidationOptions { Profile = 
 - `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
 - `ISignatureAuditSink` — a record of every signature made or refused (`AuditChain`, `JsonLinesAuditSink`)
 - `IPolicyProvider` / `ISignaturePolicyDocumentProvider` — the validation policy, and policy documents
-- `DirectoryTrustAnchorProvider`, `TrustedList` — ready-made `ITrustAnchorProvider`s
+- `DirectoryTrustAnchorProvider`, `TrustedList`, `TrustedListSource` (a list kept current) — ready-made `ITrustAnchorProvider`s
 
 ### Error Handling
 - `SigningException` — signing failures; `Reason` (`SigningErrorReason`) says which check of the `SigningPolicy` refused the certificate, key or algorithm (`KeyUsageNotPermitted`, `KeyTooWeak`, `ChainCertificateNotValid`, `CertificateRevoked`…)
@@ -226,10 +240,14 @@ SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension eac
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
 
+SimpleSign.Adobe.Aatl (the Adobe Approved Trust List; one ICountryExtension)
+  └── depends on SimpleSign.Core + SimpleSign.PAdES — public API only; downloads Adobe's list at run time, bundles only the Adobe root
+
 SimpleSign.Cli.Extensibility (the contract of CLI extensions)
   └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli
 
-SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli (CLI extensions, not libraries: each package carries cli-extension/)
+SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli / SimpleSign.Adobe.Aatl.Cli
+(CLI extensions, not libraries: each package carries cli-extension/)
   └── depend on their framework's packages + SimpleSign.Cli.Extensibility; SimpleSign.Cli references none of them, nor any framework
 
 SimpleSign.CAdES / SimpleSign.XAdES
