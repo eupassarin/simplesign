@@ -10,7 +10,7 @@ namespace SimpleSign.Cli.Tests;
 /// </summary>
 [Collection(CliConsoleCollection.Name)]
 [Trait("Category", "Unit")]
-public sealed class HelpScreenTests
+public sealed partial class HelpScreenTests
 {
     public static TheoryData<string> Commands => new()
     {
@@ -26,6 +26,7 @@ public sealed class HelpScreenTests
         "inspect",
         "extract",
         "explain",
+        "profiles",
         "html-to-pdf",
         "version",
         "cades",
@@ -91,6 +92,37 @@ public sealed class HelpScreenTests
         string wanted = new([.. expected.Where(c => !char.IsWhiteSpace(c))]);
         flat.ShouldContain(wanted);
     }
+
+    [Fact]
+    public async Task Help_Root_EveryCommandHasDescription()
+    {
+        var (exit, output) = await RunAsync("--help");
+
+        exit.ShouldBe(0);
+
+        // A command group (AddBranch) shows its own description in the root list, not its
+        // subcommands': without SetDescription its row is just the name.
+        string[] lines = output.Split('\n');
+        int start = Array.FindIndex(lines, l => l.TrimEnd() == "COMMANDS:");
+        start.ShouldBeGreaterThan(-1, output);
+
+        List<string> rows = [.. lines.Skip(start + 1)
+            .Select(l => l.TrimEnd())
+            .TakeWhile(l => l.Length > 0)];
+        rows.ShouldNotBeEmpty(output);
+
+        // A row is "    name [<argument>]    description"; a wrapped description continues on a
+        // line that starts in the description column, so only rows that start a command count.
+        int column = rows[0].Length - rows[0].TrimStart().Length;
+        List<string> missing = [.. rows
+            .Where(r => r.Length - r.TrimStart().Length == column)
+            .Where(r => !CommandRow().Match(r).Groups["description"].Success)
+            .Select(r => r.Trim())];
+        missing.ShouldBeEmpty($"commands without a description in 'simplesign --help': {string.Join(", ", missing)}");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s+\S+(?: <[^>]+>)?\s{2,}(?<description>\S.*)$")]
+    private static partial System.Text.RegularExpressions.Regex CommandRow();
 
     // One console for the whole class: Spectre caches the console it renders help with, so a
     // per-call StringWriter goes stale after the first call ("Cannot write to a closed

@@ -71,21 +71,31 @@ COMMANDS:
                                 prepare, sign outside, complete
     augment <file>              Raise an existing signature (PDF, CMS or XML) to
                                 B-T, B-LT or B-LTA
-    validate <input>            Validate PDF signatures
-    validate-dir <directory>    Validate all PDFs in a directory (bulk)
+    validate <input>            Validate the signatures of a PDF
+    validate-dir <directory>    Validate every PDF of a directory (bulk)
     inspect <input>             Inspect signature metadata (no validation)
     extract <input>             Extract CMS signatures from a signed PDF
     explain                     Explain PDF signature terms and fields
+    profiles                    List the trust profiles (--profile): the
+                                policies and the trust each one sets
     html-to-pdf <input>         Convert an HTML file to PDF
     version                     Show version information
-    cades
-    timestamp
-    pkcs11
-    psc
-    csc
-    xades
-    policy
-    audit
+    cades                       Sign data and validate detached signatures with
+                                CAdES (CMS/PKCS#7)
+    timestamp                   Create and verify standalone RFC 3161 timestamps
+                                (.tst)
+    pkcs11                      PKCS#11 tokens and HSMs: list the drivers,
+                                tokens and certificates
+    psc                         ICP-Brasil cloud certificate providers (PSC):
+                                log in and list certificates
+    csc                         Cloud Signature Consortium (CSC v2) services:
+                                list credentials
+    xades                       Sign and validate XML documents with XAdES
+    policy                      Validation and signing policy files: export the
+                                defaults or their JSON Schema
+    audit                       Check audit trails written by --audit-log
+    extension                   Install, list and remove CLI extensions (trust
+                                profiles, policies, commands)
 ```
 
 Signing a PDF at B-LT against a Sandbox TSA, then validating it:
