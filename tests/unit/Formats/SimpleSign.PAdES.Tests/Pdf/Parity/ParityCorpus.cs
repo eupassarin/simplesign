@@ -1,3 +1,4 @@
+using System.Globalization;
 using SimpleSign.TestHelpers;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Parity;
@@ -63,6 +64,8 @@ internal static class ParityCorpus
         ["pdfa-xmp-outside-catalog"] = ["PdfAFromCatalogMetadata"],
         ["encrypt-in-content"] = ["EncryptFromTrailer"],
         ["docmdp-without-space"] = ["DocMdpFromStructure"],
+        ["changes-page-rewritten"] = ["ComparedSemantically"],
+        ["changes-utf16-field-added"] = ["FieldNameDecoding"],
         ["text-inline-descendant-font"] = ["LegacyInlineDescendantFont"],
         ["text-encrypted"] = ["EncryptedContentUnreadable"],
         ["attachment-predictor"] = ["EmbeddedFileDecodeParms"],
@@ -114,8 +117,31 @@ internal static class ParityCorpus
         .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
         .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>");
 
-    /// <summary>The generated documents, by name.</summary>
-    public static IReadOnlyDictionary<string, Func<byte[]>> Generated { get; } = new Dictionary<string, Func<byte[]>>(StringComparer.Ordinal)
+    /// <summary>The generated documents, by name, each signature's /ByteRange covering its revision (see <see cref="CoverRevisions"/>).</summary>
+    public static IReadOnlyDictionary<string, Func<byte[]>> Generated => s_generated.ToDictionary(
+        e => e.Key, e => (Func<byte[]>)(() => CoverRevisions(e.Value())), StringComparer.Ordinal);
+
+    /// <summary>
+    /// Makes each generated /ByteRange end where its revision ends (after the next %%EOF line), as a signer writes it:
+    /// the second length is written with ten digits, so the file keeps its offsets.
+    /// </summary>
+    private static byte[] CoverRevisions(byte[] pdf)
+    {
+        string text = System.Text.Encoding.Latin1.GetString(pdf);
+        var result = new System.Text.StringBuilder(text);
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"/ByteRange \[0 (\d{10}) (\d{10}) (0000000001)\]"))
+        {
+            long gapEnd = long.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+            int eof = text.IndexOf("%%EOF", m.Index, StringComparison.Ordinal);
+            long end = eof < 0 ? text.Length : eof + 5 + (eof + 5 < text.Length && text[eof + 5] == '\n' ? 1 : 0);
+            string length = (end - gapEnd).ToString("D10", CultureInfo.InvariantCulture);
+            result.Remove(m.Groups[3].Index, 10).Insert(m.Groups[3].Index, length);
+        }
+
+        return System.Text.Encoding.Latin1.GetBytes(result.ToString());
+    }
+
+    private static readonly Dictionary<string, Func<byte[]>> s_generated = new(StringComparer.Ordinal)
     {
         ["table"] = () => Base().EndRevision().ToArray(),
         ["table-crlf"] = () => Base("\r\n").EndRevision(options: new RevisionOptions { EntryEnd = "\r\n" }).ToArray(),
@@ -265,6 +291,30 @@ internal static class ParityCorpus
         ["docmdp-without-space"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>", "/Perms << /DocMDP 11 0 R >> ")
             .Object(10, "<< /FT /Sig /T (Cert) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
             .Signature(11, "/Reference [<</Type/SigRef/TransformMethod/DocMDP/TransformParams<</Type/TransformParams/P 2/V/1.2>>>>] ")
+            .EndRevision().ToArray(),
+        ["changes-form-filled"] = () => Catalog("<< /Fields [10 0 R 12 0 R] /SigFlags 3 >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
+            .Signature(11)
+            .Object(12, "<< /FT /Tx /T (name) /Subtype /Widget /Rect [10 10 100 30] /P 3 0 R >>")
+            .EndRevision()
+            .Object(12, "<< /FT /Tx /T (name) /V (Ann) /Subtype /Widget /Rect [10 10 100 30] /P 3 0 R >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [13 0 R] >>")
+            .Object(13, "<< /Type /Annot /Subtype /Text /Rect [10 10 50 50] /Contents (note) >>")
+            .EndRevision().ToArray(),
+        ["changes-page-rewritten"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
+            .Signature(11)
+            .EndRevision()
+
+            // The same page, written again with its keys in another order and 612.0 for 612.
+            .Object(3, "<< /MediaBox [0 0 612.0 792.00] /Parent 2 0 R /Type /Page >>")
+            .EndRevision().ToArray(),
+        ["changes-utf16-field-added"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
+            .Signature(11)
+            .EndRevision()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [10 0 R 12 0 R] /SigFlags 3 >> >>")
+            .Object(12, "<< /FT /Sig /T (\\376\\377\\000S\\000i\\000g\\0002) /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
             .EndRevision().ToArray(),
         ["prev-loop"] = () =>
         {

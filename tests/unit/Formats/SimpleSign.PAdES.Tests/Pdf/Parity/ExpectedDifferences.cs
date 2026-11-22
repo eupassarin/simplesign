@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using Shouldly;
 using SimpleSign.PAdES.Pdf;
@@ -136,6 +137,21 @@ internal static class ExpectedDifferences
                 || d.Key.StartsWith("signature", StringComparison.Ordinal) && c.Legacy["signatures"] == "encrypted")),
 
         new(
+            "ComparedSemantically",
+            "The revision comparison compares objects (PdfObject.SemanticEquals): a page written again with other spacing, "
+            + "numbers written otherwise (612.0 and 612) or its keys in another order is not a change, nor is an object number "
+            + "the signed revision did not list; the legacy comparison compared normalized text.",
+            OnlySemanticallyEqual),
+
+        new(
+            "FieldNameDecoding",
+            "Field names in the comparison's messages are decoded text strings (§7.9.2: escapes, UTF-16 with its byte order "
+            + "mark); the legacy comparison kept the escapes' digits and wrote a UTF-16 name byte by byte (þÿ S i g n …).",
+            (c, d) => d.Key.StartsWith("changes/", StringComparison.Ordinal) && d.Legacy is not null && d.Model is not null
+                && QuotedNames().Replace(d.Legacy, "''") == QuotedNames().Replace(d.Model, "''")
+                && QuotedNames().Matches(d.Model).All(m => c.Model.View().Fields.Any(f => "'" + f.FullName + "'" == m.Value))),
+
+        new(
             "SignatureDictionaryReportedOnce",
             "A signature dictionary written again in a later revision is one signature: the model reports the copy the "
             + "cross-reference gives; the legacy reader reported every copy it found in the file's text.",
@@ -146,7 +162,8 @@ internal static class ExpectedDifferences
             "DocMdpFromStructure",
             "The DocMDP level is read from the certification signature's /Reference; the legacy reader needed the text "
             + "'/TransformMethod /DocMDP' with its space, and took the first /P within 2 KB of it.",
-            (c, d) => d.Key == "docmdp" && c.Model.View().CertificationSignature is not null
+            (c, d) => (d.Key == "docmdp" || d.Key.StartsWith("changes/", StringComparison.Ordinal) && d.Key.EndsWith("/docmdp", StringComparison.Ordinal))
+                && c.Model.View().CertificationSignature is not null
                 && System.Text.Encoding.Latin1.GetString(c.Data).IndexOf("/TransformMethod /DocMDP", StringComparison.Ordinal) < 0),
 
         new(
@@ -186,6 +203,55 @@ internal static class ExpectedDifferences
             (c, d) => d.Key == "embedded-files" && d.Legacy is not null && d.Model is not null
                 && d.Legacy.StartsWith(d.Model + " | ", StringComparison.Ordinal)),
     ];
+
+    /// <summary>
+    /// Whether the changes the legacy comparison reports and the model's does not are each one the model shows is not a
+    /// change: a page whose dictionary is the same but for /Annots (written again with other spacing, number forms or key
+    /// order), or an object the signed revision did not list (a number reused after a cross-reference stream that its own
+    /// /Index left out). The model must report nothing the legacy comparison does not.
+    /// </summary>
+    private static bool OnlySemanticallyEqual(ParityContext c, FactDifference d)
+    {
+        if (!d.Key.StartsWith("changes/", StringComparison.Ordinal) || !d.Key.EndsWith("/undefined", StringComparison.Ordinal)
+            || !int.TryParse(d.Key.Split('/')[1], out int signature))
+        {
+            return false;
+        }
+
+        var legacy = (d.Legacy ?? "").Split(" | ", StringSplitOptions.RemoveEmptyEntries);
+        var model = (d.Model ?? "").Split(" | ", StringSplitOptions.RemoveEmptyEntries);
+        if (model.Except(legacy).Any())
+        {
+            return false;
+        }
+
+        var field = PdfStructureReader.ReadSignatureFields(c.Model).First(f => f.SigDictObjectNumber == signature);
+        var signed = PdfDocument.Open(c.Data.AsMemory(0, (int)(field.ByteRange.Offset2 + field.ByteRange.Length2)));
+        var pages = c.Model.View().Pages;
+        foreach (string extra in legacy.Except(model))
+        {
+            var page = System.Text.RegularExpressions.Regex.Match(extra, @"^Page (\d+) changed \(content or resources\)\.$");
+            var obj = System.Text.RegularExpressions.Regex.Match(extra, @"^Object (\d+) changed\.$");
+            if (page.Success && int.Parse(page.Groups[1].Value, CultureInfo.InvariantCulture) is int index && index <= pages.Count
+                && pages[index - 1].Id is { } id
+                && signed.GetObject(id.Number)?.Value is PdfDictionary before && c.Model.GetObject(id.Number)?.Value is PdfDictionary after
+                && before.Keys.Union(after.Keys).Where(k => k.Value != "Annots").All(k => PdfObject.SemanticEquals(before.Get(k), after.Get(k))))
+            {
+                continue;
+            }
+
+            if (obj.Success && signed.Lookup(int.Parse(obj.Groups[1].Value, CultureInfo.InvariantCulture)) is null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static System.Text.RegularExpressions.Regex QuotedNames() => new("'[^']*'", System.Text.RegularExpressions.RegexOptions.None, TimeSpan.FromSeconds(1));
 
     private static (int Number, PdfSignatureInfo Signature)? Signature(ParityContext c, FactDifference d)
     {

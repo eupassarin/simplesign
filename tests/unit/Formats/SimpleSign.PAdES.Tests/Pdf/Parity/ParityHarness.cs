@@ -1,3 +1,5 @@
+using SimpleSign.Core.Validation.Policy;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Parity;
@@ -41,11 +43,49 @@ internal sealed record ParityContext(byte[] Data, PdfDocument Model, FactSet Leg
 /// </summary>
 internal static class ParityHarness
 {
+    private static void AddChanges(FactSet facts, int signature, Func<PdfChangeFacts> compare)
+    {
+        string key = $"changes/{signature}/";
+        PdfChangeFacts changes;
+        try
+        {
+            changes = compare();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
+        {
+            facts.Add(key + "error", ex.GetType().Name);
+            return;
+        }
+
+        facts.Add(key + "pages", $"{changes.SignedPageCount} -> {changes.FinalPageCount}");
+        facts.Add(key + "overlap", changes.AnnotationsOverlap ? "true" : "false");
+        facts.Add(key + "signatures", string.Join(" | ", changes.Signatures));
+        facts.Add(key + "form-fills", string.Join(" | ", changes.FormFills));
+        facts.Add(key + "annotations", string.Join(" | ", changes.Annotations));
+        facts.Add(key + "undefined", string.Join(" | ", changes.Undefined));
+        facts.Add(key + "changed-fields", string.Join(" | ", changes.ChangedFields));
+        facts.Add(key + "docmdp", changes.DocMdpLevel.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        facts.Add(key + "fieldmdp", changes.FieldMdp is { } fieldMdp ? $"{fieldMdp.Action} [{string.Join(", ", fieldMdp.Fields)}]" : "-");
+        facts.Add(key + "lock", changes.SigFieldLock is { } fieldLock ? $"{fieldLock.Action} [{string.Join(", ", fieldLock.Fields)}]" : "-");
+    }
+
     public static ParityReport Compare(byte[] data)
     {
         var model = PdfDocument.Open(data);
         var legacy = LegacyFacts.Read(data, model);
         var modelFacts = ModelFacts.Read(model);
+
+        // What changed after each signature, as each comparison sees it.
+        if (!model.IsEncrypted && data.AsSpan().StartsWith("%PDF-"u8) && model.Catalog is not null)
+        {
+            var index = PdfObjectIndex.Build(data);
+            foreach (var field in PdfStructureReader.ReadSignatureFields(model))
+            {
+                long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
+                AddChanges(legacy, field.SigDictObjectNumber, () => PdfRevisionComparerLegacy.Compare(index, data, end, field.SigDictObjectNumber));
+                AddChanges(modelFacts, field.SigDictObjectNumber, () => PdfRevisionComparer.Compare(model, end, field.SigDictObjectNumber));
+            }
+        }
 
         // The empty signature fields a signer can fill, found by each reader by their partial name.
         if (!model.IsEncrypted)

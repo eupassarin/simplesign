@@ -458,11 +458,11 @@ internal static class PdfRawDictionary
 }
 
 /// <summary>
-/// Compares the revision a signature covers with the final one and sorts each change the way the PDF
-/// modification constraints need: signatures, form filling, annotations, page count, and anything else
-/// ("undefined"). Validation data (DSS) and document timestamps are not changes (ETSI EN 319 142-1).
+/// The revision comparison as the scanning code did it before the object model (ADR 0032): over the text of each
+/// object (<see cref="PdfObjectIndex"/>, <see cref="PdfRawDictionary"/>). Kept to check <see cref="PdfRevisionComparer"/>
+/// against it until the old code is removed.
 /// </summary>
-internal static class PdfRevisionComparer
+internal static class PdfRevisionComparerLegacy
 {
     private static readonly HashSet<string> s_catalogKeysAllowed = new(StringComparer.Ordinal) { "DSS", "AcroForm", "Extensions" };
     private static readonly HashSet<string> s_acroFormKeysAllowed = new(StringComparer.Ordinal) { "Fields", "SigFlags", "DR", "DA", "NeedAppearances" };

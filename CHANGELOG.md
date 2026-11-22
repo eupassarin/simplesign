@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
     (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
     included) and the certification signature (with or without `/Perms`).
-  - The signature fields, `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
+  - The revision comparison, the signature fields, `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
     the DocMDP level, encryption and PDF/A detection now read the document through the model
     (the scanning code they used is kept for the parity checks until it is removed).
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **What changed after a signature is compared object by object** (ADR 0032): the revision a signature covers is the
+  file up to the end of its byte range, read as a document, and its objects are compared with the final ones
+  semantically. A page written again with its keys in another order, other spacing or `612.0` for `612` is no longer
+  reported as changed, nor is an object number the signed revision did not list (reused after a cross-reference
+  stream); a field name with escapes or in UTF-16 is decoded in the messages (it read `þÿ S i g n …`). The messages
+  are otherwise the same.
 - **Signature fields are read through the cross-reference** (`PdfStructureReader.ReadSignatureFieldsAsync`, and with it
   validation, inspection and `PadesExtractor`): a signature whose field is inside an object stream has its field name
   (it was `Signature_N`); a signature dictionary written again in a later revision is reported once, not once per

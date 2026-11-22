@@ -137,6 +137,7 @@ internal sealed class PdfRevisionView
     private static readonly PdfName s_widget = PdfName.Of("Widget");
 
     private readonly Lazy<IReadOnlyList<PdfPage>> _pages;
+    private readonly List<PdfObjectId> _pageTreeNodes = [];
     private readonly Lazy<IReadOnlyList<PdfField>> _fields;
     private readonly Lazy<IReadOnlyList<PdfSignatureInfo>> _signatures;
 
@@ -164,6 +165,16 @@ internal sealed class PdfRevisionView
     /// <summary>The pages, in order: the whole page tree, nested <c>/Kids</c> included.</summary>
     public IReadOnlyList<PdfPage> Pages => _pages.Value;
 
+    /// <summary>The page tree's intermediate nodes (<c>/Type /Pages</c>) that are objects of their own, root included.</summary>
+    public IReadOnlyList<PdfObjectId> PageTreeNodes
+    {
+        get
+        {
+            _ = _pages.Value;
+            return _pageTreeNodes;
+        }
+    }
+
     /// <summary>The AcroForm dictionary, written inline in the catalog or as its own object; null when there is none.</summary>
     public PdfDictionary? AcroForm => Resolve(Catalog?.Get(PdfName.AcroForm)) as PdfDictionary;
 
@@ -180,7 +191,7 @@ internal sealed class PdfRevisionView
     public PdfDictionary? Dss => Resolve(Catalog?.Get(s_dss)) as PdfDictionary;
 
     /// <summary>
-    /// The signature dictionaries, in file order: those signature fields hold, and those no field points to (orphans: a
+    /// The signature dictionaries, in file order: the /V of each signature field, and those no field points to (orphans: a
     /// dictionary with a <c>/ByteRange</c> among the revision's objects). Usage-rights signatures are included;
     /// <see cref="PdfSignatureInfo.IsUsageRights"/> marks them.
     /// </summary>
@@ -373,6 +384,11 @@ internal sealed class PdfRevisionView
                 continue;
             }
 
+            if (node is PdfReference reference)
+            {
+                _pageTreeNodes.Add(reference.Id);
+            }
+
             if (kids is not null)
             {
                 for (int i = kids.Count - 1; i >= 0; i--)
@@ -454,8 +470,7 @@ internal sealed class PdfRevisionView
         foreach (var field in Fields)
         {
             // Only a field's own /V: a kid inherits its parent's value, which the parent already reports.
-            if (!field.IsSignature || field.Dictionary.Get(PdfName.V) is not { } value
-                || Resolve(value) is not PdfDictionary dictionary || !dictionary.ContainsKey(PdfName.ByteRange))
+            if (!field.IsSignature || field.Dictionary.Get(PdfName.V) is not { } value || Resolve(value) is not PdfDictionary dictionary)
             {
                 continue;
             }

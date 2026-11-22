@@ -106,7 +106,7 @@ internal static class PdfXrefReader
 
         PdfDictionary? trailer = LastTrailer(data.Span, context, withRoot: true);
         PdfObjectId? catalog = null;
-        var compressed = new Dictionary<int, PdfXrefEntry>();
+        var compressed = new Dictionary<int, (PdfXrefEntry Entry, long StreamOffset)>();
 
         // Newest first, so the first cross-reference stream with a /Root is the latest.
         foreach (var (offset, id) in Enumerable.Reverse(headers))
@@ -130,7 +130,7 @@ internal static class PdfXrefReader
                     var numbers = decodeObjectStream(stream);
                     for (int i = 0; i < numbers.Count; i++)
                     {
-                        compressed.TryAdd(numbers[i], PdfXrefEntry.Compressed(id.Number, i));
+                        compressed.TryAdd(numbers[i], (PdfXrefEntry.Compressed(id.Number, i), offset));
                     }
 
                     break;
@@ -140,9 +140,13 @@ internal static class PdfXrefReader
             }
         }
 
-        foreach (var (number, entry) in compressed)
+        // The latest copy in the file wins: an object stream written after an object's header replaces it.
+        foreach (var (number, (entry, streamOffset)) in compressed)
         {
-            entries.TryAdd(number, entry);
+            if (!entries.TryGetValue(number, out var direct) || direct.Offset < streamOffset)
+            {
+                entries[number] = entry;
+            }
         }
 
         if (trailer is null)
