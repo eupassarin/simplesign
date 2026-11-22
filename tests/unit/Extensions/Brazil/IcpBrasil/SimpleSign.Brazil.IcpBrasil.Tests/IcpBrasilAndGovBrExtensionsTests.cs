@@ -20,6 +20,14 @@ public sealed class IcpBrasilAndGovBrExtensionsTests
     private static readonly ICountryExtension[] Both = [new IcpBrasilExtension(), new GovBrExtension()];
 
     [Fact]
+    public void WithTrustFrom_IcpBrasilAndGovBrProfiles_KeepTheBrazilianReaderOnce()
+    {
+        var profile = IcpBrasilProfile.Create().WithTrustFrom(GovBrProfile.Create());
+
+        profile.SignerIdentityReaders.ShouldBe([BrazilSignerIdentityReader.Instance]);
+    }
+
+    [Fact]
     public void Both_ProvidersAddUp_OnePerHierarchy()
     {
         var anchors = Both.SelectMany(e => e.TrustAnchorProviders).ToList();

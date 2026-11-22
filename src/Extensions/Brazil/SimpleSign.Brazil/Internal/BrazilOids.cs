@@ -9,6 +9,9 @@ internal static class BrazilOids
     /// <summary>ICP-Brasil SAN otherName (PF): holder data — birth date (8), CPF (11), NIS (11), RG (15), issuer + UF (6).</summary>
     internal const string IcpBrasilSanHolderData = "2.16.76.1.3.1";
 
+    /// <summary>ICP-Brasil SAN otherName (PJ): data of the person responsible — birth date (8), CPF (11), NIS (11), RG (15), issuer + UF (6).</summary>
+    internal const string IcpBrasilSanResponsibleData = "2.16.76.1.3.4";
+
     /// <summary>ICP-Brasil SAN otherName (PJ): CNPJ of the legal entity (14 characters).</summary>
     internal const string IcpBrasilSanCnpj = "2.16.76.1.3.3";
 

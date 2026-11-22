@@ -31,6 +31,13 @@ public static class SignerIdentifierTypes
     /// <summary>The Brazilian CPF of a natural person: its 11 digits, no punctuation.</summary>
     public const string Cpf = "CPF";
 
+    /// <summary>
+    /// The Brazilian CPF of the natural person responsible for a legal entity's certificate (an ICP-Brasil e-CNPJ):
+    /// its 11 digits. Not <see cref="Cpf"/>: the certificate is issued to the company, and this person holds it for the
+    /// company. A signer listed by CPF who signs for a company is matched by this type, not by <see cref="Cpf"/>.
+    /// </summary>
+    public const string ResponsibleCpf = "RESPONSIBLE-CPF";
+
     /// <summary>The Brazilian CNPJ of a legal entity: its 14 characters (digits, or upper-case letters in the alphanumeric format), no punctuation.</summary>
     public const string Cnpj = "CNPJ";
 

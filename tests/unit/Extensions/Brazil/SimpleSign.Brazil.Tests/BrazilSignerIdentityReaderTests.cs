@@ -42,12 +42,21 @@ public sealed class BrazilSignerIdentityReaderTests
     }
 
     [Fact]
-    public void Read_ECnpj_IsTheCnpjButNotTheCpfOfTheResponsiblePerson()
+    public void Read_ECnpj_IsTheCnpjAndTheResponsiblePersonsCpfButNoHolderCpf()
     {
-        using var certificate = Create((CnpjField, "11222333000181"), (ResponsibleData, "01011980" + Cpf));
+        using var certificate = Create((CnpjField, "11222333000181"), (ResponsibleData, "01011980" + Cpf + "00000000000"));
 
         _reader.Read(certificate, SignerIdentifierTypes.Cnpj).ShouldBe(["11222333000181"]);
+        _reader.Read(certificate, SignerIdentifierTypes.ResponsibleCpf).ShouldBe([Cpf]);
         _reader.Read(certificate, SignerIdentifierTypes.Cpf).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Read_PersonCertificate_HasNoResponsibleCpf()
+    {
+        using var certificate = Create((HolderData, "01011980" + Cpf));
+
+        _reader.Read(certificate, "responsible-cpf").ShouldBeEmpty();
     }
 
     [Fact]
@@ -64,7 +73,7 @@ public sealed class BrazilSignerIdentityReaderTests
         using var certificate = Create((HolderData, Cpf));
 
         _reader.Read(certificate, SignerIdentifierTypes.Email).ShouldBeEmpty();
-        _reader.IdentifierTypes.ShouldBe([SignerIdentifierTypes.Cpf, SignerIdentifierTypes.Cnpj]);
+        _reader.IdentifierTypes.ShouldBe([SignerIdentifierTypes.Cpf, SignerIdentifierTypes.Cnpj, SignerIdentifierTypes.ResponsibleCpf]);
     }
 
     [Fact]
