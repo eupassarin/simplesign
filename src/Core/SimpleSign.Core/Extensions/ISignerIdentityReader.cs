@@ -47,6 +47,26 @@ public static class SignerIdentifierTypes
     /// <summary>The subject's serialNumber attribute (X.520, OID 2.5.4.5), trimmed, as written: often a national identifier with its prefix (ETSI EN 319 412-1 §5.1.3).</summary>
     public const string SerialNumber = "SERIALNUMBER";
 
+    /// <summary>
+    /// The identifier of a natural person in the form of ETSI EN 319 412-1 §5.1.3, read from the subject's serialNumber:
+    /// the type of identity (PAS passport, IDC identity card, PNO personal number, TIN or TAX tax number, or a national
+    /// scheme written as two letters and a colon), the ISO 3166 country, a hyphen and the identifier — for example
+    /// <c>PNOBE-85010112345</c>. The type and country are returned in upper case, the identifier as written. Used by
+    /// European qualified certificates (ETSI EN 319 412-2) and by other authorities that follow the standard.
+    /// </summary>
+    public const string NaturalPersonId = "NATURAL-PERSON-ID";
+
+    /// <summary>
+    /// The identifier of a legal person in the form of ETSI EN 319 412-1 §5.1.4, read from the subject's
+    /// organizationIdentifier: the type (VAT, NTR national trade register, PSD payment service provider, LEI legal
+    /// entity identifier, or a national scheme written as two letters and a colon), the ISO 3166 country (XG for LEI), a
+    /// hyphen and the identifier — for example <c>VATBE-0123456789</c>. The type and country are returned in upper case.
+    /// </summary>
+    public const string LegalPersonId = "LEGAL-PERSON-ID";
+
+    /// <summary>The subject's organizationIdentifier attribute (X.520, OID 2.5.4.97), trimmed, as written, whatever its form.</summary>
+    public const string OrganizationIdentifier = "ORGANIZATIONIDENTIFIER";
+
     /// <summary>The SHA-256 digest of the certificate (its DER encoding), in upper-case hexadecimal: names one certificate, not a person.</summary>
     public const string CertificateSha256 = "CERT-SHA256";
 }

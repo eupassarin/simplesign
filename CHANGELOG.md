@@ -40,9 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`CmsAttribute.SignerAttributesV2`** (`SimpleSign.Core`): the signer-attributes-v2 encoder (claimed roles,
   attribute certificates, signed assertions), public; CAdES now uses it (same bytes as before).
 - **`ISignerIdentityReader`** (`SimpleSign.Core`): reads the identifiers of a type (`SignerIdentifierTypes`: CPF, CNPJ, RESPONSIBLE-CPF,
-  EMAIL, SERIALNUMBER, CERT-SHA256) from a certificate, to check it is that of an expected signer.
+  NATURAL-PERSON-ID, LEGAL-PERSON-ID, EMAIL, SERIALNUMBER, ORGANIZATIONIDENTIFIER, CERT-SHA256) from a certificate, to check it is that of an expected signer.
   `DefaultSignerIdentityReader` reads the email (SubjectAltName rfc822Name, subject E=), the subject serialNumber and
-  the SHA-256 of the certificate; `ICountryExtension.SignerIdentityReaders` (default: none) gives a framework's.
+  organizationIdentifier, the identifiers of a natural and a legal person in the form of ETSI EN 319 412-1 §5.1.3/§5.1.4
+  (`NATURAL-PERSON-ID` such as `PNOBE-85010112345`, `LEGAL-PERSON-ID` such as `VATBE-0123456789`: European qualified
+  certificates and others that follow the standard) and the SHA-256 of the certificate;
+  `ICountryExtension.SignerIdentityReaders` (default: none) gives a framework's.
   `TrustProfile.SignerIdentityReaders` carries them (from `FromExtension`; `WithTrustFrom` adds the others').
   `BrazilSignerIdentityReader` (`SimpleSign.Brazil`) reads the CPF (2.16.76.1.3.1) and CNPJ (2.16.76.1.3.3) of
   ICP-Brasil and Gov.br certificates, and the CPF of the person responsible for an e-CNPJ (2.16.76.1.3.4) as
