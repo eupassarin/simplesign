@@ -53,7 +53,39 @@ internal static class ParityCorpus
         ["blank-line-before-trailer"] = ["LegacyMisreadsTable"],
         ["no-startxref"] = ["RebuiltWhereLegacyFailed"],
         ["stray-object-after-eof"] = ["LookupByXref"],
+        ["nested-pages"] = ["NestedPageTree"],
+        ["signature-field-in-objstm"] = ["FieldInObjectStream"],
+        ["signature-nested-field"] = ["FullyQualifiedFieldName"],
+        ["signature-prop-build-name"] = ["LegacyKeyAnywhereInDictionary"],
+        ["signature-dictionary-rewritten"] = ["ContentsFromDictionary"],
+        ["dss-indirect-arrays"] = ["LegacyDssArrayInlineWithSpace", "LegacyVriInlineOnly"],
     };
+
+    /// <summary>
+    /// Writes a signature dictionary whose /ByteRange gap is exactly its /Contents, as a signer writes it (the CMS is
+    /// made up).
+    /// </summary>
+    /// <param name="builder">The builder.</param>
+    /// <param name="number">The object number.</param>
+    /// <param name="extra">More entries.</param>
+    /// <param name="contents">The /Contents, in hexadecimal.</param>
+    /// <param name="gapStart">Where the /ByteRange gap starts instead: an earlier copy's /Contents.</param>
+    private static PdfFileBuilder Signature(this PdfFileBuilder builder, int number, string extra = "", string contents = "3082AABB", long? gapStart = null)
+    {
+        gapStart ??= SignatureGap(builder, number);
+        long gapEnd = gapStart.Value + contents.Length + 2;
+        return builder.Object(number, $"{SignaturePrefix}<{contents}> /ByteRange [0 {gapStart:D10} {gapEnd:D10} 0000000001] /M (D:20260101120000Z) {extra}>>");
+    }
+
+    private const string SignaturePrefix = "<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /ETSI.CAdES.detached /Contents ";
+
+    /// <summary>Where the /Contents of a signature dictionary written next would start.</summary>
+    private static long SignatureGap(PdfFileBuilder builder, int number) => builder.Position + $"{number} 0 obj\n".Length + SignaturePrefix.Length;
+
+    private static PdfFileBuilder Catalog(string acroForm, string extra = "") => new PdfFileBuilder()
+        .Object(1, $"<< /Type /Catalog /Pages 2 0 R /AcroForm {acroForm} {extra}>>")
+        .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>");
 
     /// <summary>The generated documents, by name.</summary>
     public static IReadOnlyDictionary<string, Func<byte[]>> Generated { get; } = new Dictionary<string, Func<byte[]>>(StringComparer.Ordinal)
@@ -93,6 +125,52 @@ internal static class ParityCorpus
             .Object(3, "<< /Type /Page /Parent 2 0 R /Rotate 90 >>").EndRevision(options: new RevisionOptions { EntryEnd = "\r\n" }).ToArray(),
         ["blank-line-before-trailer"] = () => Base().EndRevision()
             .Object(3, "<< /Type /Page /Parent 2 0 R /Rotate 90 >>").EndRevision(options: new RevisionOptions { BeforeTrailer = "\n" }).ToArray(),
+        ["nested-pages"] = () => new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 3 /MediaBox [0 0 612 792] >>")
+            .Object(3, "<< /Type /Pages /Parent 2 0 R /Kids [5 0 R 6 0 R] /Count 2 /MediaBox [0 0 100 200] >>")
+            .Object(4, "<< /Type /Page /Parent 2 0 R >>")
+            .Object(5, "<< /Type /Page /Parent 3 0 R >>")
+            .Object(6, "<< /Type /Page /Parent 3 0 R /Rotate 90 >>")
+            .EndRevision().ToArray(),
+        ["signature-held"] = () => Catalog("<< /Fields [10 0 R 12 0 R] /SigFlags 3 >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
+            .Signature(11, "/Reason (approved) /Name (Signer) ")
+            .Object(12, "<< /FT /Sig /T (Empty) /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>")
+            .EndRevision().ToArray(),
+        ["signature-certification"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>", "/Perms << /DocMDP 11 0 R >> ")
+            .Object(10, "<< /FT /Sig /T (Cert) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Signature(11, "/Reference [<< /Type /SigRef /TransformMethod /DocMDP /TransformParams << /Type /TransformParams /P 2 /V /1.2 >> >>] ")
+            .EndRevision().ToArray(),
+        ["signature-field-in-objstm"] = () => Catalog("<< /Fields [10 0 R 12 0 R] /SigFlags 3 >>")
+            .Compressed(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Compressed(12, "<< /FT /Sig /T (Empty) /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Signature(11)
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { XrefStreamNumber = 14, ObjectStreamNumber = 13 }).ToArray(),
+        ["signature-nested-field"] = () => Catalog("<< /Fields [9 0 R] /SigFlags 3 >>")
+            .Object(9, "<< /T (form) /Kids [10 0 R] >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /Parent 9 0 R /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Signature(11)
+            .EndRevision().ToArray(),
+        ["signature-prop-build-name"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>")
+            .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Signature(11, "/Prop_Build << /App << /Name (Some Signing App) /REx (1.0) >> >> ")
+            .EndRevision().ToArray(),
+        ["signature-dictionary-rewritten"] = () =>
+        {
+            // The update writes the signature dictionary again with another /Contents, and the old /ByteRange.
+            var builder = Catalog("<< /Fields [10 0 R] /SigFlags 3 >>")
+                .Object(10, "<< /FT /Sig /T (Sig1) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>");
+            long gap = SignatureGap(builder, 11);
+            return builder.Signature(11).EndRevision().Signature(11, contents: "3082CCDD", gapStart: gap).EndRevision().ToArray();
+        },
+        ["dss-indirect-arrays"] = () => Catalog("<< /Fields [] >>", "/DSS 20 0 R ")
+            .Object(20, "<< /Type /DSS /Certs 21 0 R /OCSPs [] /CRLs [] /VRI 22 0 R >>")
+            .Object(21, "[23 0 R]")
+            .Object(22, "<< /AABBCCDDEEFF00112233445566778899AABBCCDD 24 0 R >>")
+            .Stream(23, "", [0x30, 0x00])
+            .Object(24, "<< /Cert [23 0 R] >>")
+            .EndRevision().ToArray(),
         ["prev-loop"] = () =>
         {
             var builder = Base().EndRevision().Object(3, "<< /Type /Page /Parent 2 0 R /Rotate 90 >>");

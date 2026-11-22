@@ -131,6 +131,7 @@ public sealed class PdfXrefReaderTests
         var (chain, context) = Read(builder.ToArray());
 
         chain.Sections.ShouldHaveSingleItem().Offset.ShouldBe(builder.XrefOffsets[1]);
+        chain.Complete.ShouldBeFalse();
         context.Diagnostics.Has(PdfRepairKind.PrevLoop).ShouldBeTrue();
     }
 

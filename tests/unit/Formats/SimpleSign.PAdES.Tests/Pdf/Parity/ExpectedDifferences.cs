@@ -58,7 +58,105 @@ internal static class ExpectedDifferences
             (c, d) => d.Key.StartsWith("object/", StringComparison.Ordinal)
                 && c.Legacy.ObjectStarts.TryGetValue(d.ObjectNumber!.Value, out int legacyStart)
                 && c.Model.GetObject(d.ObjectNumber.Value) is { } obj && obj.Source.Offset != legacyStart),
+
+        new(
+            "NestedPageTree",
+            "The legacy reader takes the pages from the root's /Kids only; the model walks the whole page tree (§7.7.3.2).",
+            (c, d) => (d.Key == "pages" || d.Key.StartsWith("page/", StringComparison.Ordinal))
+                && c.Model.Resolve(c.Model.Catalog?.Get(PdfName.Pages)) is PdfDictionary root
+                && c.Model.Resolve(root.Get(PdfName.Kids)) is PdfArray kids
+                && kids.Any(kid => c.Model.Resolve(kid) is PdfDictionary node && PdfName.Pages.Equals(node.Get(PdfName.Type)))),
+
+        new(
+            "FieldInObjectStream",
+            "The legacy reader finds a signature's field, and an empty signature field, by searching the file's text; a "
+            + "field inside an object stream is not in that text. The model reads the field tree.",
+            (c, d) => (Signature(c, d) is { Signature.Field.Id: { } field } && d.Key.EndsWith("/name", StringComparison.Ordinal)
+                    && d.Legacy == $"Signature_{Signature(c, d)!.Value.Number}" && IsCompressed(c.Model, field))
+                || (d.Key.StartsWith("empty-field/", StringComparison.Ordinal) && d.Legacy == "not found"
+                    && c.Model.View().Fields.FirstOrDefault(f => "empty-field/" + f.FullName == d.Key) is { Id: { } id } && IsCompressed(c.Model, id))),
+
+        new(
+            "FullyQualifiedFieldName",
+            "A signature's field name is its fully qualified name (§12.7.3.2) in the model, its partial /T in the legacy reader.",
+            (c, d) => d.Key.EndsWith("/name", StringComparison.Ordinal) && d.Legacy is not null
+                && d.Model?.EndsWith("." + d.Legacy, StringComparison.Ordinal) == true),
+
+        new(
+            "LegacyKeyAnywhereInDictionary",
+            "The legacy reader takes the first occurrence of a key anywhere in the signature dictionary's text, nested "
+            + "dictionaries included (/Prop_Build /App /Name); the model reads the dictionary's own entry.",
+            (c, d) => Signature(c, d) is { } s && d.Key[(d.Key.LastIndexOf('/') + 1)..] is var key
+                && key is "Name" or "Reason" or "Location" or "ContactInfo" or "Filter" or "SubFilter"
+                && NestedHas(c.Model, s.Signature.Dictionary, key, 0)),
+
+        new(
+            "ContentsFromDictionary",
+            "The legacy reader takes the signature value from the bytes the /ByteRange gap covers; the model from the "
+            + "/Contents of the signature dictionary the cross-reference gives. They differ when the dictionary was written "
+            + "again in a later revision.",
+            (c, d) => d.Key.EndsWith("/contents", StringComparison.Ordinal) && Signature(c, d) is { } s
+                && s.Signature.ByteRange is [var o1, var l1, _, _]
+                && (s.Signature.Dictionary.Source is not { } source || source.Offset > o1 + l1 || source.End <= o1 + l1)),
+
+        new(
+            "LegacyDssArrayInlineWithSpace",
+            "The legacy reader finds a DSS array by the text '/Certs [' (and '/OCSPs [', '/CRLs ['): an array written as a "
+            + "reference, or without the space, is empty to it. The model reads the entry.",
+            (c, d) => d.Key is "dss/Certs" or "dss/OCSPs" or "dss/CRLs" && string.IsNullOrEmpty(d.Legacy)
+                && c.Model.View().Dss is { } dss && dss.Get(d.Key[4..]) is { } entry
+                && (entry is PdfReference || !RawText(c.Data, dss).Contains($"/{d.Key[4..]} [", StringComparison.Ordinal))),
+
+        new(
+            "LegacyVriInlineOnly",
+            "The legacy reader reads /VRI only when it is a dictionary written inside the DSS; the model follows a reference.",
+            (c, d) => d.Key == "dss/VRI" && string.IsNullOrEmpty(d.Legacy) && c.Model.View().Dss?.Get("VRI") is PdfReference),
     ];
+
+    private static (int Number, PdfSignatureInfo Signature)? Signature(ParityContext c, FactDifference d)
+    {
+        string[] parts = d.Key.Split('/');
+        if (parts is not ["signature", var n, _] || !int.TryParse(n, out int number))
+        {
+            return null;
+        }
+
+        var signature = c.Model.View().Signatures.FirstOrDefault(s => (s.Id?.Number ?? s.Field?.Id?.Number ?? 0) == number);
+        return signature is null ? null : (number, signature);
+    }
+
+    /// <summary>The bytes a dictionary was parsed from, as text; empty when it is not in the file's bytes.</summary>
+    private static string RawText(byte[] data, PdfDictionary dictionary) =>
+        dictionary.Source is { } source && source.End <= data.Length
+            ? System.Text.Encoding.Latin1.GetString(data, (int)source.Offset, source.Length)
+            : "";
+
+    private static bool IsCompressed(PdfDocument doc, PdfObjectId id) => doc.Lookup(id.Number) is { Type: PdfXrefEntryType.Compressed };
+
+    /// <summary>Whether a dictionary nested in this one (at any depth) has the key.</summary>
+    private static bool NestedHas(PdfDocument doc, PdfDictionary dictionary, string key, int depth)
+    {
+        if (depth > 8)
+        {
+            return false;
+        }
+
+        foreach (var (_, value) in dictionary)
+        {
+            var nested = value is PdfReference ? doc.Resolve(value) : value;
+            if (nested is PdfDictionary child && (child.ContainsKey(PdfName.Of(key)) || NestedHas(doc, child, key, depth + 1)))
+            {
+                return true;
+            }
+
+            if (nested is PdfArray array && array.OfType<PdfDictionary>().Any(item => item.ContainsKey(PdfName.Of(key)) || NestedHas(doc, item, key, depth + 1)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>The section the latest revision takes an object's entry from.</summary>
     private static PdfXrefSection? Providing(PdfDocument doc, int number)

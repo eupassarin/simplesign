@@ -49,7 +49,9 @@ internal static class PdfXrefReader
         {
             if (!visited.Add(at))
             {
+                // The section /Prev should have led to is not known: what it listed is looked for by header.
                 context.Repair(PdfRepairKind.PrevLoop, ClampOffset(at, data.Length));
+                complete = false;
                 break;
             }
 
@@ -71,6 +73,7 @@ internal static class PdfXrefReader
             if (section.Offset != at && !visited.Add(section.Offset))
             {
                 context.Repair(PdfRepairKind.PrevLoop, (int)section.Offset);
+                complete = false;
                 break;
             }
 

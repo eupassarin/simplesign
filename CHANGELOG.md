@@ -48,9 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cross-reference and revisions: tables, streams and hybrid files (`/XRefStm`), object streams within a budget, a
     linearized file's two sections as one revision, objects found through the cross-reference by revision, and the
     cross-reference rebuilt from the object headers when it cannot be read.
+  - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
+    (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
+    included) and the certification signature (with or without `/Perms`).
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
-    difference is catalogued with its reason (the current reader loses tables with white-space before `xref` or
-    `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists).
+    difference is catalogued with its reason. The current reader loses tables with white-space before `xref` or
+    `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists; it does not see
+    fields inside object streams, DSS arrays written as references or without a space (`/Certs[`), nor an indirect
+    `/VRI`; it reads `/Name` from a nested `/Prop_Build`; and it looks for pages in the root's `/Kids` only.
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
   longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
   constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a

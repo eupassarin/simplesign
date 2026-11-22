@@ -97,6 +97,15 @@ internal enum PdfRepairKind
 
     /// <summary>A chain of references was longer than <see cref="PdfReadLimits.MaxReferenceHops"/>: read as null.</summary>
     ReferenceHopsExceeded,
+
+    /// <summary>A page, field or name tree nested deeper than its limit: the deeper nodes are not read.</summary>
+    TreeTooDeep,
+
+    /// <summary>A page, field or name tree node was reached twice (a cycle, or a node shared): it is read once.</summary>
+    TreeCycle,
+
+    /// <summary>The page tree had more pages than <see cref="PdfReadLimits.MaxPages"/>: the others are not read.</summary>
+    TooManyPages,
 }
 
 /// <summary>One repair: what was wrong and where.</summary>

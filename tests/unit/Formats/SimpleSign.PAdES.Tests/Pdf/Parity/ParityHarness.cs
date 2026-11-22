@@ -46,6 +46,17 @@ internal static class ParityHarness
         var model = PdfDocument.Open(data);
         var legacy = LegacyFacts.Read(data, model);
         var modelFacts = ModelFacts.Read(model);
+
+        // The empty signature fields a signer can fill, found by each reader by their partial name.
+        if (!model.IsEncrypted)
+        {
+            foreach (var field in model.View().Fields.Where(f => f.IsSignature && f.Value is null && f.PartialName is not null))
+            {
+                string key = $"empty-field/{field.FullName}";
+                legacy.Add(key, LegacyFacts.EmptyField(data, field.PartialName!));
+                modelFacts.Add(key, field.Id?.Number.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "inline");
+            }
+        }
         var context = new ParityContext(data, model, legacy, modelFacts);
 
         var report = new ParityReport

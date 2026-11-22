@@ -37,6 +37,7 @@ internal sealed class PdfDocument
     private readonly bool _chainComplete;
     private readonly ConcurrentDictionary<long, Lazy<PdfIndirectObject?>> _objectsByOffset = new();
     private readonly ConcurrentDictionary<long, Lazy<ObjectStreamContents>> _objectStreams = new();
+    private readonly ConcurrentDictionary<int, PdfRevisionView> _views = new();
     private readonly Lazy<Dictionary<int, List<(long Offset, PdfObjectId Id)>>> _headers;
     private readonly Lazy<bool> _linearized;
     private long _objectStreamBytes;
@@ -130,6 +131,14 @@ internal sealed class PdfDocument
         }
 
         return new PdfDocument(data, new PdfParseContext(limits));
+    }
+
+    /// <summary>What a revision holds: pages, fields, name trees, DSS, signatures (one view per revision, kept).</summary>
+    /// <param name="revision">The revision; the latest when null.</param>
+    public PdfRevisionView View(PdfRevision? revision = null)
+    {
+        var at = revision ?? Latest;
+        return _views.GetOrAdd(at.Index, _ => new PdfRevisionView(this, at));
     }
 
     /// <summary>The catalog's reference as a revision sees it: its trailer's, or the nearest older one's.</summary>
