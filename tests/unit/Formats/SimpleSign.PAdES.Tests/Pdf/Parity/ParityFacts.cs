@@ -152,26 +152,25 @@ internal static class LegacyFacts
 
         facts.Add("acroform/fields", string.Join(" ", fields.Select(f => string.Join(" ", f.Split(' ', StringSplitOptions.RemoveEmptyEntries)))));
 
-        // Signatures.
-        try
+        // Signatures: the scanning reader's checks (header, /Encrypt in the text), then its fields.
+        if (!data.AsSpan().StartsWith("%PDF-"u8))
         {
-            using var stream = new MemoryStream(data);
-            foreach (var signature in PdfStructureReader.ReadSignatureFieldsAsync(stream).GetAwaiter().GetResult())
-            {
-                var range = signature.ByteRange;
-                AddSignature(
-                    facts, signature.SigDictObjectNumber, signature.FieldName, [range.Offset1, range.Length1, range.Offset2, range.Length2],
-                    signature.ContentsBytes, signature.Filter, signature.SubFilter, signature.Reason, signature.Location,
-                    signature.ContactInfo, signature.SignerName, signature.PdfSigningTime?.ToString("O", CultureInfo.InvariantCulture) ?? "-");
-            }
+            facts.Add("signatures", "no header");
         }
-        catch (EncryptedPdfException)
+        else if (PdfStructureReader.IsEncrypted(data))
         {
             facts.Add("signatures", "encrypted");
         }
-        catch (PdfStructureException)
+        else
         {
-            facts.Add("signatures", "no header");
+            try
+            {
+                AddSignatures(facts, PdfStructureReader.ReadSignatureFieldsLegacy(data));
+            }
+            catch (PdfStructureException ex)
+            {
+                facts.Add("signatures", "error: " + ex.Message);
+            }
         }
 
         // DocMDP.
@@ -262,6 +261,20 @@ internal static class LegacyFacts
 
     public static string Box(double width, double height, int rotate) =>
         string.Create(CultureInfo.InvariantCulture, $"{width:F2}x{height:F2} r{rotate}");
+
+    /// <summary>The signature fields a reader gives: how many, in what order, and each one's facts.</summary>
+    public static void AddSignatures(FactSet facts, IReadOnlyList<PdfSignatureField> fields)
+    {
+        facts.Add("signatures/order", string.Join(" ", fields.Select(f => f.SigDictObjectNumber)));
+        foreach (var signature in fields)
+        {
+            var range = signature.ByteRange;
+            AddSignature(
+                facts, signature.SigDictObjectNumber, signature.FieldName, [range.Offset1, range.Length1, range.Offset2, range.Length2],
+                signature.ContentsBytes, signature.Filter, signature.SubFilter, signature.Reason, signature.Location,
+                signature.ContactInfo, signature.SignerName, signature.PdfSigningTime?.ToString("O", CultureInfo.InvariantCulture) ?? "-");
+        }
+    }
 
     public static void AddSignature(
         FactSet facts, int number, string name, long[] byteRange, ReadOnlySpan<byte> contents, string? filter, string? subFilter,
@@ -372,14 +385,13 @@ internal static class ModelFacts
         }
         else
         {
-            foreach (var signature in view.Signatures.Where(s => !s.IsUsageRights))
+            try
             {
-                int number = signature.Id?.Number ?? signature.Field?.Id?.Number ?? 0;
-                string name = string.IsNullOrEmpty(signature.Field?.FullName) ? $"Signature_{number}" : signature.Field.FullName;
-                LegacyFacts.AddSignature(
-                    facts, number, name, signature.ByteRange ?? [0, 0, 0, 0], signature.Contents.Span,
-                    signature.Name("Filter"), signature.Name("SubFilter"), signature.Text("Reason"), signature.Text("Location"),
-                    signature.Text("ContactInfo"), signature.Text("Name"), LegacyFacts.Date(signature.Text("M")));
+                LegacyFacts.AddSignatures(facts, PdfStructureReader.ReadSignatureFields(doc));
+            }
+            catch (PdfStructureException ex)
+            {
+                facts.Add("signatures", "error: " + ex.Message);
             }
         }
 

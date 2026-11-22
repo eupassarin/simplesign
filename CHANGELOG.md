@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
     (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
     included) and the certification signature (with or without `/Perms`).
-  - `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
+  - The signature fields, `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
     the DocMDP level, encryption and PDF/A detection now read the document through the model
     (the scanning code they used is kept for the parity checks until it is removed).
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
@@ -77,6 +77,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Signature fields are read through the cross-reference** (`PdfStructureReader.ReadSignatureFieldsAsync`, and with it
+  validation, inspection and `PadesExtractor`): a signature whose field is inside an object stream has its field name
+  (it was `Signature_N`); a signature dictionary written again in a later revision is reported once, not once per
+  copy; a file is refused as encrypted only when its trailer says so. The order is still the file's, the CMS still the
+  one the byte range leaves out, and the name still the field's partial name. Inspection reads the document once.
 - **The DSS is read wherever it is written**: a `/VRI` written as its own object (as most signers write it), DSS
   arrays written as references or without a space (`/Certs[`), inline VRI entries, and a DSS or catalog inside an
   object stream were not read; validation now gets each signature's VRI data, and inspection no longer reports such a

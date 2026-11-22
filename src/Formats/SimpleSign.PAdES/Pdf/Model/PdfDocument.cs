@@ -58,6 +58,13 @@ internal sealed class PdfDocument
             var rebuilt = PdfXrefReader.Reconstruct(data, context, ObjectStreamNumbers);
             IsReconstructed = true;
             Revisions = [new PdfRevision(0, [rebuilt], null, data.Length)];
+            if (rebuilt.Trailer.Get(PdfName.Root) is not PdfReference && FindCatalog(Revisions[0]) is { } catalog)
+            {
+                // No trailer names the catalog, and none is among the direct objects: one inside an object stream is.
+                var trailer = new PdfDictionary([new PdfDictionaryEntry(PdfName.Root, new PdfReference(catalog)), .. rebuilt.Trailer.RawEntries]);
+                rebuilt = new PdfXrefSection(PdfXrefSectionKind.Reconstructed, -1, rebuilt.Entries, trailer, null);
+                Revisions = [new PdfRevision(0, [rebuilt], null, data.Length)];
+            }
         }
         else
         {
@@ -455,6 +462,21 @@ internal sealed class PdfDocument
         }
 
         return new ObjectStreamContents(objects);
+    }
+
+    /// <summary>The last catalog (<c>/Type /Catalog</c>) among a revision's objects, compressed ones included.</summary>
+    private PdfObjectId? FindCatalog(PdfRevision revision)
+    {
+        PdfObjectId? found = null;
+        foreach (int number in ObjectNumbers(revision))
+        {
+            if (GetObject(number, revision) is { Value: PdfDictionary dictionary } obj && PdfName.Of("Catalog").Equals(dictionary.Get(PdfName.Type)))
+            {
+                found = obj.Id;
+            }
+        }
+
+        return found;
     }
 
     /// <summary>The object numbers an object stream holds, for reconstruction.</summary>

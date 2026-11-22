@@ -79,27 +79,12 @@ internal static class ExpectedDifferences
                     && c.Model.View().Fields.FirstOrDefault(f => "empty-field/" + f.FullName == d.Key) is { Id: { } id } && IsCompressed(c.Model, id))),
 
         new(
-            "FullyQualifiedFieldName",
-            "A signature's field name is its fully qualified name (§12.7.3.2) in the model, its partial /T in the legacy reader.",
-            (c, d) => d.Key.EndsWith("/name", StringComparison.Ordinal) && d.Legacy is not null
-                && d.Model?.EndsWith("." + d.Legacy, StringComparison.Ordinal) == true),
-
-        new(
             "LegacyKeyAnywhereInDictionary",
             "The legacy reader takes the first occurrence of a key anywhere in the signature dictionary's text, nested "
             + "dictionaries included (/Prop_Build /App /Name); the model reads the dictionary's own entry.",
             (c, d) => Signature(c, d) is { } s && d.Key[(d.Key.LastIndexOf('/') + 1)..] is var key
                 && key is "Name" or "Reason" or "Location" or "ContactInfo" or "Filter" or "SubFilter"
                 && NestedHas(c.Model, s.Signature.Dictionary, key, 0)),
-
-        new(
-            "ContentsFromDictionary",
-            "The legacy reader takes the signature value from the bytes the /ByteRange gap covers; the model from the "
-            + "/Contents of the signature dictionary the cross-reference gives. They differ when the dictionary was written "
-            + "again in a later revision.",
-            (c, d) => d.Key.EndsWith("/contents", StringComparison.Ordinal) && Signature(c, d) is { } s
-                && s.Signature.ByteRange is [var o1, var l1, _, _]
-                && (s.Signature.Dictionary.Source is not { } source || source.Offset > o1 + l1 || source.End <= o1 + l1)),
 
         new(
             "LegacyDssArrayInlineWithSpace",
@@ -147,7 +132,15 @@ internal static class ExpectedDifferences
             "EncryptFromTrailer",
             "A document is encrypted when its trailer has /Encrypt; the legacy reader took the text /Encrypt in the first or "
             + "last 4 KB of the file, wherever it was.",
-            (c, d) => !c.Model.IsEncrypted && (d.Key == "encrypted" && d.Legacy == "true" || d.Key == "embedded-files" && d.Legacy == "encrypted")),
+            (c, d) => !c.Model.IsEncrypted && (d.Key == "encrypted" && d.Legacy == "true" || d.Key == "embedded-files" && d.Legacy == "encrypted"
+                || d.Key.StartsWith("signature", StringComparison.Ordinal) && c.Legacy["signatures"] == "encrypted")),
+
+        new(
+            "SignatureDictionaryReportedOnce",
+            "A signature dictionary written again in a later revision is one signature: the model reports the copy the "
+            + "cross-reference gives; the legacy reader reported every copy it found in the file's text.",
+            (c, d) => d.Key == "signatures/order" && d.Legacy is not null && d.Model is not null
+                && d.Legacy.Split(' ').Distinct().SequenceEqual(d.Model.Split(' '))),
 
         new(
             "DocMdpFromStructure",

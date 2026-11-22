@@ -180,8 +180,9 @@ internal sealed class PdfRevisionView
     public PdfDictionary? Dss => Resolve(Catalog?.Get(s_dss)) as PdfDictionary;
 
     /// <summary>
-    /// The signature dictionaries: those signature fields hold, then those no field points to (orphans), each group in
-    /// file order. Usage-rights signatures are included; <see cref="PdfSignatureInfo.IsUsageRights"/> marks them.
+    /// The signature dictionaries, in file order: those signature fields hold, and those no field points to (orphans: a
+    /// dictionary with a <c>/ByteRange</c> among the revision's objects). Usage-rights signatures are included;
+    /// <see cref="PdfSignatureInfo.IsUsageRights"/> marks them.
     /// </summary>
     public IReadOnlyList<PdfSignatureInfo> Signatures => _signatures.Value;
 
@@ -471,14 +472,13 @@ internal sealed class PdfRevisionView
         foreach (int number in Document.ObjectNumbers(Revision))
         {
             if (Document.GetObject(number, Revision) is { Value: PdfDictionary dictionary } obj
-                && dictionary.ContainsKey(PdfName.ByteRange) && dictionary.ContainsKey(PdfName.Contents)
-                && !seen.Contains(obj.Id))
+                && dictionary.ContainsKey(PdfName.ByteRange) && !seen.Contains(obj.Id))
             {
                 orphans.Add(new PdfSignatureInfo(obj.Id, dictionary, null));
             }
         }
 
-        return [.. held.OrderBy(FileOrder), .. orphans.OrderBy(FileOrder)];
+        return [.. held.Concat(orphans).OrderBy(FileOrder)];
     }
 
     /// <summary>Where a signature dictionary is in the file; those inside object streams last.</summary>

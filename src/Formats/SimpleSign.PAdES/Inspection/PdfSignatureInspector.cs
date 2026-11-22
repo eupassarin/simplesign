@@ -5,6 +5,7 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
 using SimpleSign.PAdES.Validation;
 using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Model;
 using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Inspection;
@@ -41,13 +42,17 @@ public static partial class PdfSignatureInspector
             throw new ArgumentException("Stream must be seekable.", nameof(pdfStream));
         }
 
-        // Read all data in parallel-safe order
+        // The signatures go first: an encrypted document is refused (EncryptedPdfException) before anything else is read.
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var isEncrypted = await PdfStructureReader.IsEncryptedAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var docMdpLevel = await PdfStructureReader.GetDocMdpPermissionLevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // The rest from one reading of the document (ADR 0032).
+        var document = await PdfStructureReader.OpenDocumentAsync(pdfStream, cancellationToken).ConfigureAwait(false);
+        var view = document.View();
+        bool isEncrypted = document.IsEncrypted;
+        int docMdpLevel = view.DocMdpLevel;
+        var pdfALevel = PdfStructureReader.PdfALevelOf(view);
         var pdfVersion = await PdfStructureReader.DetectPdfVersionAsync(pdfStream, cancellationToken).ConfigureAwait(false);
-        var dssInfo = await ExtractDssInfoAsync(pdfStream, cancellationToken).ConfigureAwait(false);
+        var dssInfo = DssSummary(view);
 
         var signatures = new List<SignatureFieldInfo>(fields.Count);
         foreach (var field in fields)
@@ -142,15 +147,13 @@ public static partial class PdfSignatureInspector
         };
     }
 
-    private static async Task<DssInfo?> ExtractDssInfoAsync(
-        Stream pdfStream,
-        CancellationToken ct)
+    private static DssInfo? DssSummary(PdfRevisionView view)
     {
         try
         {
-            return DssReader.Summary((await PdfStructureReader.OpenDocumentAsync(pdfStream, ct).ConfigureAwait(false)).View());
+            return DssReader.Summary(view);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is PdfFilterException or PdfUnsupportedFilterException or InvalidOperationException)
         {
             return null;
         }

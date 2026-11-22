@@ -157,15 +157,14 @@ public sealed class PdfStructureReaderTests
     [Fact(DisplayName = "Signature field name resolves with alternate PDF whitespace")]
     public async Task ReadSignatureFields_FieldReferenceWithAlternateWhitespace_ResolvesName()
     {
-        byte[] pdf = BuildSignedPdf(out _, out _, out _, out _, out _);
-        string pdfText = Encoding.Latin1.GetString(pdf);
-        int xrefPosition = pdfText.IndexOf("xref\n", StringComparison.Ordinal);
-        xrefPosition.ShouldBeGreaterThan(0);
-        const string fieldObject =
-            "5 0 obj\n<< /FT /Sig /T(Signature1) /V\r\n  3\t0 R >>\nendobj\n";
-        byte[] pdfWithField = Encoding.Latin1.GetBytes(
-            pdfText.Insert(xrefPosition, fieldObject));
-        using var stream = new MemoryStream(pdfWithField);
+        // The field's /V reference is written across lines and with a tab: it is read as a token stream.
+        var builder = new Parity.PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] /SigFlags 3 >> >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Object(5, "<< /FT /Sig /T(Signature1) /V\r\n  3\t0 R >>");
+        long gap = builder.Position + "3 0 obj\n<< /Type /Sig /Contents ".Length;
+        builder.Object(3, $"<< /Type /Sig /Contents <3006020101020102> /ByteRange [0 {gap:D10} {gap + 18:D10} 0000000001] >>").EndRevision();
+        using var stream = new MemoryStream(builder.ToArray());
 
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(stream);
 

@@ -88,6 +88,10 @@ internal sealed class PdfFileBuilder
 
     public long Position => _out.Count;
 
+    /// <summary>The trailer's /Root entry; none for <see cref="Root"/>(0).</summary>
+    private string RootEntry => _root > 0 ? $" /Root {_root} 0 R" : "";
+
+    /// <summary>The catalog the trailer names; 0 for a trailer without /Root.</summary>
     public PdfFileBuilder Root(int number)
     {
         _root = number;
@@ -183,7 +187,7 @@ internal sealed class PdfFileBuilder
 
             long offset = _out.Count;
             streamEntries[options.XrefStreamNumber] = (1, offset, 0);
-            WriteXrefStream(options.XrefStreamNumber, streamEntries, $"/Size {size} /Root {_root} 0 R{prevEntry} {options.TrailerExtra}", options.Predictor);
+            WriteXrefStream(options.XrefStreamNumber, streamEntries, $"/Size {size}{RootEntry}{prevEntry} {options.TrailerExtra}", options.Predictor);
             XrefOffsets.Add(offset);
         }
         else
@@ -226,7 +230,7 @@ internal sealed class PdfFileBuilder
 
             string hybrid = hybridOffset is long h ? $" /XRefStm {h}" : "";
             text.Append(options.BeforeTrailer);
-            text.Append(CultureInfo.InvariantCulture, $"trailer{_eol}<< /Size {size} /Root {_root} 0 R{prevEntry}{hybrid} {options.TrailerExtra}>>{_eol}");
+            text.Append(CultureInfo.InvariantCulture, $"trailer{_eol}<< /Size {size}{RootEntry}{prevEntry}{hybrid} {options.TrailerExtra}>>{_eol}");
             Write(text.ToString());
             XrefOffsets.Add(offset);
         }

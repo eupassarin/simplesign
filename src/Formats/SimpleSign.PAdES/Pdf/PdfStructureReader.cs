@@ -45,8 +45,9 @@ public sealed partial class PdfStructureReader
     #region Public API
 
     /// <summary>
-    /// Reads all digital signature fields from a PDF stream.
-    /// Parses the cross-reference table (classic or stream) and scans for /ByteRange dictionaries.
+    /// Reads all digital signature fields from a PDF stream: the signature dictionaries of its latest revision, those
+    /// its signature fields hold and those no field points to, in file order (usage-rights signatures left out). The
+    /// CMS of each is the hexadecimal string its <c>/ByteRange</c> leaves out.
     /// </summary>
     public static async Task<IReadOnlyList<PdfSignatureField>> ReadSignatureFieldsAsync(
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)
@@ -67,9 +68,7 @@ public sealed partial class PdfStructureReader
             Span<byte> data = buffer.AsSpan(0, bytesRead);
 
             ValidatePdfHeader(data);
-            ThrowIfEncrypted(PdfDocument.Open(buffer.AsMemory(0, bytesRead)));
-            var crossRefs = ParseCrossReferenceTable(data);
-            var fields = ExtractSignatureFields(data, crossRefs);
+            var fields = ReadSignatureFields(PdfDocument.Open(buffer.AsMemory(0, bytesRead)));
 
             (logger ?? NullLogger.Instance).PdfSignatureFieldsFound(fields.Count);
 

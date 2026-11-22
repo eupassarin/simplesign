@@ -154,6 +154,23 @@ public sealed class PdfDocumentTests
     }
 
     [Fact]
+    public void Open_NoRootAndTheCatalogInAnObjectStream_FindsTheCatalog()
+    {
+        // The cross-reference stream has no /Root: the catalog is looked for among the objects, compressed ones too.
+        var builder = new PdfFileBuilder()
+            .Root(0)
+            .Compressed(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Compressed(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { XrefStreamNumber = 4, ObjectStreamNumber = 3 });
+
+        var doc = PdfDocument.Open(builder.ToArray());
+
+        doc.IsReconstructed.ShouldBeTrue();
+        doc.RootId.ShouldBe(new PdfObjectId(1, 0));
+        doc.Catalog.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void GetObject_ChainCutShort_FindsOlderObjectsByHeader()
     {
         var builder = ThreeObjects().EndRevision();

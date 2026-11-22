@@ -1,12 +1,73 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
 using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
 
 public sealed partial class PdfStructureReader
 {
     #region Signature Field Extraction
+
+    /// <summary>
+    /// The signature fields of a document's latest revision, read through the object model (ADR 0032): every signature
+    /// dictionary with a <c>/ByteRange</c> of four integers, in file order, but usage-rights ones. The field name is the
+    /// holding field's partial name (<c>/T</c>), or <c>Signature_N</c> for an orphan; the CMS is read from the byte
+    /// range's gap, the bytes the signature leaves out.
+    /// </summary>
+    /// <exception cref="Exceptions.EncryptedPdfException">The document is encrypted.</exception>
+    /// <exception cref="Exceptions.PdfStructureException">The document has no catalog that can be read.</exception>
+    internal static IReadOnlyList<PdfSignatureField> ReadSignatureFields(PdfDocument document)
+    {
+        ThrowIfEncrypted(document);
+
+        // A file with no catalog to read is refused, as it always was (it had no startxref, or nothing at it).
+        if (document.Catalog is null)
+        {
+            throw new Exceptions.PdfStructureException(document.StartXref < 0
+                ? "PDF is missing 'startxref' marker, and no catalog was found in it."
+                : "The PDF's catalog cannot be read.");
+        }
+
+        var data = document.Data.Span;
+        var fields = new List<PdfSignatureField>();
+        foreach (var signature in document.View().Signatures)
+        {
+            if (signature.IsUsageRights || signature.ByteRange is not [long offset1, long length1, long offset2, long length2])
+            {
+                continue;
+            }
+
+            var byteRange = new PdfByteRange { Offset1 = offset1, Length1 = length1, Offset2 = offset2, Length2 = length2 };
+            int number = signature.Id?.Number ?? signature.Field?.Id?.Number ?? 0;
+            fields.Add(new PdfSignatureField
+            {
+                FieldName = string.IsNullOrEmpty(signature.Field?.PartialName) ? $"Signature_{number}" : signature.Field.PartialName,
+                ByteRange = byteRange,
+                ContentsBytes = ExtractContents(byteRange, data),
+                SigDictObjectNumber = number,
+                PdfSigningTime = signature.Text("M") is { } time ? ParsePdfDate(time) : null,
+                Filter = signature.Name("Filter"),
+                SubFilter = signature.Name("SubFilter"),
+                Reason = NullIfEmpty(signature.Text("Reason")),
+                Location = NullIfEmpty(signature.Text("Location")),
+                ContactInfo = NullIfEmpty(signature.Text("ContactInfo")),
+                SignerName = NullIfEmpty(signature.Text("Name")),
+            });
+        }
+
+        return fields.AsReadOnly();
+    }
+
+    /// <summary>An empty text string is no value, as the reader has always reported it.</summary>
+    private static string? NullIfEmpty(string? text) => string.IsNullOrEmpty(text) ? null : text;
+
+    /// <summary>
+    /// The signature fields as the scanning code read them before the object model (ADR 0032): kept to check
+    /// <see cref="ReadSignatureFields"/> against it until the old code is removed.
+    /// </summary>
+    internal static IReadOnlyList<PdfSignatureField> ReadSignatureFieldsLegacy(ReadOnlySpan<byte> data) =>
+        ExtractSignatureFields(data, ParseCrossReferenceTable(data));
 
     /// <summary>
     /// Scans the PDF data for /ByteRange markers and extracts signature field metadata.
