@@ -38,10 +38,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A PDF object model, first step (ADR 0032, proposed)**, internal: the objects, lexer and parser of
-  `SimpleSign.PAdES.Pdf.Model`, which the library will move to step by step, with parity checked against the current
-  code, before the signature envelope is built on it. The parser reads arrays and dictionaries without recursion, keeps
-  where each object came from, and records what it repairs. Nothing uses it yet.
+- **A PDF object model, first steps (ADR 0032, proposed)**, internal: `SimpleSign.PAdES.Pdf.Model`, which the library
+  will move to step by step, with parity checked against the current code, before the signature envelope is built on
+  it. Nothing uses it yet.
+  - Objects, lexer and parser: arrays and dictionaries read without recursion, where each object came from kept, and
+    every repair recorded.
+  - Stream filters: FlateDecode with the 50 MB limit, ASCII85Decode, ASCIIHexDecode, the PNG predictors (Average and
+    Paeth too) and TIFF predictor 2; LZWDecode and RunLengthDecode are refused as unsupported.
+  - Cross-reference and revisions: tables, streams and hybrid files (`/XRefStm`), object streams within a budget, a
+    linearized file's two sections as one revision, objects found through the cross-reference by revision, and the
+    cross-reference rebuilt from the object headers when it cannot be read.
+  - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
+    difference is catalogued with its reason (the current reader loses tables with white-space before `xref` or
+    `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists).
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
   longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
   constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a

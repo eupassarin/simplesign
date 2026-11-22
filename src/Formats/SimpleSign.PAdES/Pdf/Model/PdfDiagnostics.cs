@@ -44,6 +44,59 @@ internal enum PdfRepairKind
 
     /// <summary>A stream had no <c>endstream</c>: its data runs to the end of what could be read.</summary>
     MissingEndStream,
+
+    /// <summary>No <c>startxref</c> was found: the cross-reference was rebuilt.</summary>
+    StartXrefMissing,
+
+    /// <summary>The last <c>startxref</c> is further than 1024 bytes from the end of the file.</summary>
+    StartXrefNotAtEnd,
+
+    /// <summary>
+    /// A <c>startxref</c> or <c>/Prev</c> offset did not point at a cross-reference section; one was found close by.
+    /// </summary>
+    XrefOffsetWrong,
+
+    /// <summary>A cross-reference section could not be read: the sections before it in the chain are lost.</summary>
+    XrefSectionUnreadable,
+
+    /// <summary>A cross-reference entry could not be read, or pointed at offset 0: it was skipped.</summary>
+    XrefEntryInvalid,
+
+    /// <summary>
+    /// A table subsection started at 1 but its first entry was object 0's (<c>0000000000 65535 f</c>): it was read from 0.
+    /// </summary>
+    XrefSubsectionShifted,
+
+    /// <summary>A cross-reference stream had fewer entries than its <c>/Index</c> says.</summary>
+    XrefStreamTruncated,
+
+    /// <summary>A <c>/Prev</c> pointed back at a section already read: the chain stops there.</summary>
+    PrevLoop,
+
+    /// <summary>The chain had more sections than <see cref="PdfReadLimits.MaxXrefSections"/>: the oldest are not read.</summary>
+    TooManyXrefSections,
+
+    /// <summary>The cross-reference was rebuilt from the <c>N G obj</c> headers of the file.</summary>
+    XrefRebuilt,
+
+    /// <summary>No trailer with a <c>/Root</c> was found: the catalog was looked for among the objects.</summary>
+    TrailerMissing,
+
+    /// <summary>
+    /// A cross-reference entry's offset did not point at the object it names: the object was found by its header.
+    /// </summary>
+    ObjectOffsetWrong,
+
+    /// <summary>An object stream could not be read, or did not hold the object asked for.</summary>
+    ObjectStreamUnreadable,
+
+    /// <summary>
+    /// The object streams of the document decoded to more than <see cref="PdfReadLimits.MaxTotalObjectStreamBytes"/>.
+    /// </summary>
+    ObjectStreamBudgetExceeded,
+
+    /// <summary>A chain of references was longer than <see cref="PdfReadLimits.MaxReferenceHops"/>: read as null.</summary>
+    ReferenceHopsExceeded,
 }
 
 /// <summary>One repair: what was wrong and where.</summary>
