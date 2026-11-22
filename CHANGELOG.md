@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
     (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
     included) and the certification signature (with or without `/Perms`).
+  - `PdfEmbeddedFiles.Read` and the text anchors of a signature appearance now read the document through the model
+    (the scanning code they used is kept for the parity checks until it is removed).
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
     difference is catalogued with its reason. The current reader loses tables with white-space before `xref` or
     `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists; it does not see
@@ -74,6 +76,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`PdfEmbeddedFiles.Read` reads what the cross-reference says**: an embedded file compressed with a predictor
+  (`/DecodeParms`) or ASCIIHexDecode is decoded instead of refused; a file name without a byte order mark is decoded
+  as PDFDocEncoding (it was Latin-1); a name tree node that its kids point back to is read once; a FlateDecode stream
+  that is not zlib is refused as corrupt.
+- **Text anchors find text drawn with a Type 0 font whose CIDFont is written inline** in `/DescendantFonts`: its
+  widths were lost and the anchor's position drifted along the line.
 - **A PDF text string with a UTF-8 byte order mark (PDF 2.0) is read as UTF-8**: the signature dictionary's `/Name`,
   `/Reason`, `/Location` and `/ContactInfo` written as `EF BB BF …` were decoded as PDFDocEncoding.
 - **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and

@@ -58,6 +58,12 @@ public sealed class PdfFiltersTests
     public void Inflate_SingleByte_Throws() =>
         Should.Throw<PdfFilterException>(() => PdfFilters.Inflate([0x78])).FilterName.ShouldBe("FlateDecode");
 
+    [Theory]
+    [InlineData(new byte[] { 0x6E, 0x6F, 0x74, 0x20 })] // "not ": method 14
+    [InlineData(new byte[] { 0x78, 0x9D, 0x03, 0x00 })] // method 8, but 0x789D is not a multiple of 31
+    public void Inflate_NotAZlibHeader_Throws(byte[] data) =>
+        Should.Throw<PdfFilterException>(() => PdfFilters.Inflate(data)).Message.ShouldContain("zlib header");
+
     [Fact]
     public void Inflate_Truncated_ReturnsWhatWasInflated()
     {
@@ -280,6 +286,7 @@ public sealed class PdfFiltersTests
         string fixtures = RepositoryPaths.Get("tests", "integration", "SimpleSign.Integration.Tests", "Fixtures");
         int compared = 0;
         int files = 0;
+        var notZlib = new SortedSet<string>(StringComparer.Ordinal);
         foreach (string path in Directory.EnumerateFiles(fixtures, "*.pdf", SearchOption.AllDirectories))
         {
             files++;
@@ -302,6 +309,13 @@ public sealed class PdfFiltersTests
                 {
                     Should.Throw<PdfFilterException>(() => PdfFilters.Inflate(raw), where);
                 }
+                else if (raw.Length >= 2 && ((raw[0] & 0x0F) != 8 || ((raw[0] << 8) | raw[1]) % 31 != 0))
+                {
+                    // Not zlib (an encrypted stream): the old inflate skipped two bytes and returned whatever came out;
+                    // the header is checked now.
+                    Should.Throw<PdfFilterException>(() => PdfFilters.Inflate(raw), where).Message.ShouldContain("zlib header");
+                    notZlib.Add(Path.GetFileName(path));
+                }
                 else
                 {
                     PdfFilters.Inflate(raw).ShouldBe(expected, where);
@@ -313,6 +327,7 @@ public sealed class PdfFiltersTests
 
         files.ShouldBeGreaterThan(10);
         compared.ShouldBeGreaterThan(100);
+        notZlib.ShouldBe(["encrypted.pdf"]);
     }
 
     /// <summary>

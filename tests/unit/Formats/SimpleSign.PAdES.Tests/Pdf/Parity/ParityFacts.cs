@@ -180,18 +180,57 @@ internal static class LegacyFacts
         var dss = DssExtractor.ParseExistingDss(data);
         AddDss(facts, dss.CertObjRefs, dss.OcspObjRefs, dss.CrlObjRefs, dss.VriEntries.Select(e => (e.Key, e.Value)));
 
-        // Embedded files.
+        AddEmbeddedFiles(facts, () => PdfEmbeddedFiles.ReadLegacy(data));
+        AddPageTexts(facts, () => PdfTextLocator.ReadPagesLegacy(data));
+    }
+
+    /// <summary>The embedded files a reader gives: names and a hash of each one's data, or the error it raises.</summary>
+    public static void AddEmbeddedFiles(FactSet facts, Func<IReadOnlyList<PdfEmbeddedFile>> read)
+    {
+        string value;
         try
         {
-            facts.Add("embedded-files", string.Join(" | ", PdfEmbeddedFiles.Read(data).Select(f => f.Name)));
+            value = string.Join(" | ", read().Select(f => $"{f.Name} {Convert.ToHexString(SHA256.HashData(f.Data.Span))[..12]}"));
         }
         catch (EncryptedPdfException)
         {
-            facts.Add("embedded-files", "encrypted");
+            value = "encrypted";
         }
         catch (PdfStructureException ex)
         {
-            facts.Add("embedded-files", "error: " + ex.Message);
+            value = "error: " + ex.Message;
+        }
+
+        facts.Add("embedded-files", value);
+    }
+
+    /// <summary>The text of each page a reader gives, and a hash of where each character is (to a hundredth).</summary>
+    public static void AddPageTexts(FactSet facts, Func<List<(string Text, List<(float X, float Y)> Origins)?>> read)
+    {
+        List<(string Text, List<(float X, float Y)> Origins)?> pages;
+        try
+        {
+            pages = read();
+        }
+        catch (PdfStructureException ex)
+        {
+            facts.Add("text", "error: " + ex.Message);
+            return;
+        }
+
+        facts.Add("text/pages", pages.Count.ToString(CultureInfo.InvariantCulture));
+        for (int i = 0; i < pages.Count; i++)
+        {
+            if (pages[i] is not { } page)
+            {
+                facts.Add($"text/{i + 1}", "unreadable");
+                continue;
+            }
+
+            var (text, origins) = page;
+            string places = string.Join(";", origins.Select(o => string.Create(CultureInfo.InvariantCulture, $"{o.X:F2},{o.Y:F2}")));
+            facts.Add($"text/{i + 1}", $"{text.Length} chars, {Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..12]}: {(text.Length > 60 ? text[..60] : text)}");
+            facts.Add($"text/{i + 1}/origins", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(places)))[..12]);
         }
     }
 
@@ -326,7 +365,8 @@ internal static class ModelFacts
             facts, Refs(view, dss?.Get("Certs")), Refs(view, dss?.Get("OCSPs")), Refs(view, dss?.Get("CRLs")),
             vri?.Where(e => e.Value is PdfReference).Select(e => (e.Key.Value, ((PdfReference)e.Value).Id.Number)) ?? []);
 
-        facts.Add("embedded-files", doc.IsEncrypted ? "encrypted" : string.Join(" | ", view.NameTree("EmbeddedFiles").Select(e => e.Key.Text)));
+        LegacyFacts.AddEmbeddedFiles(facts, () => PdfEmbeddedFiles.Read(doc.Data));
+        LegacyFacts.AddPageTexts(facts, () => PdfTextLocator.ReadPages(doc.Data.ToArray()));
     }
 
     private static IEnumerable<int> Refs(PdfRevisionView view, PdfObject? array) =>

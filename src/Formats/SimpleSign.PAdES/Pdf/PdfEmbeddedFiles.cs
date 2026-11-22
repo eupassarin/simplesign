@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using SimpleSign.PAdES.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
 
@@ -12,9 +13,10 @@ public sealed record PdfEmbeddedFile(string Name, ReadOnlyMemory<byte> Data);
 
 /// <summary>
 /// Reads the files embedded in a PDF document: the entries of the catalog's <c>/Names /EmbeddedFiles</c> name tree
-/// (ISO 32000-1 §7.11.4, §7.9.6), each decoded (<c>/FlateDecode</c>, <c>/ASCII85Decode</c>).
+/// (ISO 32000-1 §7.11.4, §7.9.6), each decoded (<c>/FlateDecode</c> with its predictors, <c>/ASCII85Decode</c>,
+/// <c>/ASCIIHexDecode</c>).
 /// <para>
-/// The document is read as it is now, its last revision, wherever in the file an object is. To know that a signature
+/// The document is read as it is now, its last revision, through its cross-reference. To know that a signature
 /// covers what is read, check that the signature's byte range covers the whole file
 /// (<see cref="PdfByteRange.CoversEntireFile"/>) and that the bytes it leaves out — the signature's own
 /// <c>/Contents</c> — hold a hexadecimal string and nothing else: an object written there is read like any other.
@@ -50,6 +52,77 @@ public static class PdfEmbeddedFiles
     /// </exception>
     public static IReadOnlyList<PdfEmbeddedFile> Read(ReadOnlyMemory<byte> pdf)
     {
+        var document = PdfDocument.Open(pdf);
+        if (document.IsEncrypted)
+        {
+            throw new EncryptedPdfException("This PDF is encrypted: its embedded files cannot be read. Decrypt it first.");
+        }
+
+        var view = document.View();
+        if (view.Catalog is null)
+        {
+            throw new PdfStructureException("The PDF's catalog cannot be read.");
+        }
+
+        var files = new List<PdfEmbeddedFile>();
+        foreach (var (key, value) in view.NameTree("EmbeddedFiles"))
+        {
+            if (File(view, key, value) is not { } file)
+            {
+                continue;
+            }
+
+            if (files.Count == MaxFiles)
+            {
+                throw new PdfStructureException($"The PDF embeds more than {MaxFiles} files.");
+            }
+
+            files.Add(file);
+        }
+
+        return files;
+    }
+
+    /// <summary>The file of a name tree entry; null when the entry has no embedded file stream.</summary>
+    private static PdfEmbeddedFile? File(PdfRevisionView view, PdfString key, PdfObject value)
+    {
+        if (view.Resolve(value) is not PdfDictionary specification
+            || view.Resolve(specification.Get("EF")) is not PdfDictionary streams
+            || view.Resolve(streams.Get("UF") ?? streams.Get("F")) is not PdfStream stream)
+        {
+            return null;
+        }
+
+        string name = (view.Resolve(specification.Get("UF")) as PdfString)?.Text
+            ?? (view.Resolve(specification.Get("F")) as PdfString)?.Text
+            ?? key.Text;
+        try
+        {
+            byte[] content = PdfStreamDecoding.Decode(stream, MaxFileSize, item => view.Resolve(item));
+
+            // Without a filter the data is not decoded, so not held to the limit by the filters.
+            return content.Length > MaxFileSize ? throw TooLarge(name) : new PdfEmbeddedFile(name, content);
+        }
+        catch (PdfDecodedSizeLimitException)
+        {
+            throw TooLarge(name);
+        }
+        catch (PdfUnsupportedFilterException ex)
+        {
+            throw new PdfStructureException($"The embedded file '{name}' uses the filter /{ex.FilterName}, which is not supported.", ex);
+        }
+        catch (PdfFilterException ex)
+        {
+            throw new PdfStructureException($"The embedded file '{name}' cannot be decoded: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Reads the embedded files as the scanning reader did before the object model (ADR 0032): kept to check
+    /// <see cref="Read"/> against it until the old code is removed.
+    /// </summary>
+    internal static IReadOnlyList<PdfEmbeddedFile> ReadLegacy(ReadOnlyMemory<byte> pdf)
+    {
         var data = pdf.Span;
         if (PdfStructureReader.IsEncrypted(data))
         {
@@ -78,7 +151,7 @@ public static class PdfEmbeddedFiles
         {
             for (int i = 0; i + 1 < entries.Count; i += 2)
             {
-                if (File(data, entries[i], entries[i + 1]) is not { } file)
+                if (LegacyFile(data, entries[i], entries[i + 1]) is not { } file)
                 {
                     continue;
                 }
@@ -113,7 +186,7 @@ public static class PdfEmbeddedFiles
     }
 
     /// <summary>The file of a name tree entry; null when the entry has no embedded file stream.</summary>
-    private static PdfEmbeddedFile? File(ReadOnlySpan<byte> data, object? key, object? value)
+    private static PdfEmbeddedFile? LegacyFile(ReadOnlySpan<byte> data, object? key, object? value)
     {
         if (Dictionary(data, value) is not { } specification || Dictionary(data, specification.GetValueOrDefault("EF")) is not { } streams)
         {

@@ -59,7 +59,30 @@ internal static class ParityCorpus
         ["signature-prop-build-name"] = ["LegacyKeyAnywhereInDictionary"],
         ["signature-dictionary-rewritten"] = ["ContentsFromDictionary"],
         ["dss-indirect-arrays"] = ["LegacyDssArrayInlineWithSpace", "LegacyVriInlineOnly"],
+        ["text-inline-descendant-font"] = ["LegacyInlineDescendantFont"],
+        ["text-encrypted"] = ["EncryptedContentUnreadable"],
+        ["attachment-predictor"] = ["EmbeddedFileDecodeParms"],
+        ["attachment-pdfdoc-name"] = ["PdfDocEncodingText"],
+        ["attachment-tree-loop"] = ["NameTreeNodeReadOnce"],
     };
+
+    /// <summary>A document whose catalog's /Names /EmbeddedFiles is object 5.</summary>
+    private static PdfFileBuilder Attachments() => new PdfFileBuilder()
+        .Object(1, "<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles 5 0 R >> >>")
+        .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>");
+
+    private const string CMap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap 1 begincodespacerange <0000> <FFFF> "
+        + "endcodespacerange 2 beginbfchar <0001> <0041> <0002> <0020> endbfchar 1 beginbfrange <0003> <0005> <0043> endbfrange "
+        + "endcmap end end";
+
+    /// <summary>A one-page document that shows "A CDE" with font 4, and the objects it needs after it.</summary>
+    private static PdfFileBuilder Text(string font, string content = "BT /F1 10 Tf 20 40 Td <00010002000300040005> Tj ET") => new PdfFileBuilder()
+        .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+        .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>")
+        .Object(4, font)
+        .Stream(5, "", System.Text.Encoding.Latin1.GetBytes(content))
+        .Stream(6, "", System.Text.Encoding.Latin1.GetBytes(CMap));
 
     /// <summary>
     /// Writes a signature dictionary whose /ByteRange gap is exactly its /Contents, as a signer writes it (the CMS is
@@ -170,6 +193,49 @@ internal static class ParityCorpus
             .Object(22, "<< /AABBCCDDEEFF00112233445566778899AABBCCDD 24 0 R >>")
             .Stream(23, "", [0x30, 0x00])
             .Object(24, "<< /Cert [23 0 R] >>")
+            .EndRevision().ToArray(),
+        ["text-helvetica"] = () => Text("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", "BT /F1 12 Tf 50 700 Td (Contratante: Fulano) Tj ET")
+            .EndRevision().ToArray(),
+        ["text-type0"] = () => Text("<< /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+Arial /Encoding /Identity-H /DescendantFonts [7 0 R] /ToUnicode 6 0 R >>")
+            .Object(7, "<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+Arial /DW 1000 /W [1 [500 250] 3 5 600] >>")
+            .EndRevision().ToArray(),
+        ["text-inline-descendant-font"] = () => Text(
+                "<< /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+Arial /Encoding /Identity-H /ToUnicode 6 0 R "
+                + "/DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+Arial /FontDescriptor 7 0 R /DW 1000 /W [1 [500 250] 3 5 600] >>] >>")
+            .Object(7, "<< /Type /FontDescriptor /FontName /ABCDEF+Arial /Flags 32 >>")
+            .EndRevision().ToArray(),
+        ["text-encrypted"] = () => new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>")
+            .Object(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+            // Not zlib (0x0524): what an encrypted stream looks like; after those two bytes, an empty deflate block.
+            .Stream(5, "/Filter /FlateDecode", [0x05, 0x24, 0x03, 0x00])
+            .Object(9, "<< /Filter /Standard /V 1 /R 2 /O <00> /U <00> /P -4 >>")
+            .EndRevision(options: new RevisionOptions { TrailerExtra = "/Encrypt 9 0 R " }).ToArray(),
+        ["attachments"] = () => Attachments()
+            .Object(5, "<< /Kids [6 0 R] >>")
+            .Object(6, "<< /Names [(a.xml) 7 0 R (b.txt) 9 0 R] >>")
+            .Object(7, "<< /Type /Filespec /F (a.xml) /UF (a.xml) /EF << /F 8 0 R >> >>")
+            .Stream(8, "/Type /EmbeddedFile /Filter /FlateDecode", PdfFileBuilder.Zlib(System.Text.Encoding.ASCII.GetBytes("<invoice/>")))
+            .Object(9, "<< /Type /Filespec /F (b.txt) /EF << /F 10 0 R >> >>")
+            .Stream(10, "/Type /EmbeddedFile", System.Text.Encoding.ASCII.GetBytes("plain"))
+            .EndRevision().ToArray(),
+        ["attachment-predictor"] = () => Attachments()
+            .Object(5, "<< /Names [(rows.bin) 7 0 R] >>")
+            .Object(7, "<< /Type /Filespec /F (rows.bin) /EF << /F 8 0 R >> >>")
+            .Stream(8, "/Type /EmbeddedFile /Filter /FlateDecode /DecodeParms << /Predictor 12 /Columns 2 >>", PdfFileBuilder.Zlib([2, 1, 2, 2, 1, 1]))
+            .EndRevision().ToArray(),
+        ["attachment-pdfdoc-name"] = () => Attachments()
+            .Object(5, "<< /Names [(x) 7 0 R] >>")
+            .Object(7, "<< /Type /Filespec /F (\\200 quote.txt) /EF << /F 8 0 R >> >>")
+            .Stream(8, "/Type /EmbeddedFile", System.Text.Encoding.ASCII.GetBytes("x"))
+            .EndRevision().ToArray(),
+        ["attachment-tree-loop"] = () => Attachments()
+            .Object(5, "<< /Names [(k) 7 0 R] /Kids [5 0 R] >>")
+            .Object(7, "<< /Type /Filespec /F (k) /EF << /F 8 0 R >> >>")
+            .Stream(8, "/Type /EmbeddedFile", System.Text.Encoding.ASCII.GetBytes("k"))
             .EndRevision().ToArray(),
         ["prev-loop"] = () =>
         {

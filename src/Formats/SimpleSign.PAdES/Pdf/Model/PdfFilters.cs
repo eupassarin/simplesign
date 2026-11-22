@@ -149,14 +149,14 @@ internal static class PdfFilters
     }
 
     /// <summary>
-    /// Inflates zlib data (RFC 1950): the two-byte header (six with a preset dictionary) is skipped and the
-    /// deflate data after it inflated; the Adler-32 checksum is not checked, as by the old reader and by viewers.
+    /// Inflates zlib data (RFC 1950): the two-byte header (six with a preset dictionary) is checked and skipped and the
+    /// deflate data after it inflated; the Adler-32 checksum is not checked, as by viewers.
     /// </summary>
     /// <param name="data">The zlib bytes.</param>
     /// <param name="maxDecodedBytes">The most bytes inflating may produce; it stops as soon as it would pass them.</param>
     /// <returns>The inflated bytes; empty for empty input or a header alone. A truncated stream gives what was inflated.</returns>
     /// <exception cref="PdfDecodedSizeLimitException">The output would go over <paramref name="maxDecodedBytes"/>.</exception>
-    /// <exception cref="PdfFilterException">A lone header byte, or corrupt deflate data.</exception>
+    /// <exception cref="PdfFilterException">A lone header byte, a header that is not zlib's, or corrupt deflate data.</exception>
     internal static byte[] Inflate(ReadOnlySpan<byte> data, int maxDecodedBytes = DefaultMaxDecodedBytes)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDecodedBytes);
@@ -168,6 +168,12 @@ internal static class PdfFilters
         if (data.Length < 2)
         {
             throw new PdfFilterException(FlateDecode, "the zlib header is truncated.");
+        }
+
+        // RFC 1950 §2.2: compression method 8 (deflate), and CMF·256 + FLG a multiple of 31.
+        if ((data[0] & 0x0F) != 8 || ((data[0] << 8) | data[1]) % 31 != 0)
+        {
+            throw new PdfFilterException(FlateDecode, $"0x{data[0]:X2}{data[1]:X2} is not a zlib header.");
         }
 
         int headerSize = (data[1] & Asn1Tags.ZlibFdictMask) != 0 ? 6 : 2;

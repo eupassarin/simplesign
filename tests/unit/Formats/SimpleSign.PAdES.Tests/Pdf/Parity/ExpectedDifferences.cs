@@ -111,6 +111,43 @@ internal static class ExpectedDifferences
             "LegacyVriInlineOnly",
             "The legacy reader reads /VRI only when it is a dictionary written inside the DSS; the model follows a reference.",
             (c, d) => d.Key == "dss/VRI" && string.IsNullOrEmpty(d.Legacy) && c.Model.View().Dss?.Get("VRI") is PdfReference),
+
+        new(
+            "LegacyInlineDescendantFont",
+            "A Type 0 font whose /DescendantFonts holds the CIDFont dictionary inline: the legacy reader takes the first "
+            + "reference inside that dictionary for the CIDFont, loses its /W and places every glyph 1000 units wide.",
+            (c, d) => d.Key.StartsWith("text/", StringComparison.Ordinal) && d.Key.EndsWith("/origins", StringComparison.Ordinal)
+                && int.TryParse(d.Key.Split('/')[1], out int page) && page <= c.Model.View().Pages.Count
+                && c.Model.Resolve(c.Model.View().Pages[page - 1].Resources?.Get("Font")) is PdfDictionary fonts
+                && fonts.Any(f => c.Model.Resolve(f.Value) is PdfDictionary font
+                    && c.Model.Resolve(font.Get("DescendantFonts")) is PdfArray { Count: > 0 } descendants && descendants[0] is PdfDictionary)),
+
+        new(
+            "EncryptedContentUnreadable",
+            "The content of an encrypted document is not decrypted: the model refuses its streams (not zlib), the legacy "
+            + "reader inflated them as they were. Neither finds text.",
+            (c, d) => c.Model.IsEncrypted && d.Key.StartsWith("text/", StringComparison.Ordinal) && d.Model is null or "unreadable"),
+
+        new(
+            "EmbeddedFileDecodeParms",
+            "An embedded file with /DecodeParms (a predictor) was refused by the legacy reader; the model decodes it.",
+            (c, d) => d.Key == "embedded-files" && d.Legacy?.Contains("/DecodeParms", StringComparison.Ordinal) == true
+                && d.Model?.StartsWith("error", StringComparison.Ordinal) == false),
+
+        new(
+            "PdfDocEncodingText",
+            "A text string without a byte order mark is PDFDocEncoding (ISO 32000-1 Annex D); the legacy attachment reader "
+            + "read it as Latin-1, which differs in 0x18–0x1F and 0x80–0xA0.",
+            (c, d) => d.Key == "embedded-files" && d.Legacy is not null && d.Model is not null
+                && d.Legacy.Length == d.Model.Length
+                && d.Legacy.Zip(d.Model).All(p => p.First == p.Second || p.First is (>= '\u0018' and <= '\u001F') or (>= '\u0080' and <= '\u00A0'))),
+
+        new(
+            "NameTreeNodeReadOnce",
+            "A name tree whose /Kids point back to the root: the legacy reader read the root a second time, the model reads "
+            + "each node once.",
+            (c, d) => d.Key == "embedded-files" && d.Legacy is not null && d.Model is not null
+                && d.Legacy.StartsWith(d.Model + " | ", StringComparison.Ordinal)),
     ];
 
     private static (int Number, PdfSignatureInfo Signature)? Signature(ParityContext c, FactDifference d)
