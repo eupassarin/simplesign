@@ -148,21 +148,19 @@ public static partial class PdfSignatureInspector
     {
         try
         {
-            pdfStream.Seek(0, SeekOrigin.Begin);
-            int length = (int)Math.Min(pdfStream.Length, PdfStructureReader.MaxPdfSize);
-            var pdfBytes = new byte[length];
-            int read = 0;
-            while (read < length)
-            {
-                int n = await pdfStream.ReadAsync(pdfBytes.AsMemory(read, length - read), ct).ConfigureAwait(false);
-                if (n == 0)
-                {
-                    break;
-                }
-                read += n;
-            }
+            return DssReader.Summary((await PdfStructureReader.OpenDocumentAsync(pdfStream, ct).ConfigureAwait(false)).View());
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
 
-            var data = pdfBytes.AsSpan(0, read);
+    /// <summary>The DSS summary as the scanning code read it before the object model (ADR 0032), for the parity checks.</summary>
+    internal static DssInfo? ExtractDssInfoLegacy(ReadOnlySpan<byte> data)
+    {
+        try
+        {
             var dssDictSlice = DssExtractor.FindDssDictionary(data);
             if (dssDictSlice is null)
             {

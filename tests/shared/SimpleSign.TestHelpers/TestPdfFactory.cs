@@ -60,6 +60,46 @@ public static class TestPdfFactory
     }
 
     /// <summary>
+    /// Creates a one-page PDF declared PDF/A by its catalog's XMP metadata stream (ISO 19005: <c>pdfaid:part</c> and
+    /// <c>pdfaid:conformance</c>), with a correct cross-reference table.
+    /// </summary>
+    /// <param name="part">The PDF/A part: 1, 2, 3 or 4.</param>
+    /// <param name="conformance">The conformance level: A, B or U.</param>
+    public static byte[] CreateMinimalPdfA(int part, char conformance)
+    {
+        string xmp = "<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?><x:xmpmeta xmlns:x=\"adobe:ns:meta/\">"
+            + "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" "
+            + "xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\">"
+            + string.Create(CultureInfo.InvariantCulture, $"<pdfaid:part>{part}</pdfaid:part><pdfaid:conformance>{conformance}</pdfaid:conformance>")
+            + "</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end=\"w\"?>";
+        string[] objects =
+        [
+            "<< /Type /Catalog /Pages 2 0 R /Metadata 4 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
+            string.Create(CultureInfo.InvariantCulture, $"<< /Type /Metadata /Subtype /XML /Length {Encoding.UTF8.GetByteCount(xmp)} >>\nstream\n{xmp}\nendstream"),
+        ];
+
+        var pdf = new StringBuilder("%PDF-1.7\n");
+        var offsets = new List<int>();
+        for (int i = 0; i < objects.Length; i++)
+        {
+            offsets.Add(pdf.Length);
+            pdf.Append(CultureInfo.InvariantCulture, $"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
+        }
+
+        int xref = pdf.Length;
+        pdf.Append(CultureInfo.InvariantCulture, $"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+        foreach (int offset in offsets)
+        {
+            pdf.Append(CultureInfo.InvariantCulture, $"{offset:D10} 00000 n \n");
+        }
+
+        pdf.Append(CultureInfo.InvariantCulture, $"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        return Encoding.Latin1.GetBytes(pdf.ToString());
+    }
+
+    /// <summary>
     /// Creates a one-page PDF with embedded files: a <c>/Names /EmbeddedFiles</c> name tree whose entries are file
     /// specifications with a <c>/FlateDecode</c> stream each, named in UTF-16BE (as Acrobat writes them).
     /// </summary>

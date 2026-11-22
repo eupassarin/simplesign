@@ -92,8 +92,8 @@ internal sealed class PdfDocument
     /// <summary>Whether the cross-reference was rebuilt from the object headers.</summary>
     public bool IsReconstructed { get; }
 
-    /// <summary>Whether the trailer has <c>/Encrypt</c>.</summary>
-    public bool IsEncrypted => Trailer.ContainsKey(PdfName.Encrypt);
+    /// <summary>Whether the latest revision's trailer (any of its sections', for a linearized file) has <c>/Encrypt</c>.</summary>
+    public bool IsEncrypted => Latest.Sections.Any(s => s.Trailer.ContainsKey(PdfName.Encrypt));
 
     /// <summary>Whether the first object of the file is a linearization dictionary (ISO 32000-1 Annex F).</summary>
     public bool IsLinearized => _linearized.Value;

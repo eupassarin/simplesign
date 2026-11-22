@@ -206,6 +206,13 @@ internal sealed class PdfRevisionView
             ? (int)p.Value
             : null;
 
+    /// <summary>
+    /// The DocMDP level (§12.8.2.2, Table 254): 0 without a certification signature; its <c>/P</c> when it is 1, 2 or 3;
+    /// 1, the most restrictive, when <c>/P</c> is absent or out of range (as the library has always read it; the
+    /// standard's default is 2, ADR 0032 follow-ups).
+    /// </summary>
+    public int DocMdpLevel => CertificationSignature is null ? 0 : DocMdpPermissions is int p and >= 1 and <= 3 ? p : 1;
+
     /// <summary>The number the next new object of an update to this revision gets.</summary>
     public int NextObjectNumber
     {

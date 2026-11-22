@@ -88,7 +88,7 @@ public sealed class SigningLoggingTests : IDisposable
     public async Task SignAsync_PdfAPreservationWarning_LogsAndSigns()
     {
         var logger = new RecordingLogger();
-        byte[] pdfA2b = [.. CreateMinimalPdf(), .. "\n%<pdfaid:part>2</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>\n"u8];
+        byte[] pdfA2b = TestPdfFactory.CreateMinimalPdfA(2, 'B');
         byte[] cmykJpeg = [0xFF, 0xD8, 0xFF, 0xC0, 0, 20, 8, 0, 8, 0, 8, 4, 1, 0x11, 0, 2, 0x11, 0, 3, 0x11, 0, 4, 0x11, 0, 0xFF, 0xD9];
 
         byte[] signed = await PadesSigner

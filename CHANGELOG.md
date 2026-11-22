@@ -51,7 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
     (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
     included) and the certification signature (with or without `/Perms`).
-  - `PdfEmbeddedFiles.Read` and the text anchors of a signature appearance now read the document through the model
+  - `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
+    the DocMDP level, encryption and PDF/A detection now read the document through the model
     (the scanning code they used is kept for the parity checks until it is removed).
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
     difference is catalogued with its reason. The current reader loses tables with white-space before `xref` or
@@ -76,6 +77,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The DSS is read wherever it is written**: a `/VRI` written as its own object (as most signers write it), DSS
+  arrays written as references or without a space (`/Certs[`), inline VRI entries, and a DSS or catalog inside an
+  object stream were not read; validation now gets each signature's VRI data, and inspection no longer reports such a
+  VRI as malformed. The VRI's own `/Type` is not counted as an entry.
+- **Document facts come from the document's structure** (ADR 0032): the PDF/A level is what the catalog's
+  `/Metadata` declares (a `pdfaid:part` elsewhere in the file no longer counts); a document is encrypted when its
+  trailer has `/Encrypt` (the word in a content stream no longer counts); the DocMDP level is read from the
+  certification signature's `/Reference` however it is spaced (`/TransformMethod/DocMDP` was missed), still 1 when `/P`
+  is absent.
 - **`PdfEmbeddedFiles.Read` reads what the cross-reference says**: an embedded file compressed with a predictor
   (`/DecodeParms`) or ASCIIHexDecode is decoded instead of refused; a file name without a byte order mark is decoded
   as PDFDocEncoding (it was Latin-1); a name tree node that its kids point back to is read once; a FlateDecode stream

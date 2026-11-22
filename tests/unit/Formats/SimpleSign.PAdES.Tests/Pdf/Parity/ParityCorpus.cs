@@ -58,7 +58,12 @@ internal static class ParityCorpus
         ["signature-nested-field"] = ["FullyQualifiedFieldName"],
         ["signature-prop-build-name"] = ["LegacyKeyAnywhereInDictionary"],
         ["signature-dictionary-rewritten"] = ["ContentsFromDictionary"],
-        ["dss-indirect-arrays"] = ["LegacyDssArrayInlineWithSpace", "LegacyVriInlineOnly"],
+        ["dss-indirect-arrays"] = ["DssSummaryFromTheModel", "LegacyDssArrayInlineWithSpace", "LegacyVriInlineOnly"],
+        ["dss-inline-vri-entry"] = ["LegacyVriInlineOnly"],
+        ["dss-catalog-in-objstm"] = ["DssLookupByText", "FieldInObjectStream"],
+        ["pdfa-xmp-outside-catalog"] = ["PdfAFromCatalogMetadata"],
+        ["encrypt-in-content"] = ["EncryptFromTrailer"],
+        ["docmdp-without-space"] = ["DocMdpFromStructure"],
         ["text-inline-descendant-font"] = ["LegacyInlineDescendantFont"],
         ["text-encrypted"] = ["EncryptedContentUnreadable"],
         ["attachment-predictor"] = ["EmbeddedFileDecodeParms"],
@@ -236,6 +241,31 @@ internal static class ParityCorpus
             .Object(5, "<< /Names [(k) 7 0 R] /Kids [5 0 R] >>")
             .Object(7, "<< /Type /Filespec /F (k) /EF << /F 8 0 R >> >>")
             .Stream(8, "/Type /EmbeddedFile", System.Text.Encoding.ASCII.GetBytes("k"))
+            .EndRevision().ToArray(),
+        ["dss-inline-vri-entry"] = () => Catalog("<< /Fields [] >>", "/DSS 20 0 R ")
+            .Object(20, "<< /Type /DSS /Certs [23 0 R] /VRI << /AABBCCDDEEFF00112233445566778899AABBCCDD << /Cert [23 0 R] /TU (D:20260101000000Z) >> >> >>")
+            .Stream(23, "", [0x30, 0x00])
+            .EndRevision().ToArray(),
+        ["dss-catalog-in-objstm"] = () => new PdfFileBuilder()
+            .Compressed(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [10 0 R] >> /DSS 20 0 R >>")
+            .Compressed(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Compressed(10, "<< /FT /Sig /T (Empty) /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Object(20, "<< /Type /DSS /Certs [23 0 R] >>")
+            .Stream(23, "", [0x30, 0x00])
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { XrefStreamNumber = 25, ObjectStreamNumber = 24 }).ToArray(),
+        ["pdfa-xmp-outside-catalog"] = () => Base()
+            .Stream(4, "/Type /Metadata /Subtype /XML", System.Text.Encoding.ASCII.GetBytes("<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>"))
+            .EndRevision().ToArray(),
+        ["encrypt-in-content"] = () => new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>")
+            .Object(4, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+            .Stream(5, "", System.Text.Encoding.ASCII.GetBytes("BT /F1 12 Tf 50 700 Td (Use /Encrypt to protect a file) Tj ET"))
+            .EndRevision().ToArray(),
+        ["docmdp-without-space"] = () => Catalog("<< /Fields [10 0 R] /SigFlags 3 >>", "/Perms << /DocMDP 11 0 R >> ")
+            .Object(10, "<< /FT /Sig /T (Cert) /V 11 0 R /Subtype /Widget /Rect [0 0 0 0] >>")
+            .Signature(11, "/Reference [<</Type/SigRef/TransformMethod/DocMDP/TransformParams<</Type/TransformParams/P 2/V/1.2>>>>] ")
             .EndRevision().ToArray(),
         ["prev-loop"] = () =>
         {

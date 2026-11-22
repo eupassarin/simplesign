@@ -1,6 +1,7 @@
 using System.Reflection;
 using Shouldly;
 using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Parity;
@@ -69,9 +70,10 @@ internal static class ExpectedDifferences
 
         new(
             "FieldInObjectStream",
-            "The legacy reader finds a signature's field, and an empty signature field, by searching the file's text; a "
-            + "field inside an object stream is not in that text. The model reads the field tree.",
-            (c, d) => (Signature(c, d) is { Signature.Field.Id: { } field } && d.Key.EndsWith("/name", StringComparison.Ordinal)
+            "The legacy reader finds a signature's field, an empty signature field and the AcroForm's /Fields by searching "
+            + "the file's text; a field, or a catalog, inside an object stream is not in that text. The model reads the field tree.",
+            (c, d) => (d.Key == "acroform/fields" && string.IsNullOrEmpty(d.Legacy) && c.Model.RootId is { } root && IsCompressed(c.Model, root))
+                || (Signature(c, d) is { Signature.Field.Id: { } field } && d.Key.EndsWith("/name", StringComparison.Ordinal)
                     && d.Legacy == $"Signature_{Signature(c, d)!.Value.Number}" && IsCompressed(c.Model, field))
                 || (d.Key.StartsWith("empty-field/", StringComparison.Ordinal) && d.Legacy == "not found"
                     && c.Model.View().Fields.FirstOrDefault(f => "empty-field/" + f.FullName == d.Key) is { Id: { } id } && IsCompressed(c.Model, id))),
@@ -103,14 +105,56 @@ internal static class ExpectedDifferences
             "LegacyDssArrayInlineWithSpace",
             "The legacy reader finds a DSS array by the text '/Certs [' (and '/OCSPs [', '/CRLs ['): an array written as a "
             + "reference, or without the space, is empty to it. The model reads the entry.",
-            (c, d) => d.Key is "dss/Certs" or "dss/OCSPs" or "dss/CRLs" && string.IsNullOrEmpty(d.Legacy)
-                && c.Model.View().Dss is { } dss && dss.Get(d.Key[4..]) is { } entry
-                && (entry is PdfReference || !RawText(c.Data, dss).Contains($"/{d.Key[4..]} [", StringComparison.Ordinal))),
+            (c, d) => (d.Key is "dss/Certs" or "dss/OCSPs" or "dss/CRLs" && string.IsNullOrEmpty(d.Legacy)
+                    || d.Key is "dss-data/Certs" or "dss-data/OCSPs" or "dss-data/CRLs" && d.Legacy?.StartsWith("0:", StringComparison.Ordinal) == true)
+                && c.Model.View().Dss is { } dss && dss.Get(d.Key[(d.Key.IndexOf('/') + 1)..]) is { } entry
+                && (entry is PdfReference || !RawText(c.Data, dss).Contains($"/{d.Key[(d.Key.IndexOf('/') + 1)..]} [", StringComparison.Ordinal))),
 
         new(
             "LegacyVriInlineOnly",
-            "The legacy reader reads /VRI only when it is a dictionary written inside the DSS; the model follows a reference.",
-            (c, d) => d.Key == "dss/VRI" && string.IsNullOrEmpty(d.Legacy) && c.Model.View().Dss?.Get("VRI") is PdfReference),
+            "The legacy reader reads /VRI only when it is a dictionary written inside the DSS, and of it only the entries "
+            + "that are references; the model follows a /VRI reference and reads inline entries too.",
+            (c, d) => (d.Key == "dss/VRI" && string.IsNullOrEmpty(d.Legacy) || d.Key.StartsWith("dss-data/VRI/", StringComparison.Ordinal) && d.Legacy is null)
+                && c.Model.View().Dss is { } dss
+                && (dss.Get("VRI") is PdfReference
+                    || (c.Model.Resolve(dss.Get("VRI")) as PdfDictionary)?.Get(d.Key[(d.Key.LastIndexOf('/') + 1)..]) is PdfDictionary)),
+
+        new(
+            "DssLookupByText",
+            "The legacy reader finds the DSS through the catalog's text: a catalog or a DSS inside an object stream is not "
+            + "in it. The model reads the catalog's /DSS.",
+            (c, d) => d.Key.StartsWith("dss", StringComparison.Ordinal) && c.Legacy["dss-data/present"] == "false"
+                && c.Model.RootId is { } root && c.Model.View().Catalog?.Get("DSS") is { } entry
+                && (IsCompressed(c.Model, root) || entry is PdfReference reference && IsCompressed(c.Model, reference.Id))),
+
+        new(
+            "DssSummaryFromTheModel",
+            "Inspection's DSS summary counts what the DSS holds; it differs where the legacy reader misread the DSS (an "
+            + "explained difference of the DSS data), and the model does not report /VRI as malformed when it is a reference.",
+            (c, d) => d.Key == "dss-summary"
+                && (c.Model.View().Dss?.Get("VRI") is PdfReference
+                    || c.Legacy.Facts.Keys.Union(c.ModelFacts.Facts.Keys).Where(k => k.StartsWith("dss-data/", StringComparison.Ordinal))
+                        .Any(k => c.Legacy[k] != c.ModelFacts[k] && All!.Any(r => r.Name != "DssSummaryFromTheModel"
+                            && r.Explains(c, new FactDifference(k, c.Legacy[k], c.ModelFacts[k])))))),
+
+        new(
+            "PdfAFromCatalogMetadata",
+            "The PDF/A level is what the catalog's /Metadata stream declares (ISO 19005); the legacy reader took the first "
+            + "pdfaid:part in any text of the file.",
+            (c, d) => d.Key == "pdfa" && d.Model == nameof(PdfALevel.None) && d.Legacy != nameof(PdfALevel.None)),
+
+        new(
+            "EncryptFromTrailer",
+            "A document is encrypted when its trailer has /Encrypt; the legacy reader took the text /Encrypt in the first or "
+            + "last 4 KB of the file, wherever it was.",
+            (c, d) => !c.Model.IsEncrypted && (d.Key == "encrypted" && d.Legacy == "true" || d.Key == "embedded-files" && d.Legacy == "encrypted")),
+
+        new(
+            "DocMdpFromStructure",
+            "The DocMDP level is read from the certification signature's /Reference; the legacy reader needed the text "
+            + "'/TransformMethod /DocMDP' with its space, and took the first /P within 2 KB of it.",
+            (c, d) => d.Key == "docmdp" && c.Model.View().CertificationSignature is not null
+                && System.Text.Encoding.Latin1.GetString(c.Data).IndexOf("/TransformMethod /DocMDP", StringComparison.Ordinal) < 0),
 
         new(
             "LegacyInlineDescendantFont",

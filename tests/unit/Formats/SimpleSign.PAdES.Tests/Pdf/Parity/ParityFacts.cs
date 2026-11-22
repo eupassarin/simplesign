@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Shouldly;
+using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Model;
@@ -177,8 +178,12 @@ internal static class LegacyFacts
         facts.Add("docmdp", PdfStructureReader.GetDocMdpPermissionLevel(data).ToString(CultureInfo.InvariantCulture));
 
         // DSS.
-        var dss = DssExtractor.ParseExistingDss(data);
+        var dss = DssExtractor.ParseExistingDssLegacy(data);
         AddDss(facts, dss.CertObjRefs, dss.OcspObjRefs, dss.CrlObjRefs, dss.VriEntries.Select(e => (e.Key, e.Value)));
+        AddDssData(facts, DssExtractor.ReadFullDssDataLegacy(data));
+        AddDssSummary(facts, PdfSignatureInspector.ExtractDssInfoLegacy(data));
+        facts.Add("encrypted", PdfStructureReader.IsEncrypted(data) ? "true" : "false");
+        facts.Add("pdfa", PdfStructureReader.DetectPdfALevel(data).ToString());
 
         AddEmbeddedFiles(facts, () => PdfEmbeddedFiles.ReadLegacy(data));
         AddPageTexts(facts, () => PdfTextLocator.ReadPagesLegacy(data));
@@ -276,6 +281,28 @@ internal static class LegacyFacts
         facts.Add(key + "M", time);
     }
 
+    /// <summary>The DSS data a validator gets: what is there, and a hash of each array's and each VRI entry's data.</summary>
+    public static void AddDssData(FactSet facts, DssValidationData dss)
+    {
+        facts.Add("dss-data/present", dss.Present ? "true" : "false");
+        facts.Add("dss-data/keys", string.Join(",", dss.Keys.Order(StringComparer.Ordinal)));
+        facts.Add("dss-data/Certs", Hashes(dss.GlobalCerts));
+        facts.Add("dss-data/OCSPs", Hashes(dss.GlobalOcsps));
+        facts.Add("dss-data/CRLs", Hashes(dss.GlobalCrls));
+        foreach (var (key, entry) in dss.VriEntries)
+        {
+            facts.Add($"dss-data/VRI/{key}", $"Cert {Hashes(entry.Certs)} | OCSP {Hashes(entry.Ocsps)} | CRL {Hashes(entry.Crls)} | keys {string.Join(",", entry.Keys.Order(StringComparer.Ordinal))}");
+        }
+    }
+
+    /// <summary>What inspection reports about the DSS.</summary>
+    public static void AddDssSummary(FactSet facts, DssInfo? info) =>
+        facts.Add("dss-summary", info is null ? "none" : string.Create(CultureInfo.InvariantCulture,
+            $"CRLs {info.CrlCount} OCSPs {info.OcspResponseCount} Certs {info.CertificateCount} VRI {info.HasVri}/{info.VriEntryCount}/{info.VriHasTimestamps} | {string.Join("; ", info.VriWarnings)}"));
+
+    private static string Hashes(IReadOnlyList<byte[]> items) =>
+        $"{items.Count}: {Convert.ToHexString(SHA256.HashData([.. items.SelectMany(i => SHA256.HashData(i))]))[..12]}";
+
     private static string Value(string? text) => string.IsNullOrEmpty(text) ? "-" : text;
 
     public static void AddDss(FactSet facts, IEnumerable<int> certs, IEnumerable<int> ocsps, IEnumerable<int> crls, IEnumerable<(string Key, int Value)> vri)
@@ -356,21 +383,18 @@ internal static class ModelFacts
             }
         }
 
-        int? p = view.DocMdpPermissions;
-        facts.Add("docmdp", view.CertificationSignature is null ? "0" : (p is >= 1 and <= 3 ? p.Value : 1).ToString(CultureInfo.InvariantCulture));
+        facts.Add("docmdp", view.DocMdpLevel.ToString(CultureInfo.InvariantCulture));
 
-        var dss = view.Dss;
-        var vri = view.Resolve(dss?.Get("VRI")) as PdfDictionary;
-        LegacyFacts.AddDss(
-            facts, Refs(view, dss?.Get("Certs")), Refs(view, dss?.Get("OCSPs")), Refs(view, dss?.Get("CRLs")),
-            vri?.Where(e => e.Value is PdfReference).Select(e => (e.Key.Value, ((PdfReference)e.Value).Id.Number)) ?? []);
+        var dss = DssExtractor.ParseExistingDss(doc.Data.ToArray());
+        LegacyFacts.AddDss(facts, dss.CertObjRefs, dss.OcspObjRefs, dss.CrlObjRefs, dss.VriEntries.Select(e => (e.Key, e.Value)));
+        LegacyFacts.AddDssData(facts, DssReader.Read(view));
+        LegacyFacts.AddDssSummary(facts, DssReader.Summary(view));
+        facts.Add("encrypted", doc.IsEncrypted ? "true" : "false");
+        facts.Add("pdfa", PdfStructureReader.PdfALevelOf(view).ToString());
 
         LegacyFacts.AddEmbeddedFiles(facts, () => PdfEmbeddedFiles.Read(doc.Data));
         LegacyFacts.AddPageTexts(facts, () => PdfTextLocator.ReadPages(doc.Data.ToArray()));
     }
-
-    private static IEnumerable<int> Refs(PdfRevisionView view, PdfObject? array) =>
-        view.Resolve(array) is PdfArray items ? items.OfType<PdfReference>().Select(r => r.Id.Number) : [];
 
     private static double[]? Numbers(PdfArray? array) =>
         array is { Count: 4 } && array.All(item => item is PdfInteger or PdfReal)

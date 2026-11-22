@@ -1,6 +1,8 @@
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Exceptions;
 
+using SimpleSign.PAdES.Pdf.Model;
+
 namespace SimpleSign.PAdES.Pdf;
 
 public sealed partial class PdfStructureReader
@@ -18,9 +20,9 @@ public sealed partial class PdfStructureReader
     /// <summary>
     /// Throws <see cref="EncryptedPdfException"/> if the PDF trailer contains an /Encrypt entry.
     /// </summary>
-    private static void ThrowIfEncrypted(ReadOnlySpan<byte> data)
+    private static void ThrowIfEncrypted(PdfDocument document)
     {
-        if (DetectEncryption(data))
+        if (document.IsEncrypted)
         {
             throw new EncryptedPdfException(
                 "This PDF is encrypted. SimpleSign cannot sign or validate encrypted PDFs. " +
@@ -163,6 +165,27 @@ public sealed partial class PdfStructureReader
     }
 
     private static PdfALevel ScanForPdfAIdTags(ReadOnlySpan<byte> span) => ParsePdfALevelFromXmp(span);
+
+    /// <summary>
+    /// The PDF/A level the catalog's XMP metadata stream (ISO 19005-1 §6.7.11) declares, read through the object model
+    /// (ADR 0032); <see cref="PdfALevel.None"/> without one, or when it cannot be decoded.
+    /// </summary>
+    internal static PdfALevel PdfALevelOf(PdfRevisionView view)
+    {
+        if (view.Resolve(view.Catalog?.Get("Metadata")) is not PdfStream metadata)
+        {
+            return PdfALevel.None;
+        }
+
+        try
+        {
+            return ParsePdfALevelFromXmp(view.Document.DecodeStream(metadata, view.Revision));
+        }
+        catch (Exception ex) when (ex is PdfFilterException or PdfUnsupportedFilterException)
+        {
+            return PdfALevel.None;
+        }
+    }
 
     private static PdfALevel ScanCompressedObjStmsForPdfAIdTags(ReadOnlySpan<byte> data)
     {

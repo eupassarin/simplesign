@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
 
+using SimpleSign.PAdES.Pdf.Model;
+
 namespace SimpleSign.PAdES.Pdf;
 
 /// <summary>
@@ -65,7 +67,7 @@ public sealed partial class PdfStructureReader
             Span<byte> data = buffer.AsSpan(0, bytesRead);
 
             ValidatePdfHeader(data);
-            ThrowIfEncrypted(data);
+            ThrowIfEncrypted(PdfDocument.Open(buffer.AsMemory(0, bytesRead)));
             var crossRefs = ParseCrossReferenceTable(data);
             var fields = ExtractSignatureFields(data, crossRefs);
 
@@ -111,21 +113,10 @@ public sealed partial class PdfStructureReader
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pdfStream);
-        byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(pdfStream.Length, MaxPdfSize));
-        try
-        {
-            pdfStream.Seek(0, SeekOrigin.Begin);
-            int bytesRead = await ReadFullyAsync(pdfStream, buffer, cancellationToken).ConfigureAwait(false);
-            Span<byte> data = buffer.AsSpan(0, bytesRead);
-
-            int level = GetDocMdpPermissionLevel(data);
-            (logger ?? NullLogger.Instance).PdfDocMdpChecked(level > 0 && level < 3);
-            return level;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        var document = await OpenDocumentAsync(pdfStream, cancellationToken).ConfigureAwait(false);
+        int level = document.View().DocMdpLevel;
+        (logger ?? NullLogger.Instance).PdfDocMdpChecked(level > 0 && level < 3);
+        return level;
     }
 
     /// <summary>
@@ -135,19 +126,9 @@ public sealed partial class PdfStructureReader
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pdfStream);
-        byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(pdfStream.Length, MaxPdfSize));
-        try
-        {
-            pdfStream.Seek(0, SeekOrigin.Begin);
-            int bytesRead = await ReadFullyAsync(pdfStream, buffer, cancellationToken).ConfigureAwait(false);
-            bool encrypted = DetectEncryption(buffer.AsSpan(0, bytesRead));
-            (logger ?? NullLogger.Instance).PdfEncryptionChecked(encrypted);
-            return encrypted;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        bool encrypted = (await OpenDocumentAsync(pdfStream, cancellationToken).ConfigureAwait(false)).IsEncrypted;
+        (logger ?? NullLogger.Instance).PdfEncryptionChecked(encrypted);
+        return encrypted;
     }
 
     /// <summary>
@@ -158,19 +139,21 @@ public sealed partial class PdfStructureReader
         Stream pdfStream, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(pdfStream);
-        byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(pdfStream.Length, MaxPdfSize));
-        try
-        {
-            pdfStream.Seek(0, SeekOrigin.Begin);
-            int bytesRead = await ReadFullyAsync(pdfStream, buffer, cancellationToken).ConfigureAwait(false);
-            PdfALevel level = DetectPdfALevel(buffer.AsSpan(0, bytesRead));
-            (logger ?? NullLogger.Instance).PdfADetected(level.ToString());
-            return level;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
+        PdfALevel level = PdfALevelOf((await OpenDocumentAsync(pdfStream, cancellationToken).ConfigureAwait(false)).View());
+        (logger ?? NullLogger.Instance).PdfADetected(level.ToString());
+        return level;
+    }
+
+    /// <summary>
+    /// Reads a stream (up to <see cref="MaxPdfSize"/>) and opens it as a <see cref="PdfDocument"/> of the object model
+    /// (ADR 0032). The bytes are a new array the document keeps.
+    /// </summary>
+    internal static async Task<PdfDocument> OpenDocumentAsync(Stream pdfStream, CancellationToken cancellationToken)
+    {
+        byte[] data = new byte[(int)Math.Min(pdfStream.Length, MaxPdfSize)];
+        pdfStream.Seek(0, SeekOrigin.Begin);
+        int bytesRead = await ReadFullyAsync(pdfStream, data, cancellationToken).ConfigureAwait(false);
+        return PdfDocument.Open(data.AsMemory(0, bytesRead));
     }
 
     /// <summary>

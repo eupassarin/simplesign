@@ -104,7 +104,7 @@ internal static class PdfXrefReader
             entries[id.Number] = PdfXrefEntry.InUse(offset, id.Generation);
         }
 
-        PdfDictionary? trailer = LastTrailerWithRoot(data.Span, context);
+        PdfDictionary? trailer = LastTrailer(data.Span, context, withRoot: true);
         PdfObjectId? catalog = null;
         var compressed = new Dictionary<int, PdfXrefEntry>();
 
@@ -147,11 +147,18 @@ internal static class PdfXrefReader
 
         if (trailer is null)
         {
+            // No trailer has a /Root: the last trailer still says what it says (/Encrypt, /Info, /ID), and the catalog
+            // found among the objects is its /Root.
             context.Repair(PdfRepairKind.TrailerMissing, 0);
             int size = entries.Count == 0 ? 1 : entries.Keys.Max() + 1;
-            trailer = catalog is { } root
-                ? new PdfDictionary(("Size", new PdfInteger(size)), ("Root", new PdfReference(root)))
-                : new PdfDictionary(("Size", new PdfInteger(size)));
+            var kept = LastTrailer(data.Span, context, withRoot: false)?.RawEntries
+                .Where(e => !e.Key.Equals(PdfName.Root) && !e.Key.Equals(PdfName.Size) && !e.Key.Equals(PdfName.Prev)) ?? [];
+            trailer = new PdfDictionary(
+                [
+                    new PdfDictionaryEntry(PdfName.Size, new PdfInteger(size)),
+                    .. catalog is { } root ? [new PdfDictionaryEntry(PdfName.Root, new PdfReference(root))] : Array.Empty<PdfDictionaryEntry>(),
+                    .. kept,
+                ]);
         }
 
         return new PdfXrefSection(PdfXrefSectionKind.Reconstructed, -1, entries, trailer, null);
@@ -563,8 +570,8 @@ internal static class PdfXrefReader
         return value;
     }
 
-    /// <summary>The last <c>trailer</c> dictionary of the file that has a <c>/Root</c>.</summary>
-    private static PdfDictionary? LastTrailerWithRoot(ReadOnlySpan<byte> data, PdfParseContext context)
+    /// <summary>The last <c>trailer</c> dictionary of the file (that has a <c>/Root</c>, when asked).</summary>
+    private static PdfDictionary? LastTrailer(ReadOnlySpan<byte> data, PdfParseContext context, bool withRoot)
     {
         int end = data.Length;
         while (end > 0)
@@ -576,7 +583,7 @@ internal static class PdfXrefReader
             }
 
             int position = keyword + "trailer"u8.Length;
-            if (PdfParser.ParseObject(data, ref position, context) is PdfDictionary trailer && trailer.Get(PdfName.Root) is PdfReference)
+            if (PdfParser.ParseObject(data, ref position, context) is PdfDictionary trailer && (!withRoot || trailer.Get(PdfName.Root) is PdfReference))
             {
                 return trailer;
             }

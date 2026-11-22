@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Internal;
 
+using SimpleSign.PAdES.Pdf.Model;
+
 namespace SimpleSign.PAdES.Validation;
 
 /// <summary>
@@ -50,25 +52,7 @@ internal static partial class DssExtractor
                 }
                 read += n;
             }
-            var data = pdfBytes.AsSpan(0, read);
-
-            var dssDictSlice = FindDssDictionary(data);
-            if (dssDictSlice == null)
-            {
-                return DssValidationData.Empty;
-            }
-
-            var dssSpan = dssDictSlice.Value.Span;
-            var globalCrls = ExtractCrlsFromDss(dssSpan, data);
-            var globalOcsps = ExtractStreamsFromArray(dssSpan, "/OCSPs ["u8, data);
-            var globalCerts = ExtractStreamsFromArray(dssSpan, "/Certs ["u8, data);
-            var vriEntries = ExtractVriData(dssSpan, data);
-
-            return new DssValidationData(globalCrls, globalOcsps, globalCerts, vriEntries)
-            {
-                Present = true,
-                Keys = TopLevelKeys(dssSpan),
-            };
+            return DssReader.Read(PdfDocument.Open(pdfBytes.AsMemory(0, read)).View());
         }
         catch (OperationCanceledException)
         {
@@ -80,6 +64,28 @@ internal static partial class DssExtractor
             logger?.CrlExtractionFromPdfFailed(ex.Message);
             return DssValidationData.Empty;
         }
+    }
+
+    /// <summary>
+    /// The DSS data as the scanning code read it before the object model (ADR 0032): kept to check
+    /// <see cref="DssReader.Read"/> against it until the old code is removed.
+    /// </summary>
+    internal static DssValidationData ReadFullDssDataLegacy(ReadOnlySpan<byte> data)
+    {
+        var dssDictSlice = FindDssDictionary(data);
+        if (dssDictSlice == null)
+        {
+            return DssValidationData.Empty;
+        }
+
+        var dssSpan = dssDictSlice.Value.Span;
+        return new DssValidationData(
+            ExtractCrlsFromDss(dssSpan, data), ExtractStreamsFromArray(dssSpan, "/OCSPs ["u8, data),
+            ExtractStreamsFromArray(dssSpan, "/Certs ["u8, data), ExtractVriData(dssSpan, data))
+        {
+            Present = true,
+            Keys = TopLevelKeys(dssSpan),
+        };
     }
 
     /// <summary>
@@ -675,7 +681,10 @@ internal static partial class DssExtractor
     /// Parses the existing DSS dictionary from PDF bytes and returns the object references
     /// for CRLs, OCSPs, Certs, and VRI entries. Used for DSS merge during multi-signature LTV embedding.
     /// </summary>
-    internal static Signing.ExistingDssData ParseExistingDss(ReadOnlySpan<byte> pdfData)
+    internal static Signing.ExistingDssData ParseExistingDss(byte[] pdf) => DssReader.ReadExisting(PdfDocument.Open(pdf).View());
+
+    /// <summary>The existing DSS as the scanning code read it before the object model (ADR 0032), for the parity checks.</summary>
+    internal static Signing.ExistingDssData ParseExistingDssLegacy(ReadOnlySpan<byte> pdfData)
     {
         var dssDictSlice = FindDssDictionary(pdfData);
         if (dssDictSlice == null)
