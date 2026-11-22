@@ -37,7 +37,7 @@ internal static class PdfTextLocator
         int root = PdfStructureParser.FindRootObjectNumber(pdf);
         string? pagesRef = document.Dict(document.Object(root)).GetValueOrDefault("Pages");
         int pageNumber = 0;
-        foreach (var (page, resources) in document.Pages(PdfDictionary.Reference(pagesRef)))
+        foreach (var (page, resources) in document.Pages(PdfRawDictionary.Reference(pagesRef)))
         {
             pageNumber++;
             List<Glyph> glyphs;
@@ -156,7 +156,7 @@ internal static class PdfTextLocator
         /// <summary>The value, or the object it refers to.</summary>
         public string? Resolve(string? value)
         {
-            int number = PdfDictionary.Reference(value);
+            int number = PdfRawDictionary.Reference(value);
             return number > 0 ? Object(number) : value;
         }
 
@@ -164,7 +164,7 @@ internal static class PdfTextLocator
         public Dictionary<string, string> Dict(string? value)
         {
             string? body = Resolve(value);
-            return body is null ? new Dictionary<string, string>(StringComparer.Ordinal) : PdfDictionary.Parse(PdfDictionary.Head(body));
+            return body is null ? new Dictionary<string, string>(StringComparer.Ordinal) : PdfRawDictionary.Parse(PdfRawDictionary.Head(body));
         }
 
         /// <summary>The pages under a page tree node, in order, with the resources each inherits or has.</summary>
@@ -185,7 +185,7 @@ internal static class PdfTextLocator
                 string? resources = dict.GetValueOrDefault("Resources") ?? inherited;
                 if (dict.TryGetValue("Kids", out string? kids))
                 {
-                    var children = PdfDictionary.References(Resolve(kids));
+                    var children = PdfRawDictionary.References(Resolve(kids));
                     for (int i = children.Count - 1; i >= 0; i--)
                     {
                         stack.Push((children[i], resources, depth + 1));
@@ -212,7 +212,7 @@ internal static class PdfTextLocator
             var content = new List<byte>();
             if (contents.TrimStart().StartsWith('['))
             {
-                foreach (int part in PdfDictionary.References(contents))
+                foreach (int part in PdfRawDictionary.References(contents))
                 {
                     content.AddRange(StreamData(Object(part)) ?? []);
                     content.Add((byte)'\n');
@@ -238,7 +238,7 @@ internal static class PdfTextLocator
                 return null;
             }
 
-            string head = PdfDictionary.Head(body);
+            string head = PdfRawDictionary.Head(body);
             if (head.Length >= body.Length || !body.AsSpan(head.Length).TrimStart().StartsWith("stream", StringComparison.Ordinal))
             {
                 return null;
@@ -255,7 +255,7 @@ internal static class PdfTextLocator
                 start++;
             }
 
-            var dict = PdfDictionary.Parse(head);
+            var dict = PdfRawDictionary.Parse(head);
             int end = int.TryParse(Resolve(dict.GetValueOrDefault("Length"))?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int length)
                 && length >= 0 && start + length <= body.Length
                 ? start + length
@@ -278,7 +278,7 @@ internal static class PdfTextLocator
                 return null;
             }
 
-            string key = PdfDictionary.Reference(value) is > 0 and var number ? number.ToString(CultureInfo.InvariantCulture) : value;
+            string key = PdfRawDictionary.Reference(value) is > 0 and var number ? number.ToString(CultureInfo.InvariantCulture) : value;
             if (!_fonts.TryGetValue(key, out var font))
             {
                 font = Fonts.Read(this, Dict(value));
@@ -849,7 +849,7 @@ internal static class PdfTextLocator
             {
                 string? descendants = document.Resolve(font.GetValueOrDefault("DescendantFonts"))?.Trim();
                 var descendant = document.Dict(descendants is null ? null
-                    : PdfDictionary.References(descendants) is { Count: > 0 } refs ? document.Object(refs[0])
+                    : PdfRawDictionary.References(descendants) is { Count: > 0 } refs ? document.Object(refs[0])
                     : descendants.TrimStart('[').TrimEnd(']'));
                 double dw = double.TryParse(descendant.GetValueOrDefault("DW"), NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : 1000;
                 return new Font
@@ -918,7 +918,7 @@ internal static class PdfTextLocator
                 return Tables.ByName(resolved[1..]) ?? table;
             }
 
-            var dict = PdfDictionary.Parse(resolved);
+            var dict = PdfRawDictionary.Parse(resolved);
             if (dict.GetValueOrDefault("BaseEncoding") is { } baseEncoding)
             {
                 table = Tables.ByName(baseEncoding.TrimStart('/')) ?? table;

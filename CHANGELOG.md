@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A PDF object model, first step (ADR 0032, proposed)**, internal: the objects, lexer and parser of
+  `SimpleSign.PAdES.Pdf.Model`, which the library will move to step by step, with parity checked against the current
+  code, before the signature envelope is built on it. The parser reads arrays and dictionaries without recursion, keeps
+  where each object came from, and records what it repairs. Nothing uses it yet.
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
   longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
   constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a
@@ -56,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A PDF text string with a UTF-8 byte order mark (PDF 2.0) is read as UTF-8**: the signature dictionary's `/Name`,
+  `/Reason`, `/Location` and `/ContactInfo` written as `EF BB BF …` were decoded as PDFDocEncoding.
 - **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and
   `XadesAugmenter` ignored `TimestampOptions.ExpectedTsaCertificate` and accepted a token from any TSA; such a token now
   throws `SigningException` with `SigningErrorReason.TimestampUntrusted`. New, on each augmenter: `WithSigningPolicy`

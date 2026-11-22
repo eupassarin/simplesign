@@ -42,7 +42,7 @@ internal sealed class PdfObjectIndex
 
             string body = text[bodyStart..end].Trim();
             index._entries.Add((number, headerStart, body));
-            if (Regex.IsMatch(PdfDictionary.Head(body), @"/Type\s*/ObjStm\b", RegexOptions.None, s_timeout))
+            if (Regex.IsMatch(PdfRawDictionary.Head(body), @"/Type\s*/ObjStm\b", RegexOptions.None, s_timeout))
             {
                 index.AddObjectStream(pdf, headerStart, body);
             }
@@ -110,8 +110,8 @@ internal sealed class PdfObjectIndex
 
     private void AddObjectStream(byte[] pdf, int objStart, string body)
     {
-        string head = PdfDictionary.Head(body);
-        var dictionary = PdfDictionary.Parse(head);
+        string head = PdfRawDictionary.Head(body);
+        var dictionary = PdfRawDictionary.Parse(head);
         if (!int.TryParse(dictionary.GetValueOrDefault("N"), out int count) || !int.TryParse(dictionary.GetValueOrDefault("First"), out int first))
         {
             return;
@@ -158,7 +158,7 @@ internal sealed class PdfObjectIndex
 }
 
 /// <summary>Reads the top-level entries of a PDF dictionary, as raw value text.</summary>
-internal static class PdfDictionary
+internal static class PdfRawDictionary
 {
     /// <summary>The dictionary part of an object body (what comes before <c>stream</c>).</summary>
     public static string Head(string body)
@@ -534,7 +534,7 @@ internal static class PdfRevisionComparer
             string name = final.FieldName(field);
             if (final.FieldType(field) == "Sig")
             {
-                int value = PdfDictionary.Reference(final.Dict(field).GetValueOrDefault("V"));
+                int value = PdfRawDictionary.Reference(final.Dict(field).GetValueOrDefault("V"));
                 if (value == 0)
                 {
                     changes.Signatures.Add($"Signature field '{name}' added.");
@@ -593,7 +593,7 @@ internal static class PdfRevisionComparer
                 var dictionary = final.Dict(annotation);
                 if (dictionary.GetValueOrDefault("Subtype") == "/Widget")
                 {
-                    if (!final.FieldSet.Contains(annotation) && !final.FieldSet.Contains(PdfDictionary.Reference(dictionary.GetValueOrDefault("Parent"))))
+                    if (!final.FieldSet.Contains(annotation) && !final.FieldSet.Contains(PdfRawDictionary.Reference(dictionary.GetValueOrDefault("Parent"))))
                     {
                         changes.Undefined.Add($"A form widget outside the form was added on page {i + 1}.");
                     }
@@ -683,7 +683,7 @@ internal static class PdfRevisionComparer
         string? oldValue = before.GetValueOrDefault("V");
         string? newValue = after.GetValueOrDefault("V");
         bool signature = final.FieldType(number) == "Sig";
-        if (!string.Equals(oldValue is null ? null : PdfDictionary.Normalize(oldValue), newValue is null ? null : PdfDictionary.Normalize(newValue), StringComparison.Ordinal))
+        if (!string.Equals(oldValue is null ? null : PdfRawDictionary.Normalize(oldValue), newValue is null ? null : PdfRawDictionary.Normalize(newValue), StringComparison.Ordinal))
         {
             if (!signature)
             {
@@ -692,7 +692,7 @@ internal static class PdfRevisionComparer
             }
             else if (oldValue is null && newValue is not null)
             {
-                if (!final.IsDocumentTimestamp(PdfDictionary.Reference(newValue)))
+                if (!final.IsDocumentTimestamp(PdfRawDictionary.Reference(newValue)))
                 {
                     changes.Signatures.Add($"Signature field '{name}' signed.");
                 }
@@ -723,7 +723,7 @@ internal static class PdfRevisionComparer
             changes.FormFills.Add($"The appearance of field '{name}' changed.");
             changes.ChangedFields.Add(name);
         }
-        else if (signed.Dict(widget).ContainsKey("V") || signed.Dict(PdfDictionary.Reference(signed.Dict(widget).GetValueOrDefault("Parent"))).ContainsKey("V"))
+        else if (signed.Dict(widget).ContainsKey("V") || signed.Dict(PdfRawDictionary.Reference(signed.Dict(widget).GetValueOrDefault("Parent"))).ContainsKey("V"))
         {
             changes.Undefined.Add($"The appearance of the signed field '{name}' changed.");
         }
@@ -737,7 +737,7 @@ internal static class PdfRevisionComparer
             return null;
         }
 
-        string text = reference + string.Concat(PdfDictionary.References(reference).Select(n => revision.Objects.GetValueOrDefault(n)));
+        string text = reference + string.Concat(PdfRawDictionary.References(reference).Select(n => revision.Objects.GetValueOrDefault(n)));
         int method = text.IndexOf("/FieldMDP", StringComparison.Ordinal);
         return method < 0 ? null : LockOf(revision, text[method..]);
     }
@@ -747,9 +747,9 @@ internal static class PdfRevisionComparer
         foreach (int field in revision.FieldSet)
         {
             var dictionary = revision.Dict(field);
-            if (PdfDictionary.Reference(dictionary.GetValueOrDefault("V")) == sigDict && dictionary.GetValueOrDefault("Lock") is { } value)
+            if (PdfRawDictionary.Reference(dictionary.GetValueOrDefault("V")) == sigDict && dictionary.GetValueOrDefault("Lock") is { } value)
             {
-                int number = PdfDictionary.Reference(value);
+                int number = PdfRawDictionary.Reference(value);
                 return LockOf(revision, number > 0 ? revision.Objects.GetValueOrDefault(number) ?? "" : value);
             }
         }
@@ -768,7 +768,7 @@ internal static class PdfRevisionComparer
         var fields = Regex.Match(text, @"/Fields\s*(\[(?:[^\]\\]|\\.)*\]|\d+\s+\d+\s+R)", RegexOptions.Singleline, TimeSpan.FromSeconds(1));
         string array = fields.Success ? revision.ArrayText(fields.Groups[1].Value) : "";
         var names = Regex.Matches(array, @"\((?:\\.|[^\\)])*\)|<[0-9A-Fa-f\s]*>", RegexOptions.None, TimeSpan.FromSeconds(1))
-            .Select(m => PdfDictionary.Text(m.Value)).ToList();
+            .Select(m => PdfRawDictionary.Text(m.Value)).ToList();
         return new PdfFieldLock(action.Groups[1].Value, names);
     }
 
@@ -780,18 +780,18 @@ internal static class PdfRevisionComparer
         }
 
         // Only the dictionary is normalized; stream data must be the same byte for byte.
-        string headBefore = PdfDictionary.Head(before);
-        string headAfter = PdfDictionary.Head(after);
+        string headBefore = PdfRawDictionary.Head(before);
+        string headAfter = PdfRawDictionary.Head(after);
         return !before.AsSpan(headBefore.Length).SequenceEqual(after.AsSpan(headAfter.Length))
-            || !string.Equals(PdfDictionary.Normalize(headBefore), PdfDictionary.Normalize(headAfter), StringComparison.Ordinal);
+            || !string.Equals(PdfRawDictionary.Normalize(headBefore), PdfRawDictionary.Normalize(headAfter), StringComparison.Ordinal);
     }
 
     /// <summary>Whether two dictionaries differ in any entry but the ignored ones.</summary>
     private static bool Differs(Dictionary<string, string> before, Dictionary<string, string> after, IReadOnlySet<string> ignored) =>
         before.Keys.Union(after.Keys).Where(key => !ignored.Contains(key)).Any(key =>
             !string.Equals(
-                before.TryGetValue(key, out string? a) ? PdfDictionary.Normalize(a) : null,
-                after.TryGetValue(key, out string? b) ? PdfDictionary.Normalize(b) : null,
+                before.TryGetValue(key, out string? a) ? PdfRawDictionary.Normalize(a) : null,
+                after.TryGetValue(key, out string? b) ? PdfRawDictionary.Normalize(b) : null,
                 StringComparison.Ordinal));
 
     private static bool Differs(Dictionary<string, string> before, Dictionary<string, string> after, string[] ignored) =>
@@ -842,21 +842,21 @@ internal static class PdfRevisionComparer
             Objects = objects;
             Root = root;
             var catalog = Dict(root);
-            WalkPages(PdfDictionary.Reference(catalog.GetValueOrDefault("Pages")), 0);
+            WalkPages(PdfRawDictionary.Reference(catalog.GetValueOrDefault("Pages")), 0);
 
             string? acroForm = catalog.GetValueOrDefault("AcroForm");
-            AcroFormNumber = PdfDictionary.Reference(acroForm);
-            AcroForm = AcroFormNumber > 0 ? Dict(AcroFormNumber) : acroForm is null ? [] : PdfDictionary.Parse(acroForm);
+            AcroFormNumber = PdfRawDictionary.Reference(acroForm);
+            AcroForm = AcroFormNumber > 0 ? Dict(AcroFormNumber) : acroForm is null ? [] : PdfRawDictionary.Parse(acroForm);
             string? fields = AcroForm.GetValueOrDefault("Fields");
-            FieldsArrayNumber = PdfDictionary.Reference(fields);
-            TopFields = [.. PdfDictionary.References(ArrayText(fields))];
+            FieldsArrayNumber = PdfRawDictionary.Reference(fields);
+            TopFields = [.. PdfRawDictionary.References(ArrayText(fields))];
             foreach (int field in TopFields)
             {
                 WalkFields(field, 0);
             }
 
             string? dss = catalog.GetValueOrDefault("DSS");
-            var queue = new Queue<(int Number, int Depth)>(PdfDictionary.References(dss).Select(n => (n, 0)));
+            var queue = new Queue<(int Number, int Depth)>(PdfRawDictionary.References(dss).Select(n => (n, 0)));
             while (queue.Count > 0 && DssObjects.Count < 100_000)
             {
                 var (number, depth) = queue.Dequeue();
@@ -865,7 +865,7 @@ internal static class PdfRevisionComparer
                     continue;
                 }
 
-                foreach (int child in PdfDictionary.References(PdfDictionary.Head(text)))
+                foreach (int child in PdfRawDictionary.References(PdfRawDictionary.Head(text)))
                 {
                     queue.Enqueue((child, depth + 1));
                 }
@@ -896,7 +896,7 @@ internal static class PdfRevisionComparer
         {
             if (!_dictionaries.TryGetValue(number, out var dictionary))
             {
-                dictionary = Objects.TryGetValue(number, out string? text) ? PdfDictionary.Parse(PdfDictionary.Head(text)) : [];
+                dictionary = Objects.TryGetValue(number, out string? text) ? PdfRawDictionary.Parse(PdfRawDictionary.Head(text)) : [];
                 _dictionaries[number] = dictionary;
             }
 
@@ -906,13 +906,13 @@ internal static class PdfRevisionComparer
         /// <summary>An array value, following it when it is an indirect reference.</summary>
         public string ArrayText(string? value)
         {
-            int number = PdfDictionary.Reference(value);
+            int number = PdfRawDictionary.Reference(value);
             return number > 0 ? Objects.GetValueOrDefault(number) ?? "" : value ?? "";
         }
 
-        public List<int> Annots(int page) => [.. PdfDictionary.References(ArrayText(Dict(page).GetValueOrDefault("Annots")))];
+        public List<int> Annots(int page) => [.. PdfRawDictionary.References(ArrayText(Dict(page).GetValueOrDefault("Annots")))];
 
-        public int AnnotsArrayNumber(int page) => PdfDictionary.Reference(Dict(page).GetValueOrDefault("Annots"));
+        public int AnnotsArrayNumber(int page) => PdfRawDictionary.Reference(Dict(page).GetValueOrDefault("Annots"));
 
         public bool IsDocumentTimestamp(int sigDict) =>
             Dict(sigDict).GetValueOrDefault("SubFilter") == "/ETSI.RFC3161" || Dict(sigDict).GetValueOrDefault("Type") == "/DocTimeStamp";
@@ -926,10 +926,10 @@ internal static class PdfRevisionComparer
                 var dictionary = Dict(number);
                 if (dictionary.GetValueOrDefault("T") is { } name)
                 {
-                    parts.Insert(0, PdfDictionary.Text(name));
+                    parts.Insert(0, PdfRawDictionary.Text(name));
                 }
 
-                number = PdfDictionary.Reference(dictionary.GetValueOrDefault("Parent"));
+                number = PdfRawDictionary.Reference(dictionary.GetValueOrDefault("Parent"));
             }
 
             return string.Join('.', parts);
@@ -946,7 +946,7 @@ internal static class PdfRevisionComparer
                     return type.TrimStart('/');
                 }
 
-                number = PdfDictionary.Reference(dictionary.GetValueOrDefault("Parent"));
+                number = PdfRawDictionary.Reference(dictionary.GetValueOrDefault("Parent"));
             }
 
             return null;
@@ -959,13 +959,13 @@ internal static class PdfRevisionComparer
             foreach (int annotation in Pages.SelectMany(Annots).Concat(FieldSet).Distinct())
             {
                 string? appearance = Dict(annotation).GetValueOrDefault("AP");
-                var references = PdfDictionary.References(appearance).ToList();
+                var references = PdfRawDictionary.References(appearance).ToList();
                 // /AP << /N 12 0 R >> or /AP 12 0 R, and a state dictionary one level down.
                 foreach (int number in references.ToList())
                 {
                     if (Objects.TryGetValue(number, out string? text) && !text.Contains("stream", StringComparison.Ordinal))
                     {
-                        references.AddRange(PdfDictionary.References(text));
+                        references.AddRange(PdfRawDictionary.References(text));
                     }
                 }
 
@@ -989,7 +989,7 @@ internal static class PdfRevisionComparer
             if (dictionary.GetValueOrDefault("Type") == "/Pages" || dictionary.ContainsKey("Kids"))
             {
                 PageTreeNodes.Add(node);
-                foreach (int kid in PdfDictionary.References(ArrayText(dictionary.GetValueOrDefault("Kids"))))
+                foreach (int kid in PdfRawDictionary.References(ArrayText(dictionary.GetValueOrDefault("Kids"))))
                 {
                     WalkPages(kid, depth + 1);
                 }
@@ -1007,7 +1007,7 @@ internal static class PdfRevisionComparer
                 return;
             }
 
-            foreach (int kid in PdfDictionary.References(ArrayText(Dict(field).GetValueOrDefault("Kids"))))
+            foreach (int kid in PdfRawDictionary.References(ArrayText(Dict(field).GetValueOrDefault("Kids"))))
             {
                 WalkFields(kid, depth + 1);
             }
