@@ -833,6 +833,7 @@ internal static class Translations
         ["How many documents are signed at the same time."] = "Quantos documentos são assinados ao mesmo tempo.",
         ["Validate after signing"] = "Validar depois de assinar",
         ["Validates the produced file with SimpleSign's own validator."] = "Valida o arquivo produzido com o validador do próprio SimpleSign.",
+        ["simplesign sign has no option for signer roles: the command signs without them (the library's WithSignerRoles does)."] = "O simplesign sign não tem opção para os papéis do signatário: o comando assina sem eles (o WithSignerRoles da biblioteca os grava).",
         ["Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."] = "Entre os dois comandos, o assinante calcula o hash de document.pdf.tbs e o assina; signature.bin é a assinatura bruta.",
         ["The sandbox certificate exists only inside the TestBench; export your own PFX to run this."] = "O certificado do sandbox existe só dentro do TestBench; exporte o seu próprio PFX para rodar isto.",
         ["Trusted roots"] = "Raízes confiáveis",

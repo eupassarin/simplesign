@@ -69,6 +69,9 @@ public sealed class GovBrExtension : ICountryExtension
 
     /// <inheritdoc />
     public IReadOnlyList<IChainValidationProvider> ChainValidationProviders => _chainValidators.Value;
+
+    /// <summary>The CPF and CNPJ of Gov.br certificates (<see cref="BrazilSignerIdentityReader"/>).</summary>
+    public IReadOnlyList<ISignerIdentityReader> SignerIdentityReaders { get; } = [BrazilSignerIdentityReader.Instance];
 }
 
 // ─── Trust anchor provider ───────────────────────────────────────────────────

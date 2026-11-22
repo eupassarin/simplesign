@@ -254,6 +254,28 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
     }
 
     [Fact]
+    public async Task WithSignerRoles_AreSignedInPhaseOneAndReadBack()
+    {
+        DeferredSigningPrepareResult prepared = await Prepare().WithSignerRoles(["Diretor", "Testemunha"]).PrepareAsync();
+        byte[] signed = await Complete(prepared);
+
+        (await InspectSignature(signed)).ClaimedRoles.ShouldBe(["Diretor", "Testemunha"]);
+        await ShouldBeValid(signed);
+    }
+
+    [Fact]
+    public async Task WithSignerRoles_OneCallBuilderTurnedDeferred_KeepsTheRoles()
+    {
+        DeferredSigningPrepareResult prepared = await DeferredSigner.From(PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+                .WithCertificate(_publicCertificate)
+                .WithSignerRole("Testemunha"))
+            .WithSessionIntegrityKey(s_key)
+            .PrepareAsync();
+
+        (await InspectSignature(await Complete(prepared))).ClaimedRoles.ShouldBe(["Testemunha"]);
+    }
+
+    [Fact]
     public async Task WithMetadata_SetsTheFieldAndTheSignedAttributes()
     {
         var metadata = new SignatureMetadata
@@ -481,6 +503,7 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
         Should.Throw<InvalidOperationException>(() => resumed.WithSigningTime(DateTimeOffset.UtcNow));
         Should.Throw<InvalidOperationException>(() => resumed.WithSignaturePolicy(new SignaturePolicyReference("1.2.3", Oids.Sha256, new byte[32], null)));
         Should.Throw<InvalidOperationException>(() => resumed.WithMetadata(new SignatureMetadata { SignerName = "x" }));
+        Should.Throw<InvalidOperationException>(() => resumed.WithSignerRole("x"));
         Should.Throw<InvalidOperationException>(() => resumed.WithDocumentInfo("Title", "x"));
         Should.Throw<InvalidOperationException>(() => resumed.WithPdfAPreservation());
         Should.Throw<InvalidOperationException>(() => resumed.WithDssArtifacts([]));

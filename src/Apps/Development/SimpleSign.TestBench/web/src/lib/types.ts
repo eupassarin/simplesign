@@ -122,6 +122,8 @@ export interface SigningOptions {
   metadata: MetadataChoice
   certification: CertificationChoice
   documentInfo: { key: string; value: string }[]
+  /** The roles the signer claims (signer-attributes-v2), one per line. */
+  signerRoles?: string[]
   operationId?: string | null
   mode: RunMode
   batchCopies: number

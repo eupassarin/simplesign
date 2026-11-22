@@ -167,6 +167,12 @@ internal sealed class SigningPlan
             }
         }
 
+        if (_o.SignerRoles.Count > 0)
+        {
+            var roles = _o.SignerRoles;
+            steps.Add(new($".WithSignerRoles([{string.Join(", ", roles.Select(Str))}])", b => b.WithSignerRoles(roles)));
+        }
+
         if (_o.PreservePdfA)
         {
             steps.Add(new(".WithPdfAPreservation()", b => b.WithPdfAPreservation()));

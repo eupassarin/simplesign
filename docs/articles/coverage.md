@@ -12,7 +12,7 @@ from the published standards; check them against the version you follow before q
 
 | Format | Options | Implemented | Not implemented |
 |---|---|---|---|
-| PAdES | 142 | 141 | 1 |
+| PAdES | 143 | 142 | 1 |
 | CAdES | 86 | 85 | 1 |
 | XAdES | 88 | 84 | 4 |
 
@@ -88,6 +88,7 @@ ETSI EN 319 142-1 (PAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signed attributes | Institution |  | `SignatureMetadata.InstitutionName` | yes |
 | Signed attributes | Legal basis |  | `SignatureMetadata.LegalBasis` | yes |
 | Signed attributes | Policy OID | ETSI EN 319 122-1 · §5.2.9 signature-policy-identifier | `SignatureMetadata.PolicyOid` | yes |
+| Signed attributes | Signer roles | ETSI EN 319 122-1 · §5.2.6 signer-attributes-v2 | `WithSignerRoles(IReadOnlyList<string>)` | yes |
 | PDF signature field | Sub-filter | ETSI EN 319 142-1 · §5.2 General syntax<br>ISO 32000-2 · §12.8.3.4 CAdES signatures<br>ISO 32000-1 · §12.8.3.3 PKCS#7 signatures | `SignatureFieldOptions.SubFilter / WithSubFilter` | yes |
 | PDF signature field | Sub-filter: ETSI.CAdES.detached | ETSI EN 319 142-1 · §6.3 Table 1 /SubFilter |  | yes |
 | PDF signature field | Sub-filter: adbe.pkcs7.detached | ISO 32000-1 · §12.8.3.3 PKCS#7 signatures |  | yes |
@@ -396,7 +397,7 @@ Each clause and the options that implement it.
 | §5.2.5 signer-location | Signer location: postal address | CAdES | yes |
 | §5.2.6 signer-attributes-v2 | Attribute certificate | CAdES, XAdES | yes |
 | §5.2.6 signer-attributes-v2 | Signed assertion (SAML) | CAdES, XAdES | yes |
-| §5.2.6 signer-attributes-v2 | Signer roles | CAdES | yes |
+| §5.2.6 signer-attributes-v2 | Signer roles | PAdES, CAdES | yes |
 | §5.2.7 countersignature | Operation | CAdES | yes |
 | §5.2.7 countersignature | Operation: Countersign | CAdES | yes |
 | §5.2.8 content-time-stamp | Content timestamp | CAdES | yes |

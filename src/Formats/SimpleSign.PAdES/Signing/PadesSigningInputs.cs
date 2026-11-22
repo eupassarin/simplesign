@@ -88,9 +88,11 @@ internal static class PadesSigningInputs
 
     /// <summary>
     /// The signed attributes added to the mandatory ones: the commitment type, the signature policy and the
-    /// extra attributes of the metadata, then the signature policy given with its hash. Null when there are none.
+    /// extra attributes of the metadata, then the signature policy given with its hash, then the claimed roles
+    /// (signer-attributes-v2). Null when there are none.
     /// </summary>
-    internal static IReadOnlyList<CmsAttribute>? ExtraSignedAttributes(SignatureMetadata? metadata, SignaturePolicyReference? signaturePolicy)
+    internal static IReadOnlyList<CmsAttribute>? ExtraSignedAttributes(
+        SignatureMetadata? metadata, SignaturePolicyReference? signaturePolicy, IReadOnlyList<string>? signerRoles = null)
     {
         var extraAttributes = new List<CmsAttribute>();
         if (metadata is not null)
@@ -111,12 +113,24 @@ internal static class PadesSigningInputs
             extraAttributes.Add(CmsAttribute.SignaturePolicyIdentifier(signaturePolicy));
         }
 
+        if (signerRoles is { Count: > 0 })
+        {
+            extraAttributes.Add(CmsAttribute.SignerAttributesV2(signerRoles));
+        }
+
         // A signed attribute may appear once (RFC 5652 §5.3): the last one of a type wins.
         var distinct = extraAttributes
             .GroupBy(a => a.Oid, StringComparer.Ordinal)
             .Select(g => g.Last())
             .ToList();
         return distinct.Count > 0 ? distinct : null;
+    }
+
+    /// <summary>The roles a signer claims, trimmed, blank ones left out.</summary>
+    internal static IReadOnlyList<string> SignerRoles(IReadOnlyList<string> roles)
+    {
+        ArgumentNullException.ThrowIfNull(roles);
+        return roles.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).ToList().AsReadOnly();
     }
 
     /// <summary>The entries of the document information dictionary with <paramref name="key"/> set to <paramref name="value"/>.</summary>

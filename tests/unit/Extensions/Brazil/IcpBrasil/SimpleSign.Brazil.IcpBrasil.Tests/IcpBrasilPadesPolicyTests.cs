@@ -191,6 +191,35 @@ public sealed class IcpBrasilPadesPolicyTests : IDisposable
         facts.VriKeys.ShouldContain(IcpBrasilPolicyArtifacts.VriLpaSignature);
     }
 
+    [Theory]
+    [InlineData(IcpBrasilPolicy.AdRb)]
+    [InlineData(IcpBrasilPolicy.AdRt)]
+    [InlineData(IcpBrasilPolicy.AdRc)]
+    [InlineData(IcpBrasilPolicy.AdRa)]
+    public async Task WithIcpBrasilPolicy_AndClaimedRole_PolicyChecksStillPass(IcpBrasilPolicy policy)
+    {
+        // signer-attributes-v2 is an optional signed attribute the PBAD policies do not forbid.
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+            .WithCertificate(_pki.Leaf, _pki.IntermediatesAndRoot())
+            .WithHttpClientProvider(new SingleClientProvider(_http))
+            .WithIcpBrasilPolicy(policy, new IcpBrasilPadesOptions
+            {
+                Timestamp = policy == IcpBrasilPolicy.AdRb ? null : _tsa,
+                LongTermValidation = new LongTermValidationOptions(new SingleClientProvider(_http)),
+                Artifacts = policy == IcpBrasilPolicy.AdRa ? Artifacts() : null,
+            })
+            .WithSignerRole("Diretor")
+            .SignAsync();
+
+        var (cms, facts) = await Inspect(signed);
+        var check = IcpBrasilPolicyValidator.Validate(cms, DateTimeOffset.UtcNow, signerRoot: null, facts);
+
+        check.Status.ShouldBe(IcpBrasilPolicyStatus.Valid, string.Join("; ", check.Errors));
+        await using var stream = new MemoryStream(signed, writable: false);
+        var inspection = await SimpleSign.PAdES.Inspection.PdfSignatureInspector.InspectAsync(stream);
+        inspection.Signatures.First(s => !s.IsDocumentTimestamp).ClaimedRoles.ShouldBe(["Diretor"]);
+    }
+
     [Fact]
     public async Task Validate_AdRcWithoutDssOrDocumentTimestamp_IsInvalid()
     {

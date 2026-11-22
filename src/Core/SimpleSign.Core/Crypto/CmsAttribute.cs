@@ -409,6 +409,114 @@ public sealed class CmsAttribute
     }
 
     /// <summary>
+    /// Creates a signer-attributes-v2 attribute (ETSI EN 319 122-1 §5.2.6.1): the roles the signer claims and,
+    /// optionally, attribute certificates and assertions signed by a third party.
+    /// <code>
+    /// SignerAttributeV2 ::= SEQUENCE {
+    ///   claimedAttributes     [0] ClaimedAttributes OPTIONAL,
+    ///   certifiedAttributesV2 [1] CertifiedAttributesV2 OPTIONAL,
+    ///   signedAssertions      [2] SignedAssertions OPTIONAL }
+    /// ClaimedAttributes ::= SEQUENCE OF Attribute
+    /// CertifiedAttributesV2 ::= SEQUENCE OF CHOICE {
+    ///   attributeCertificate      [0] AttributeCertificate,
+    ///   otherAttributeCertificate [1] OtherAttributeCertificate }
+    /// SignedAssertions ::= SEQUENCE OF SignedAssertion
+    /// SignedAssertion ::= SEQUENCE { signedAssertionID OBJECT IDENTIFIER, signedAssertion ANY OPTIONAL }
+    /// </code>
+    /// The module uses explicit tags. Each role is one Attribute of type id-at-role (<see cref="Oids.RoleAttribute"/>)
+    /// whose value is the role as a UTF8String.
+    /// </summary>
+    /// <param name="claimedRoles">The roles the signer claims, written in this order.</param>
+    /// <param name="attributeCertificates">DER-encoded X.509 attribute certificates (certifiedAttributesV2); null or empty: none.</param>
+    /// <param name="signedAssertions">
+    /// Assertions about the signer signed by a third party: the OID of the kind of assertion and its DER-encoded
+    /// value (empty: none); null or empty: none.
+    /// </param>
+    /// <returns>The signer-attributes-v2 attribute.</returns>
+    /// <exception cref="ArgumentException">
+    /// A role is empty, or the three lists are all empty: an empty signer-attributes-v2 shall not be created.
+    /// </exception>
+    public static CmsAttribute SignerAttributesV2(
+        IReadOnlyList<string> claimedRoles,
+        IReadOnlyList<ReadOnlyMemory<byte>>? attributeCertificates = null,
+        IReadOnlyList<(string Oid, ReadOnlyMemory<byte> Value)>? signedAssertions = null)
+    {
+        ArgumentNullException.ThrowIfNull(claimedRoles);
+        attributeCertificates ??= [];
+        signedAssertions ??= [];
+        if (claimedRoles.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("A claimed role cannot be empty.", nameof(claimedRoles));
+        }
+
+        if (claimedRoles.Count == 0 && attributeCertificates.Count == 0 && signedAssertions.Count == 0)
+        {
+            throw new ArgumentException("An empty signer-attributes-v2 shall not be created (ETSI EN 319 122-1 §5.2.6.1).", nameof(claimedRoles));
+        }
+
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        using (writer.PushSequence())
+        {
+            if (claimedRoles.Count > 0)
+            {
+                using (writer.PushSequence(ExplicitContext(0)))
+                using (writer.PushSequence())
+                {
+                    foreach (string role in claimedRoles)
+                    {
+                        using (writer.PushSequence())
+                        {
+                            writer.WriteObjectIdentifier(Oids.RoleAttribute);
+                            using (writer.PushSetOf())
+                            {
+                                writer.WriteCharacterString(UniversalTagNumber.UTF8String, role);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (attributeCertificates.Count > 0)
+            {
+                using (writer.PushSequence(ExplicitContext(1)))
+                using (writer.PushSequence())
+                {
+                    foreach (ReadOnlyMemory<byte> attributeCertificate in attributeCertificates)
+                    {
+                        using (writer.PushSequence(ExplicitContext(0)))
+                        {
+                            writer.WriteEncodedValue(attributeCertificate.Span);
+                        }
+                    }
+                }
+            }
+
+            if (signedAssertions.Count > 0)
+            {
+                using (writer.PushSequence(ExplicitContext(2)))
+                using (writer.PushSequence())
+                {
+                    foreach ((string oid, ReadOnlyMemory<byte> value) in signedAssertions)
+                    {
+                        using (writer.PushSequence())
+                        {
+                            writer.WriteObjectIdentifier(oid);
+                            if (!value.IsEmpty)
+                            {
+                                writer.WriteEncodedValue(value.Span);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return new CmsAttribute(Oids.SignerAttributesV2, writer.Encode());
+    }
+
+    private static Asn1Tag ExplicitContext(int number) => new(TagClass.ContextSpecific, number, isConstructed: true);
+
+    /// <summary>
     /// Creates a custom attribute from an OID and a DER-encoded attribute value.
     /// The <paramref name="derValue"/> will be wrapped in SET OF by the CMS rendering code.
     /// </summary>

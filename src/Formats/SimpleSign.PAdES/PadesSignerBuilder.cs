@@ -367,6 +367,26 @@ public sealed partial class PadesSignerBuilder
     }
 
     /// <summary>
+    /// Sets the roles the signer claims, in the signer-attributes-v2 signed attribute (ETSI EN 319 122-1 §5.2.6.1,
+    /// claimedAttributes): for example "Diretor" or "Testemunha". Each role is written as an X.509 role attribute
+    /// (id-at-role) holding the role as text. Empty roles are left out; an empty list writes no attribute.
+    /// Replaces the roles set before. A validator reads them back in <see cref="SignatureValidationResult.ClaimedRoles"/>.
+    /// </summary>
+    /// <param name="roles">The claimed roles, in order.</param>
+    /// <returns>A new builder with the signer roles configured.</returns>
+    public PadesSignerBuilder WithSignerRoles(IReadOnlyList<string> roles) =>
+        With(_options with { SignerRoles = PadesSigningInputs.SignerRoles(roles) });
+
+    /// <summary>Sets one role the signer claims (see <see cref="WithSignerRoles(IReadOnlyList{string})"/>).</summary>
+    /// <param name="role">The claimed role.</param>
+    /// <returns>A new builder with the signer role configured.</returns>
+    public PadesSignerBuilder WithSignerRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return WithSignerRoles([role]);
+    }
+
+    /// <summary>
     /// Sets an entry of the PDF document information dictionary (ISO 32000-1 §14.3.3) in the
     /// signing revision, so the signature covers it. Existing entries are kept; a key set
     /// twice keeps the last value. Not supported when signing an existing field.
@@ -1058,7 +1078,7 @@ public sealed partial class PadesSignerBuilder
     }
 
     private IReadOnlyList<CmsAttribute>? BuildExtraAttributes() =>
-        PadesSigningInputs.ExtraSignedAttributes(_options.Metadata, _options.SignaturePolicy);
+        PadesSigningInputs.ExtraSignedAttributes(_options.Metadata, _options.SignaturePolicy, _options.SignerRoles);
 
     private async Task<byte[]?> ApplyTimestampAsync(
         byte[] cms,

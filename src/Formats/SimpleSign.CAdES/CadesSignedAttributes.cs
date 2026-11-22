@@ -260,90 +260,12 @@ public sealed record CadesSignedAttributes
         return CmsAttribute.Create(Oids.MimeType, writer.Encode());
     }
 
-    /// <summary>The claimed roles alone, as <see cref="EncodeSignerAttributes"/> writes them.</summary>
-    internal static CmsAttribute EncodeClaimedRoles(IReadOnlyList<string> roles) => EncodeSignerAttributes(roles, [], []);
-
-    /// <summary>
-    /// <code>
-    /// SignerAttributeV2 ::= SEQUENCE {
-    ///   claimedAttributes     [0] ClaimedAttributes OPTIONAL,
-    ///   certifiedAttributesV2 [1] CertifiedAttributesV2 OPTIONAL,
-    ///   signedAssertions      [2] SignedAssertions OPTIONAL }
-    /// ClaimedAttributes ::= SEQUENCE OF Attribute
-    /// CertifiedAttributesV2 ::= SEQUENCE OF CHOICE {
-    ///   attributeCertificate      [0] AttributeCertificate,
-    ///   otherAttributeCertificate [1] OtherAttributeCertificate }
-    /// SignedAssertions ::= SEQUENCE OF SignedAssertion
-    /// SignedAssertion ::= SEQUENCE { signedAssertionID OBJECT IDENTIFIER, signedAssertion ANY OPTIONAL }
-    /// </code>
-    /// The module uses explicit tags. Each role is one Attribute of type id-at-role whose value is
-    /// the role as a UTF8String. At least one of the three lists must have an item: an empty
-    /// signer-attributes-v2 shall not be created.
-    /// </summary>
+    /// <summary>The signer-attributes-v2 attribute of the roles, attribute certificates and signed assertions (<see cref="CmsAttribute.SignerAttributesV2"/>).</summary>
     internal static CmsAttribute EncodeSignerAttributes(
         IReadOnlyList<string> roles,
         IReadOnlyList<ReadOnlyMemory<byte>> attributeCertificates,
-        IReadOnlyList<CadesSignedAssertion> signedAssertions)
-    {
-        var writer = new AsnWriter(AsnEncodingRules.DER);
-        using (writer.PushSequence())
-        {
-            if (roles.Count > 0)
-            {
-                using (writer.PushSequence(Context(0)))
-                using (writer.PushSequence())
-                {
-                    foreach (string role in roles)
-                    {
-                        using (writer.PushSequence())
-                        {
-                            writer.WriteObjectIdentifier(Oids.RoleAttribute);
-                            using (writer.PushSetOf())
-                            {
-                                writer.WriteCharacterString(UniversalTagNumber.UTF8String, role);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (attributeCertificates.Count > 0)
-            {
-                using (writer.PushSequence(Context(1)))
-                using (writer.PushSequence())
-                {
-                    foreach (ReadOnlyMemory<byte> attributeCertificate in attributeCertificates)
-                    {
-                        using (writer.PushSequence(Context(0)))
-                        {
-                            writer.WriteEncodedValue(attributeCertificate.Span);
-                        }
-                    }
-                }
-            }
-
-            if (signedAssertions.Count > 0)
-            {
-                using (writer.PushSequence(Context(2)))
-                using (writer.PushSequence())
-                {
-                    foreach (CadesSignedAssertion assertion in signedAssertions)
-                    {
-                        using (writer.PushSequence())
-                        {
-                            writer.WriteObjectIdentifier(assertion.Oid);
-                            if (!assertion.Value.IsEmpty)
-                            {
-                                writer.WriteEncodedValue(assertion.Value.Span);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return CmsAttribute.Create(Oids.SignerAttributesV2, writer.Encode());
-    }
+        IReadOnlyList<CadesSignedAssertion> signedAssertions) =>
+        CmsAttribute.SignerAttributesV2(roles, attributeCertificates, [.. signedAssertions.Select(a => (a.Oid, a.Value))]);
 
     private static Asn1Tag Context(int number) => new(TagClass.ContextSpecific, number, isConstructed: true);
 

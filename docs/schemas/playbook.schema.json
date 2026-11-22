@@ -323,7 +323,15 @@
             "TimestampRevocationStatusUnknown",
             "CertificateNotQualified",
             "TimestampInvalid",
-            "AnchorNotFound"
+            "AnchorNotFound",
+            "EnvelopeFieldNotFound",
+            "EnvelopeFieldAlreadySigned",
+            "UnexpectedSigner",
+            "NotYourTurn",
+            "TimestampRequired",
+            "SeedValueViolated",
+            "LevelNotMet",
+            "EnvelopeTampered"
           ]
         },
         "indication": {

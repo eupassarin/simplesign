@@ -107,4 +107,50 @@ public enum SigningErrorReason
     /// or not as many times as the anchor's occurrence asks: the stamp would have no place, so nothing is signed.
     /// </summary>
     AnchorNotFound = 28,
+
+    /// <summary>
+    /// The PDF signature envelope has no empty signature field of the name given (or the envelope lists no such
+    /// field). Used by the PDF signature envelope.
+    /// </summary>
+    EnvelopeFieldNotFound = 29,
+
+    /// <summary>The signature field of the PDF signature envelope is already signed. Used by the PDF signature envelope.</summary>
+    EnvelopeFieldAlreadySigned = 30,
+
+    /// <summary>
+    /// The signing certificate is not that of the signer the PDF signature envelope expects in this field: none of its
+    /// identifiers (CPF, CNPJ, email…, read by an <see cref="Extensions.ISignerIdentityReader"/>) is the listed one.
+    /// Used by the PDF signature envelope.
+    /// </summary>
+    UnexpectedSigner = 31,
+
+    /// <summary>
+    /// The PDF signature envelope fixes an order of signing and a signer before this one has not signed yet.
+    /// Used by the PDF signature envelope.
+    /// </summary>
+    NotYourTurn = 32,
+
+    /// <summary>
+    /// The PDF signature envelope (or the field's seed value) requires a signature timestamp and none was configured.
+    /// Used by the PDF signature envelope.
+    /// </summary>
+    TimestampRequired = 33,
+
+    /// <summary>
+    /// The signature would break a required entry of the field's seed value dictionary (/SV, ISO 32000-1 §12.7.4.5):
+    /// its SubFilter, digest method, reasons or certificate constraints (/Cert). Used by the PDF signature envelope.
+    /// </summary>
+    SeedValueViolated = 34,
+
+    /// <summary>
+    /// The signature would not reach the level the PDF signature envelope asks of this signer (a baseline level, or a
+    /// legal level such as qualified). Used by the PDF signature envelope.
+    /// </summary>
+    LevelNotMet = 35,
+
+    /// <summary>
+    /// The PDF signature envelope was changed after it was prepared: its signer list or its fields are not those the
+    /// envelope's integrity data covers. Used by the PDF signature envelope.
+    /// </summary>
+    EnvelopeTampered = 36,
 }
