@@ -1,9 +1,9 @@
 # ADR 0032: A PDF Object Model for Reading and Incremental Writing
 
 **Status:** Accepted (2026-11-23). The migration's last step removed the scanning code, the legacy writers and their
-`AppContext` switch. It was taken at the maintainer's decision before three of the conditions of point 7 held: the
-weekly external corpus green twice, a preview release with the new writers, and the Interop, VeraPdf and EtsiChecker
-categories run on the last writer step. Those runs are still owed, now on the model alone.
+`AppContext` switch. It was taken at the maintainer's decision before all the conditions of point 7 held. On the final
+code the Interop (62 tests: qpdf, pyHanko, OpenSSL, xmlsec1) and VeraPdf (41) categories ran green; still owed, now on
+the model alone: the EtsiChecker category, the weekly external corpus green twice, and a preview release.
 
 **Context:**
 ADR 0005 chose to write our own PDF code, and that stays. How that code works is what this ADR changes. `SimpleSign.PAdES`
