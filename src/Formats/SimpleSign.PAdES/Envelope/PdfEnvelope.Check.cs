@@ -118,7 +118,7 @@ public static partial class PdfEnvelope
     private static EnvelopeCheck Refused(string field, EnvelopeManifestSigner? signer, SigningErrorReason reason, string message) =>
         new() { Field = field, Signer = signer, Reason = reason, Message = message };
 
-    private static EnvelopeIdentifierCheck Compare(EnvelopeIdentifier identifier, X509Certificate2 certificate, List<ISignerIdentityReader> readers)
+    internal static EnvelopeIdentifierCheck Compare(EnvelopeIdentifier identifier, X509Certificate2 certificate, List<ISignerIdentityReader> readers)
     {
         var types = new[] { identifier.Type }.Concat(identifier.AlsoAccept).ToList();
         var found = new List<string>();

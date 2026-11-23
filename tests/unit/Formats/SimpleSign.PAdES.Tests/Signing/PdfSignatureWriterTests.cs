@@ -461,6 +461,37 @@ public sealed class PdfSignatureWriterTests
         (await PdfStructureReader.GetDocMdpPermissionLevelAsync(stream)).ShouldBe((int)level);
     }
 
+    [Theory]
+    [InlineData("/Lock << /Type /SigFieldLock /Action /Exclude /Fields [(Other)] /P 2 >>", true, "/Reference [<< /Type /SigRef /TransformMethod /DocMDP")]
+    [InlineData("/Lock << /Type /SigFieldLock /Action /All >>", false, "/Reference [<< /Type /SigRef /TransformMethod /FieldMDP /TransformParams << /Type /TransformParams /Action /All /V /1.2 >> >>]")]
+    [InlineData("", false, null)]
+    public async Task SignAsync_ExistingFieldWithLock_WritesTheFieldMdpReference(string fieldLock, bool certify, string? expected)
+    {
+        string pdf =
+            "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /SigFlags 3 >> >>\nendobj\n" +
+            "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n" +
+            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Annots [4 0 R] >>\nendobj\n" +
+            $"4 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Sig /T (Assinatura) /P 3 0 R /Rect [72 300 292 370] /F 4 {fieldLock} >>\nendobj\n" +
+            "trailer\n<< /Size 5 /Root 1 0 R >>\n%%EOF\n";
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+        var builder = PadesSigner.Document(Encoding.Latin1.GetBytes(pdf)).WithCertificate(cert).WithExistingField("Assinatura");
+
+        byte[] signed = await (certify ? builder.AsCertification(CertificationLevel.FormFilling) : builder).SignAsync();
+
+        string text = Encoding.Latin1.GetString(signed);
+        if (expected is null)
+        {
+            text.ShouldNotContain("/FieldMDP");
+            return;
+        }
+
+        text.ShouldContain(expected);
+        if (certify)
+        {
+            text.ShouldContain("/TransformMethod /FieldMDP /TransformParams << /Type /TransformParams /Action /Exclude /Fields [(Other)] /P 2 /V /1.2 >> >>]");
+        }
+    }
+
     private sealed class NonSeekableStream : MemoryStream
     {
         public override bool CanSeek => false;

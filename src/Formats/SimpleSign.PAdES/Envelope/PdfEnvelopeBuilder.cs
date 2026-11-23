@@ -149,10 +149,10 @@ public sealed class PdfEnvelopeBuilder
     /// <exception cref="ArgumentException">A placement is not on a page of the document.</exception>
     public Task<byte[]> PrepareAsync(CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         var manifest = BuildManifest();
-        return Task.FromResult(PdfEnvelopeWriter.Write(
-            _pdf, manifest, new PdfEnvelopeLayout(_state.Signers, _state.TimestampUrl, _state.Certification, _state.LockDocument)));
+        var layout = new PdfEnvelopeLayout(_state.Signers, _state.TimestampUrl, _state.Certification, _state.LockDocument);
+        var pdf = _pdf;
+        return Task.Run(() => PdfEnvelopeWriter.Write(pdf, manifest, layout), cancellationToken);
     }
 
     private sealed record State

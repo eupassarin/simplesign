@@ -8,7 +8,7 @@ namespace SimpleSign.PAdES.Envelope;
 /// <item><see cref="PdfEnvelopeReader"/> reads them back, with what is signed and who is next;</item>
 /// <item><see cref="CheckSigner"/> tells, before the PIN is asked, whether a certificate may sign a field;</item>
 /// <item><c>WithEnvelopeField</c> on <see cref="PadesSignerBuilder"/> and <see cref="DeferredSignerBuilder"/> signs a field;</item>
-/// <item><c>PdfEnvelopeValidator</c> validates the whole envelope.</item>
+/// <item><see cref="PdfEnvelopeValidator"/> validates the whole envelope.</item>
 /// </list>
 /// </summary>
 public static partial class PdfEnvelope
