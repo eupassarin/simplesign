@@ -130,6 +130,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (and, from PDF 2.0, `/P`), after the DocMDP one when certifying. Before, the lock was left out of the signature, so a
   reader could not enforce it from the signature. A field without a lock is signed byte for byte as before.
 
+- **Augmenting a co-signed CAdES signature kept only one signer**: `CmsSignatureBuilder.AddUnsignedAttributes` and
+  `TimestampClient.EmbedTimestampInCms` read the first SignerInfo of the SignedData and wrote back a SignerInfos SET
+  holding that one, so `CadesAugmenter` on a CMS made with `CadesSigner.CoSign` dropped every co-signer — or threw
+  `AsnContentException` when the SignerInfos, written in signing order, were not in DER's sort order. Both now keep
+  every SignerInfo octet for octet, in signing order (as `CadesSigner.CoSign` writes them), and add to the one asked
+  for: new overloads take its index (`AddUnsignedAttributes(cms, attributes, signerIndex)`,
+  `EmbedTimestampInCms(cms, token, signerIndex)`); without one, the first, as before. `CadesAugmenter` raises one
+  signer, the first by default or the one `ForSigner(index)` names (new), each with its own signature and
+  archive-time-stamp-v3; to raise them all, augment each in turn. `CadesAugmenter.LevelOf(cms, signerIndex)` (new)
+  gives a signer's level, and a signer without a signature-time-stamp is now at B-B even when the SignedData holds
+  validation data (it was B-LT, so a co-signer's revocation data made another signer skip B-T).
+  `CmsSignatureBuilder.AddValidationMaterial` already kept every SignerInfo.
 - **A co-signed CAdES B-LTA: each archive-time-stamp-v3 is about its own SignerInfo** (ETSI EN 319 122-1 §5.5.3). Once
   `CadesSigner.CoSign` had added a second SignerInfo, `CadesSignatureValidator` rebuilt the archive time-stamp's input
   from every SignerInfo at once — all their signature fields in the message imprint, all their unsigned attributes in

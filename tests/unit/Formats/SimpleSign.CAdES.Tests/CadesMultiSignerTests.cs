@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
@@ -286,6 +287,98 @@ public sealed class CadesMultiSignerTests : IDisposable
         Assert.True(coSigner.IsValid, string.Join("; ", coSigner.Errors));
         Assert.Null(coSigner.HasValidArchiveTimestamp);
     }
+
+    [Theory]
+    [InlineData(AdesBaselineLevel.Timestamped)]
+    [InlineData(AdesBaselineLevel.Archive)]
+    public async Task Augment_CoSigned_RaisesTheFirstSignerAndKeepsTheCoSigner(AdesBaselineLevel target)
+    {
+        using var pki = new OfflinePki();
+        byte[] cosigned = await CoSignedBasic(pki);
+        List<byte[]> before = SignerInfos(cosigned);
+
+        var result = await CadesAugmenter.Signature(cosigned, _data).WithTimestamp(pki.Timestamp)
+            .WithHttpClientProvider(pki.Http).ToLevel(target).AugmentAsync();
+
+        List<byte[]> after = SignerInfos(result.Signature);
+        Assert.Equal(2, after.Count);
+        Assert.NotEqual(before[0], after[0]);
+        Assert.Equal(before[1], after[1]);
+        Assert.Equal(target, result.Level);
+        Assert.Equal(target, CadesAugmenter.LevelOf(result.Signature, 0));
+        Assert.Equal(AdesBaselineLevel.Basic, CadesAugmenter.LevelOf(result.Signature, 1));
+        var report = OfflineValidator().ValidateAll(result.Signature, _data, [pki.Pki.RootCa]);
+        Assert.True(report.IsValid, string.Join("; ", report.Signers.SelectMany(s => s.Result.Errors)));
+        Assert.True(report.Signers[0].Result.HasValidTimestamp);
+        Assert.Null(report.Signers[1].Result.HasValidTimestamp);
+        if (target == AdesBaselineLevel.Archive)
+        {
+            Assert.True(report.Signers[0].Result.HasValidArchiveTimestamp == true, string.Join("; ", report.Signers[0].Result.Warnings));
+        }
+    }
+
+    [Fact]
+    public async Task Augment_ForSecondSigner_RaisesItAndKeepsTheFirstByteIdentical()
+    {
+        using var pki = new OfflinePki();
+        byte[] cosigned = await CoSignedBasic(pki);
+        List<byte[]> before = SignerInfos(cosigned);
+
+        var result = await CadesAugmenter.Signature(cosigned, _data).ForSigner(1).WithTimestamp(pki.Timestamp)
+            .WithHttpClientProvider(pki.Http).ToLevel(AdesBaselineLevel.Archive).AugmentAsync();
+
+        List<byte[]> after = SignerInfos(result.Signature);
+        Assert.Equal(2, after.Count);
+        Assert.Equal(before[0], after[0]);
+        Assert.NotEqual(before[1], after[1]);
+        Assert.Equal(AdesBaselineLevel.Basic, result.InitialLevel);
+        Assert.Equal(AdesBaselineLevel.Archive, result.Level);
+        Assert.Equal(AdesBaselineLevel.Basic, CadesAugmenter.LevelOf(result.Signature));
+        var report = OfflineValidator().ValidateAll(result.Signature, _data, [pki.Pki.RootCa]);
+        Assert.True(report.IsValid, string.Join("; ", report.Signers.SelectMany(s => s.Result.Errors)));
+        Assert.Equal(pki.Ecdsa.Thumbprint, report.Signers[1].Result.SignerCertificate!.Thumbprint);
+        Assert.True(report.Signers[1].Result.HasValidArchiveTimestamp == true, string.Join("; ", report.Signers[1].Result.Warnings));
+    }
+
+    [Fact]
+    public async Task Augment_EachSignerInTurn_EveryArchiveTimestampV3Validates()
+    {
+        using var pki = new OfflinePki();
+        byte[] cms = await CoSignedBasic(pki);
+
+        for (int signer = 0; signer < 2; signer++)
+        {
+            cms = (await CadesAugmenter.Signature(cms, _data).ForSigner(signer).WithTimestamp(pki.Timestamp)
+                .WithHttpClientProvider(pki.Http).ToLevel(AdesBaselineLevel.Archive).AugmentAsync()).Signature;
+        }
+
+        var report = OfflineValidator().ValidateAll(cms, _data, [pki.Pki.RootCa]);
+        Assert.True(report.IsValid, string.Join("; ", report.Signers.SelectMany(s => s.Result.Errors)));
+        Assert.Equal(2, report.Signers.Count);
+        Assert.All(report.Signers, s => Assert.True(s.Result.HasValidArchiveTimestamp == true, string.Join("; ", s.Result.Warnings)));
+    }
+
+    [Fact]
+    public async Task Augment_NoSuchSigner_ThrowsArgumentOutOfRange()
+    {
+        using var pki = new OfflinePki();
+        byte[] cosigned = await CoSignedBasic(pki);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => CadesAugmenter.Signature(cosigned, _data).ForSigner(2)
+            .WithTimestamp(pki.Timestamp).ToLevel(AdesBaselineLevel.Timestamped).AugmentAsync());
+        Assert.Throws<ArgumentOutOfRangeException>(() => CadesAugmenter.Signature(cosigned).ForSigner(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CadesAugmenter.LevelOf(cosigned, 2));
+    }
+
+    /// <summary>An RSA B-B signature of <see cref="_data"/> co-signed by an ECDSA B-B one (detached).</summary>
+    private async Task<byte[]> CoSignedBasic(OfflinePki pki)
+    {
+        byte[] rsa = await CadesSigner.Document(_data).WithCertificate(pki.Pki.Leaf, pki.Chain).SignAsync();
+        return await CadesSigner.CoSign(rsa, _data).WithCertificate(pki.Ecdsa, pki.Chain).SignAsync();
+    }
+
+    private static CadesSignatureValidator OfflineValidator() =>
+        new(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false });
 
     /// <summary>The encoded SignerInfos of a SignedData, in order.</summary>
     private static List<byte[]> SignerInfos(byte[] cms)

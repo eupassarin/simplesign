@@ -15,8 +15,9 @@ namespace SimpleSign.Signers.Pkcs11.Tests;
 /// <remarks>
 /// <c>SOFTHSM2_CONF</c> must be set before the test process starts: on Unix,
 /// <see cref="Environment.SetEnvironmentVariable(string, string)"/> is not visible to
-/// <c>getenv()</c> in native libraries. Each fixture creates a token with a unique label, so
-/// test runs for several target frameworks can share one token directory.
+/// <c>getenv()</c> in native libraries. Each test run needs a token directory of its own: a
+/// process that reads every slot fails (<c>CKR_GENERAL_ERROR</c>) on a token another process is
+/// still writing, so <c>scripts/tests/pkcs11-run.sh</c> runs each target framework on its own.
 /// </remarks>
 public sealed class SoftHsmFixture : IDisposable
 {
