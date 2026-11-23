@@ -38,7 +38,11 @@ internal static class PdfObjectSerializer
     /// Top-level values written as given instead of serialized (a placeholder such as
     /// <c>[0000000000 0000000000 0000000000 0000000000]</c> that is filled in later), by key without the slash.
     /// </param>
-    public static PdfSerializedObject Write(int number, PdfObject value, int generation = 0, IReadOnlyDictionary<string, string>? raw = null)
+    /// <param name="inline">
+    /// Whether the dictionary (a stream's included) is written on one line (<c>&lt;&lt; /Filter /FlateDecode /Length 9 &gt;&gt;</c>),
+    /// as the writers write the streams they embed; its values' places are then not given.
+    /// </param>
+    public static PdfSerializedObject Write(int number, PdfObject value, int generation = 0, IReadOnlyDictionary<string, string>? raw = null, bool inline = false)
     {
         ArgumentNullException.ThrowIfNull(value);
         var text = new StringBuilder();
@@ -47,10 +51,17 @@ internal static class PdfObjectSerializer
         byte[]? data = null;
         switch (value)
         {
+            case PdfStream stream when inline:
+                text.Append(ToText(stream.Dictionary)).Append("\nstream\n");
+                data = stream.Encoded.ToArray();
+                break;
             case PdfStream stream:
                 WriteBlock(text, stream.Dictionary, raw, ranges);
                 text.Append("\nstream\n");
                 data = stream.Encoded.ToArray();
+                break;
+            case PdfDictionary dictionary when inline:
+                text.Append(ToText(dictionary));
                 break;
             case PdfDictionary dictionary:
                 WriteBlock(text, dictionary, raw, ranges);

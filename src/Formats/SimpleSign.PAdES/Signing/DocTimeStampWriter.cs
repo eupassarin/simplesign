@@ -146,7 +146,7 @@ public static class DocTimeStampWriter
         var acroFormValue = catalog.Get(PdfName.AcroForm);
         int existingAcroForm = acroFormValue is PdfReference acroFormReference ? acroFormReference.Id.Number : 0;
         bool reuseAcroForm = existingAcroForm > 0;
-        var catalogSource = ObjectSource(document, root, catalogObject);
+        var catalogSource = PdfObjectSource.Of(document, root, catalogObject, keepHeader: true);
 
         // An inline AcroForm stays inline (as in PdfSignatureWriter): converting it drops /DA, /DR, … and invalidates
         // earlier signatures in Acrobat. It is updated where it is when its /Fields is an array (or absent).
@@ -188,7 +188,7 @@ public static class DocTimeStampWriter
             // The AcroForm as an object of its own: the one the catalog points to, or the inline one moved out.
             var (existing, source) = reuseAcroForm
                 ? document.GetObject(existingAcroForm) is { Value: PdfDictionary indirect } acroFormObject
-                    ? (indirect, ObjectSource(document, existingAcroForm, acroFormObject).Buffer)
+                    ? (indirect, PdfObjectSource.Of(document, existingAcroForm, acroFormObject).Buffer)
                     : (null, ReadOnlyMemory<byte>.Empty)
                 : (acroFormValue as PdfDictionary, catalogSource.Buffer);
             update.Add(acroFormNumber, AcroFormObject(document, acroFormNumber, existing, source, fieldRef));
@@ -259,7 +259,7 @@ public static class DocTimeStampWriter
     /// </summary>
     private static byte[] PageWithAnnotation(PdfDocument document, int number, PdfIndirectObject page, string fieldRef)
     {
-        var patch = new PdfDictionaryPatch(ObjectSource(document, number, page).ObjectBytes);
+        var patch = new PdfDictionaryPatch(PdfObjectSource.Of(document, number, page).ObjectBytes);
         switch (patch.Dictionary.Get(s_annots))
         {
             case PdfArray { Source: not null }:
@@ -267,7 +267,7 @@ public static class DocTimeStampWriter
                 break;
             case PdfReference reference:
                 string items = document.GetObject(reference.Id) is { Value: PdfArray { Source: { } range } } annots
-                    ? ArrayItemsAsWritten(ObjectSource(document, reference.Id.Number, annots).Buffer.Span, range)
+                    ? ArrayItemsAsWritten(PdfObjectSource.Of(document, reference.Id.Number, annots).Buffer.Span, range)
                     : "";
                 patch.Set(s_annots.Value, items.Length == 0 ? $"[{fieldRef}]" : $"[{items} {fieldRef}]");
                 break;
@@ -287,37 +287,4 @@ public static class DocTimeStampWriter
 
     private static byte[] WithFinalLineFeed(byte[] bytes) =>
         bytes.Length > 0 && bytes[^1] == (byte)'\n' ? bytes : [.. bytes, (byte)'\n'];
-
-    /// <summary>
-    /// Where an object was read from: the file, or the decoded data of its object stream. Its bytes to patch are the
-    /// file's (<c>N 0 obj</c> before its value, as the writers have always written the header) or, for an object of an
-    /// object stream, its value written as an object of its own.
-    /// </summary>
-    private static SourcedObject ObjectSource(PdfDocument document, int number, PdfIndirectObject obj)
-    {
-        var header = Encoding.Latin1.GetBytes(string.Create(CultureInfo.InvariantCulture, $"{number} 0 obj\n"));
-        if (document.Lookup(number) is { Type: PdfXrefEntryType.Compressed } entry
-            && document.GetObject(entry.StreamNumber)?.Value is PdfStream stream)
-        {
-            byte[] decoded = document.DecodeStream(stream);
-            var value = SourceOf(obj.Value) is { } range && range.End <= decoded.Length
-                ? Encoding.Latin1.GetString(decoded, (int)range.Offset, range.Length).Trim()
-                : PdfObjectSerializer.ToText(obj.Value);
-            return new SourcedObject(decoded, [.. header, .. Encoding.Latin1.GetBytes($"{value}\nendobj\n")], Compressed: true);
-        }
-
-        int valueStart = SourceOf(obj.Value) is { } valueRange ? (int)valueRange.Offset : (int)obj.Source.Offset;
-        return new SourcedObject(document.Data, [.. header, .. document.Data.Span[valueStart..(int)obj.Source.End]], Compressed: false);
-    }
-
-    private static PdfSourceRange? SourceOf(PdfObject value) => value switch
-    {
-        PdfDictionary dictionary => dictionary.Source,
-        PdfArray array => array.Source,
-        PdfStream stream => stream.Dictionary.Source,
-        _ => null,
-    };
-
-    /// <summary>An object's bytes to patch, and the data its source ranges are offsets in.</summary>
-    private sealed record SourcedObject(ReadOnlyMemory<byte> Buffer, byte[] ObjectBytes, bool Compressed);
 }

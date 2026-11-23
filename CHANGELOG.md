@@ -82,6 +82,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The DSS of B-LT and B-LTA (`LtvEmbedder`) is written through the PDF object model** (ADR 0032): the signatures,
+  the existing DSS and the catalog are the objects the cross-reference lists, so the update no longer:
+  - leaves out the VRI of a signature whose `/Contents<` is written without a space, is in an object stream, or is
+    short (the text search looked for `/Contents <` and more than 1000 hex digits);
+  - replaces a catalog it cannot find in the file (in an object stream) by one of `/Type` and `/DSS` only, losing the
+    pages and the form;
+  - removes, with the old `/DSS`, whatever followed it on its line (other keys, the catalog's `>>`);
+  - rewrites an older copy of the catalog, or a stray one;
+  - turns the catalog's CRLF line ends into LF.
+
+  An existing `/DSS` is now set where it is. A document without a catalog is refused with `PdfStructureException`.
+  Elsewhere the update is the same, byte for byte: 66 of the 112 documents of the golden test.
 - **The document timestamp (B-LTA, `DocTimeStampWriter`) is written through the PDF object model** (ADR 0032): the
   catalog, the AcroForm and the first page are the objects the cross-reference lists, so the update no longer:
   - rewrites an older copy of the page, or a stray one, left in the file, dropping the `/Annots` the current page has

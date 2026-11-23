@@ -91,11 +91,11 @@ public sealed class VriValidatorTests
     [Fact(DisplayName = "ExtractSignatureContentHashes produces uppercase hex SHA-1")]
     public void ExtractSignatureContentHashes_ProducesUppercaseHex()
     {
-        // Build a minimal PDF with a fake /Contents <hex...>
-        var fakeHex = new string('A', 2048); // >1000 chars to be recognized as sig
+        // Build a minimal PDF with a signature dictionary holding /Contents <hex...>
+        var fakeHex = new string('A', 2048);
         var pdf = Encoding.Latin1.GetBytes(
             $"%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n" +
-            $"2 0 obj\n<< /Contents <{fakeHex}> >>\nendobj\n" +
+            $"2 0 obj\n<< /Type /Sig /ByteRange [0 10 20 30] /Contents <{fakeHex}> >>\nendobj\n" +
             "xref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n" +
             "trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n200\n%%EOF");
 

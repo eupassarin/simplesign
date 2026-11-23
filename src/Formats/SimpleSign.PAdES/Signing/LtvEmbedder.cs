@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
@@ -11,7 +13,9 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
-using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Model;
+using SimpleSign.PAdES.Pdf.Writing;
 using SimpleSign.PAdES.Internal;
 using SimpleSign.Core.Internal;
 
@@ -391,13 +395,7 @@ public sealed class LtvEmbedder : ILtvEmbedder
 
         _logger.LtvDataCollected(crlData.Count, ocspData.Count, allCerts.Count);
 
-        // Extract signature /Contents hashes for VRI (SHA-1 per ISO 32000-2 §12.8.4.4)
-        var signatureHashes = ExtractSignatureContentHashes(signedPdf);
-
-        // Parse existing DSS for merge (multi-signature support)
-        var existingDss = Validation.DssExtractor.ParseExistingDss(signedPdf);
-
-        return AppendDssDictionary(signedPdf, crlData, ocspData, allCerts, signatureHashes, existingDss, timestampTokenBytes, artifacts);
+        return AppendDss(signedPdf, crlData, ocspData, allCerts, timestampTokenBytes, artifacts);
     }
 
     internal static bool HasCompleteEvidence(
@@ -448,361 +446,202 @@ public sealed class LtvEmbedder : ILtvEmbedder
     }
 
     /// <summary>
-    /// Computes the SHA-1 hash of each signature's /Contents value for VRI dictionary keys.
-    /// Per ISO 32000-2 §12.8.4.4, the VRI key is the uppercase hex SHA-1 of the raw byte string
-    /// value of the /Contents entry — i.e. the full decoded bytes including any trailing zero
-    /// padding used to reserve space for the signature. Validators such as the ETSI Signature
-    /// Conformance Checker compute SHA-1 over the complete /Contents bytes and look for a
-    /// matching VRI key; stripping the padding would produce a different hash and break matching.
+    /// The SHA-1 of each signature's <c>/Contents</c>, in the order the signatures were made (where their byte ranges
+    /// end): the VRI keys. Per ISO 32000-2 §12.8.4.4, the VRI key is the uppercase hex SHA-1 of the raw byte string
+    /// value of the /Contents entry — i.e. the full decoded bytes including any trailing zero padding used to reserve
+    /// space for the signature. Validators such as the ETSI Signature Conformance Checker compute SHA-1 over the
+    /// complete /Contents bytes and look for a matching VRI key; stripping the padding would produce a different hash
+    /// and break matching.
     /// </summary>
-    internal static List<string> ExtractSignatureContentHashes(byte[] pdf, ILogger? logger = null)
-    {
-        var hashes = new List<string>();
-        var span = pdf.AsSpan();
-        ReadOnlySpan<byte> contentsToken = "/Contents <"u8;
-        int searchPos = 0;
+    internal static List<string> ExtractSignatureContentHashes(byte[] pdf) => SignatureContentHashes(PdfDocument.Open(pdf).View());
 
-        while (searchPos < span.Length)
-        {
-            int matchPos = span[searchPos..].IndexOf(contentsToken);
-            if (matchPos < 0)
-            {
-                break;
-            }
-
-            matchPos += searchPos;
-            int hexStart = matchPos + contentsToken.Length;
-
-            int hexEnd = span[hexStart..].IndexOf((byte)'>');
-            if (hexEnd < 0)
-            {
-                break;
-            }
-
-            hexEnd += hexStart;
-
-            int hexLen = hexEnd - hexStart;
-            if (hexLen > 1000)
-            {
-                try
-                {
-                    string hexString = System.Text.Encoding.Latin1.GetString(span.Slice(hexStart, hexLen));
-                    if (hexString.Length % 2 != 0)
-                    {
-                        hexString = "0" + hexString;
-                    }
-
-                    if (hexString.Length > 0)
-                    {
-                        byte[] sigBytes = Convert.FromHexString(hexString);
+    private static List<string> SignatureContentHashes(PdfRevisionView view) =>
+    [
+        .. view.Signatures
+            .Select((signature, index) => (signature, index, end: signature.ByteRange is [_, _, long offset, long length] ? offset + length : 0))
+            .Where(s => !s.signature.Contents.IsEmpty)
+            .OrderBy(s => s.end)
+            .ThenBy(s => s.index)
 #pragma warning disable CA5350 // VRI key is defined as SHA-1 by PAdES spec
-                        byte[] sha1 = SHA1.HashData(sigBytes);
+            .Select(s => Convert.ToHexString(SHA1.HashData(s.signature.Contents.Span))),
 #pragma warning restore CA5350
-                        hashes.Add(Convert.ToHexString(sha1));
-                    }
-                }
-                catch (FormatException ex)
-                {
-                    (logger ?? NullLogger.Instance).LogWarning("Failed to decode hex string for VRI key: {Message}", ex.Message);
-                }
-            }
+    ];
 
-            searchPos = hexEnd + 1;
-        }
-
-        return hashes;
-    }
-
-    private static byte[] AppendDssDictionary(
+    /// <summary>
+    /// Appends the validation data as an incremental update (ADR 0032): one stream per CRL, OCSP response, certificate
+    /// (each once), timestamp and artifact, a VRI for the signature made last when it has none, the DSS with the
+    /// existing references merged, and the catalog pointing to it. The document is read through the PDF object model:
+    /// the signatures, the existing DSS and the catalog (wherever it is) are those the cross-reference lists.
+    /// </summary>
+    internal static byte[] AppendDss(
         byte[] signedPdf,
         List<byte[]> crls,
         List<byte[]> ocsps,
         IReadOnlyList<X509Certificate2> certs,
-        List<string> signatureHashes,
-        ExistingDssData existingDss,
         byte[]? timestampTokenBytes,
-        IReadOnlyList<PdfDssArtifact> artifacts)
+        IReadOnlyList<PdfDssArtifact> artifacts,
+        TimeProvider? timeProvider = null)
     {
-        int nextObj = FindNextObjectNumber(signedPdf);
-        int dssObjNum = nextObj;
-        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(signedPdf);
+        var document = PdfDocument.Open(signedPdf);
+        var view = document.View();
+        if (document.RootId is not { } rootId || document.GetObject(rootId) is not { Value: PdfDictionary } catalogObject)
+        {
+            throw new PdfStructureException("The document has no catalog: validation data cannot be added to it.");
+        }
 
-        using var result = new MemoryStream();
-        result.Write(signedPdf);
-        IncrementalUpdateUtility.EnsureTrailingEol(result);
+        var signatureHashes = SignatureContentHashes(view);
+        var existingDss = Validation.DssReader.ReadExisting(view);
+        int root = rootId.Number;
+        int dssNumber = view.NextObjectNumber;
+        int next = dssNumber + 1;
+        var update = new PdfIncrementalUpdate(document);
 
-        var xrefMap = new SortedDictionary<int, long>();
-        int nextObjNum = dssObjNum + 1;
+        int Stream(ReadOnlySpan<byte> data)
+        {
+            int number = next++;
+            byte[] compressed = CompressWithZlib(data);
+            var stream = new PdfStream(new PdfDictionary((PdfName.Filter.Value, s_flateDecode), (PdfName.Length.Value, new PdfInteger(compressed.Length))), compressed);
+            update.Add(number, PdfObjectSerializer.Write(number, stream, inline: true).Bytes);
+            return number;
+        }
 
-        // Write CRL stream objects
-        var crlRefs = WriteStreamObjects(result, crls, ref nextObjNum, xrefMap);
+        List<int> crlRefs = [.. crls.Select(crl => Stream(crl))];
+        List<int> ocspRefs = [.. ocsps.Select(ocsp => Stream(ocsp))];
 
-        // Write OCSP response stream objects
-        var ocspRefs = WriteStreamObjects(result, ocsps, ref nextObjNum, xrefMap);
-
-        // Write certificate stream objects (deduplicated by thumbprint)
-        var certThumbprintMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var certRefs = new List<string>();
-        var certRefSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Certificates once each, by thumbprint.
+        var certByThumbprint = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var certRefs = new List<int>();
         foreach (var cert in certs)
         {
-            string thumbprint = cert.Thumbprint;
-            if (certThumbprintMap.TryGetValue(thumbprint, out var existingRef))
+            if (!certByThumbprint.TryGetValue(cert.Thumbprint, out int number))
             {
-                if (certRefSet.Add(existingRef))
-                {
-                    certRefs.Add(existingRef);
-                }
-                continue;
+                number = Stream(cert.RawData);
+                certByThumbprint[cert.Thumbprint] = number;
             }
 
-            int objNum = nextObjNum++;
-            string objRef = $"{objNum} 0 R";
-            certRefSet.Add(objRef);
-            certRefs.Add(objRef);
-            certThumbprintMap[thumbprint] = objRef;
-
-            xrefMap[objNum] = result.Position;
-            byte[] compressed = CompressWithZlib(cert.RawData);
-            var sb = new System.Text.StringBuilder();
-            sb.Append($"{objNum} 0 obj\n");
-            sb.Append($"<< /Filter /FlateDecode /Length {compressed.Length} >>\n");
-            sb.Append("stream\n");
-            byte[] header = System.Text.Encoding.Latin1.GetBytes(sb.ToString());
-            byte[] footer = System.Text.Encoding.Latin1.GetBytes("\nendstream\nendobj\n");
-            result.Write(header);
-            result.Write(compressed);
-            result.Write(footer);
+            if (!certRefs.Contains(number))
+            {
+                certRefs.Add(number);
+            }
         }
 
-        // The validation material and timestamp supplied to this invocation belong to the
-        // signature that was just added, which is the last signature in the incremental PDF.
-        // Historical VRI mappings are immutable: replacing them would discard their original
-        // per-signature /TS and validation-data associations.
+        // The validation material and timestamp supplied to this invocation belong to the signature made last.
+        // Historical VRI mappings are immutable: replacing them would discard their original per-signature /TS and
+        // validation-data associations; and a /TS is written only when a new VRI references it.
         string? currentSignatureHash = signatureHashes.Count > 0 ? signatureHashes[^1] : null;
-        bool createCurrentVri = currentSignatureHash is not null
-            && !existingDss.VriEntries.ContainsKey(currentSignatureHash);
+        bool createCurrentVri = currentSignatureHash is not null && !existingDss.VriEntries.ContainsKey(currentSignatureHash);
+        int? tsRef = createCurrentVri && timestampTokenBytes is { Length: > 0 } ? Stream(timestampTokenBytes) : null;
 
-        // Write /TS only when a new current-signature VRI will reference it. If the current
-        // signature already has a VRI, preserve that mapping instead of creating an orphaned
-        // timestamp stream or destructively rebuilding the VRI.
-        string? tsRef = null;
-        if (createCurrentVri && timestampTokenBytes is { Length: > 0 })
-        {
-            int tsObjNum = nextObjNum++;
-            xrefMap[tsObjNum] = result.Position;
-            byte[] tsCompressed = CompressWithZlib(timestampTokenBytes);
-            var tsSb = new System.Text.StringBuilder();
-            tsSb.Append($"{tsObjNum} 0 obj\n");
-            tsSb.Append($"<< /Filter /FlateDecode /Length {tsCompressed.Length} >>\n");
-            tsSb.Append("stream\n");
-            result.Write(System.Text.Encoding.Latin1.GetBytes(tsSb.ToString()));
-            result.Write(tsCompressed);
-            result.Write(System.Text.Encoding.Latin1.GetBytes("\nendstream\nendobj\n"));
-            tsRef = $"{tsObjNum} 0 R";
-        }
-
-        // Extra artifacts: one stream per distinct content, listed under their DSS key and
-        // referenced from the new signature's VRI under their VRI key.
-        var artifactRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var vriArtifactRefs = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        var written = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Extra artifacts: one stream per distinct content, listed under their DSS key and referenced from the new
+        // signature's VRI under their VRI key.
+        var artifactRefs = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        var vriArtifactRefs = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        var byDigest = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var artifact in artifacts)
         {
             string digest = Convert.ToHexString(SHA256.HashData(artifact.Content.Span));
-            if (!written.TryGetValue(digest, out var objRef))
+            if (!byDigest.TryGetValue(digest, out int number))
             {
-                objRef = WriteStreamObjects(result, [artifact.Content.ToArray()], ref nextObjNum, xrefMap)[0];
-                written[digest] = objRef;
+                number = Stream(artifact.Content.Span);
+                byDigest[digest] = number;
             }
 
-            Add(artifactRefs, artifact.DssKey, objRef);
-            Add(vriArtifactRefs, artifact.VriKey, objRef);
+            AddOnce(artifactRefs, artifact.DssKey, number);
+            AddOnce(vriArtifactRefs, artifact.VriKey, number);
         }
 
-        static void Add(Dictionary<string, List<string>> map, string key, string objRef)
-        {
-            if (!map.TryGetValue(key, out var list))
-            {
-                map[key] = list = [];
-            }
-
-            if (!list.Contains(objRef))
-            {
-                list.Add(objRef);
-            }
-        }
-
-        // Build a VRI only for the newly added signature. Existing mappings remain active and
-        // continue to reference the validation material and timestamp collected for their own
-        // signatures. Validation material collected in this pass cannot safely be attributed to
-        // historical signatures merely because their hashes are present in the document.
-        var vriEntries = new List<(string Hash, int ObjNum)>();
+        var vriEntries = existingDss.VriEntries.Select(e => (Hash: e.Key, Number: e.Value)).ToList();
         if (createCurrentVri)
         {
-            int vriObjNum = nextObjNum++;
-            long vriOffset = result.Position;
-            xrefMap[vriObjNum] = vriOffset;
-
-            var vriSb = new System.Text.StringBuilder();
-            vriSb.Append($"{vriObjNum} 0 obj\n");
-            vriSb.Append("<< /Type /VRI\n");
-            if (crlRefs is not [])
+            var vri = new List<PdfDictionaryEntry> { new(PdfName.Type, PdfName.Of("VRI")) };
+            AddArray(vri, "CRL", crlRefs);
+            AddArray(vri, "OCSP", ocspRefs);
+            AddArray(vri, "Cert", certRefs);
+            if (tsRef is int ts)
             {
-                vriSb.Append($"   /CRL [{string.Join(" ", crlRefs)}]\n");
-            }
-
-            if (ocspRefs is not [])
-            {
-                vriSb.Append($"   /OCSP [{string.Join(" ", ocspRefs)}]\n");
-            }
-
-            if (certRefs is not [])
-            {
-                vriSb.Append($"   /Cert [{string.Join(" ", certRefs)}]\n");
-            }
-
-            if (tsRef is not null)
-            {
-                vriSb.Append($"   /TS {tsRef}\n");
+                vri.Add(new(PdfName.Of("TS"), new PdfReference(ts)));
             }
 
             foreach (var (key, refs) in vriArtifactRefs)
             {
-                vriSb.Append(refs.Count == 1 ? $"   /{key} {refs[0]}\n" : $"   /{key} [{string.Join(" ", refs)}]\n");
+                vri.Add(new(PdfName.Of(key), refs.Count == 1 ? new PdfReference(refs[0]) : References(refs)));
             }
 
-            // ISO 32000-2 §12.8.4.4: /TU is the time at which the VRI was created
-            vriSb.Append($"   /TU (D:{DateTime.UtcNow:yyyyMMddHHmmss}+00'00')\n");
-
-            vriSb.Append(">>\nendobj\n");
-            result.Write(System.Text.Encoding.Latin1.GetBytes(vriSb.ToString()));
-
-            vriEntries.Add((currentSignatureHash!, vriObjNum));
+            // ISO 32000-2 §12.8.4.4: /TU is the time at which the VRI was created.
+            DateTime now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+            vri.Add(new(PdfName.Of("TU"), PdfObjectSerializer.TextString(string.Create(CultureInfo.InvariantCulture, $"D:{now:yyyyMMddHHmmss}+00'00'"))));
+            int vriNumber = next++;
+            update.Add(vriNumber, new PdfDictionary(vri));
+            vriEntries.Add((currentSignatureHash!, vriNumber));
         }
 
-        // Write DSS dictionary — merge existing refs with new refs
-        long dssOffset = result.Position;
-        xrefMap[dssObjNum] = dssOffset;
-
-        // Merge existing object refs with newly written refs
-        var allCrlRefs = MergeRefs(existingDss.CrlObjRefs, crlRefs);
-        var allOcspRefs = MergeRefs(existingDss.OcspObjRefs, ocspRefs);
-        var allCertRefs = MergeRefs(existingDss.CertObjRefs, certRefs);
-
-        var allVriEntries = new List<(string Hash, int ObjNum)>(existingDss.VriEntries.Count + vriEntries.Count);
-        allVriEntries.AddRange(existingDss.VriEntries.Select(entry => (entry.Key, entry.Value)));
-        allVriEntries.AddRange(vriEntries);
-
-        var dssSb = new System.Text.StringBuilder();
-        dssSb.Append($"{dssObjNum} 0 obj\n");
-        dssSb.Append("<< /Type /DSS\n");
-        if (allCrlRefs is not [])
-        {
-            dssSb.Append($"   /CRLs [{string.Join(" ", allCrlRefs)}]\n");
-        }
-
-        if (allOcspRefs is not [])
-        {
-            dssSb.Append($"   /OCSPs [{string.Join(" ", allOcspRefs)}]\n");
-        }
-
-        if (allCertRefs is not [])
-        {
-            dssSb.Append($"   /Certs [{string.Join(" ", allCertRefs)}]\n");
-        }
-
+        // The DSS: the existing references first, then the new ones, each object once.
+        var dss = new List<PdfDictionaryEntry> { new(PdfName.Type, PdfName.Of("DSS")) };
+        AddArray(dss, "CRLs", Merge(existingDss.CrlObjRefs, crlRefs));
+        AddArray(dss, "OCSPs", Merge(existingDss.OcspObjRefs, ocspRefs));
+        AddArray(dss, "Certs", Merge(existingDss.CertObjRefs, certRefs));
         foreach (string key in existingDss.ExtraArrays.Keys.Union(artifactRefs.Keys, StringComparer.Ordinal))
         {
-            var merged = MergeRefs(
+            var merged = Merge(
                 existingDss.ExtraArrays.TryGetValue(key, out var old) ? old : [],
                 artifactRefs.TryGetValue(key, out var added) ? added : []);
-            dssSb.Append($"   /{key} [{string.Join(" ", merged)}]\n");
+            dss.Add(new(PdfName.Of(key), References(merged)));
         }
 
-        if (allVriEntries is not [])
+        Dictionary<string, string>? raw = null;
+        if (vriEntries.Count > 0)
         {
-            dssSb.Append("   /VRI <<\n");
-            foreach (var (hash, objNum) in allVriEntries)
+            // The VRI dictionary one entry per line, as the DSS has always been written.
+            var text = new StringBuilder("<<\n");
+            foreach (var (hash, number) in vriEntries)
             {
-                dssSb.Append($"      /{hash} {objNum} 0 R\n");
+                text.Append(CultureInfo.InvariantCulture, $"      /{hash} {number} 0 R\n");
             }
 
-            dssSb.Append("   >>\n");
+            dss.Add(new(PdfName.Of("VRI"), PdfNull.Instance));
+            raw = new(StringComparer.Ordinal) { ["VRI"] = text.Append("   >>").ToString() };
         }
 
-        dssSb.Append(">>\nendobj\n");
-        result.Write(System.Text.Encoding.Latin1.GetBytes(dssSb.ToString()));
+        update.Add(dssNumber, new PdfDictionary(dss), raw);
 
-        // Write updated catalog with /DSS reference
-        long catOffset = result.Position;
-        xrefMap[catalogObjNum] = catOffset;
+        // The catalog with /DSS set: in place when it has one, else before its >>; every other byte kept.
+        var catalog = new PdfDictionaryPatch(PdfObjectSource.Of(document, root, catalogObject, keepHeader: true).ObjectBytes)
+            .Set("DSS", string.Create(CultureInfo.InvariantCulture, $"{dssNumber} 0 R"))
+            .ToBytes();
+        update.Add(root, catalog.Length > 0 && catalog[^1] == (byte)'\n' ? catalog : [.. catalog, (byte)'\n']);
 
-        byte[] updCatalog = BuildUpdatedCatalogDss(catalogObjNum, signedPdf, dssObjNum);
-        result.Write(updCatalog);
-
-        int trailerSize = Math.Max(dssObjNum + 1, xrefMap.Keys.Max() + 1);
-
-        long prevXRef = FindLastStartXRef(signedPdf);
-        string? trailerId = PdfStructureParser.FindTrailerId(signedPdf);
-        string? trailerInfo = PdfStructureParser.FindTrailerInfo(signedPdf);
-
-        bool useXRefStream = PdfStructureParser.UsesXRefStreams(signedPdf);
-        long xrefOffset = result.Position;
-
-        if (useXRefStream)
-        {
-            int xrefObjNum = xrefMap.Keys.Max() + 1;
-            trailerSize = Math.Max(trailerSize, xrefObjNum + 1);
-            var (xrefBytes, _) = PdfSignatureWriter.BuildXrefStream(
-                xrefMap, xrefObjNum, trailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            result.Write(xrefBytes);
-        }
-        else
-        {
-            byte[] xrefTrailer = PdfSignatureWriter.BuildXrefTableAndTrailer(xrefMap, trailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            result.Write(xrefTrailer);
-        }
-
-        return result.ToArray();
+        return update.Finish(Math.Max(dssNumber + 1, update.Offsets.Keys.Max() + 1), root);
     }
 
-    /// <summary>
-    /// Writes a list of byte arrays as PDF stream objects to the output stream.
-    /// Returns indirect reference strings (e.g. "N 0 R") for each written object.
-    /// </summary>
-    private static List<string> WriteStreamObjects(
-        MemoryStream output,
-        List<byte[]> dataList,
-        ref int nextObjNum,
-        SortedDictionary<int, long> offsets)
+    private static readonly PdfName s_flateDecode = PdfName.Of("FlateDecode");
+
+    private static void AddOnce(Dictionary<string, List<int>> map, string key, int number)
     {
-        var refs = new List<string>();
-        foreach (var data in dataList)
+        if (!map.TryGetValue(key, out var list))
         {
-            int objNum = nextObjNum++;
-            refs.Add($"{objNum} 0 R");
-
-            offsets[objNum] = output.Position;
-
-            // Compress with zlib (FlateDecode) — CRLs can be 1MB+ uncompressed
-            byte[] compressed = CompressWithZlib(data);
-
-            var sb = new System.Text.StringBuilder();
-            sb.Append($"{objNum} 0 obj\n");
-            sb.Append($"<< /Filter /FlateDecode /Length {compressed.Length} >>\n");
-            sb.Append("stream\n");
-            byte[] header = System.Text.Encoding.Latin1.GetBytes(sb.ToString());
-            byte[] footer = System.Text.Encoding.Latin1.GetBytes("\nendstream\nendobj\n");
-            output.Write(header);
-            output.Write(compressed);
-            output.Write(footer);
+            map[key] = list = [];
         }
 
-        return refs;
+        if (!list.Contains(number))
+        {
+            list.Add(number);
+        }
     }
 
-    private static byte[] CompressWithZlib(byte[] data)
+    private static void AddArray(List<PdfDictionaryEntry> entries, string key, List<int> numbers)
+    {
+        if (numbers.Count > 0)
+        {
+            entries.Add(new(PdfName.Of(key), References(numbers)));
+        }
+    }
+
+    private static PdfArray References(IEnumerable<int> numbers) => new(numbers.Select(n => (PdfObject)new PdfReference(n)));
+
+    /// <summary>The existing references, then the new ones, each object once.</summary>
+    private static List<int> Merge(IReadOnlyList<int> existing, IReadOnlyList<int> added) => [.. existing.Concat(added).Distinct()];
+
+    private static byte[] CompressWithZlib(ReadOnlySpan<byte> data)
     {
         using var ms = new MemoryStream();
         using (var zlib = new ZLibStream(ms, CompressionLevel.Optimal, leaveOpen: true))
@@ -811,177 +650,6 @@ public sealed class LtvEmbedder : ILtvEmbedder
         }
 
         return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Merges existing object references (from prior DSS) with newly written references.
-    /// Existing refs are formatted as "N 0 R" strings. Deduplication is by object number.
-    /// </summary>
-    private static List<string> MergeRefs(IReadOnlyList<int> existingObjNums, List<string> newRefs)
-    {
-        var merged = new List<string>();
-        var seen = new HashSet<int>();
-
-        // Add existing references first (preserves prior data)
-        foreach (int objNum in existingObjNums)
-        {
-            if (seen.Add(objNum))
-            {
-                merged.Add($"{objNum} 0 R");
-            }
-        }
-
-        // Add new references, skipping duplicates
-        foreach (string r in newRefs)
-        {
-            // Extract obj number from "N 0 R" string
-            int spaceIdx = r.IndexOf(' ');
-            if (spaceIdx > 0 && int.TryParse(r.AsSpan(0, spaceIdx), out int num) && seen.Add(num))
-            {
-                merged.Add(r);
-            }
-        }
-
-        return merged;
-    }
-
-    private static byte[] BuildUpdatedCatalogDss(int catalogObjNum, byte[] pdf, int dssObjNum)
-    {
-        // The last "N 0 obj" that is not the tail of a larger number: a plain search for "1 0 obj"
-        // also matches "21 0 obj" (a stamp's font descriptor, say) and would rewrite that object as
-        // the catalog, dropping the AcroForm and the signature field with it.
-        var (start, end) = PdfStructureParser.FindObjectBytes(pdf, catalogObjNum);
-        if (start < 0)
-        {
-            return System.Text.Encoding.Latin1.GetBytes(
-                $"{catalogObjNum} 0 obj\n<< /Type /Catalog /DSS {dssObjNum} 0 R >>\nendobj\n");
-        }
-
-        string original = System.Text.Encoding.Latin1.GetString(pdf, start, end - start);
-
-        // Remove existing /DSS if present
-        int dssIdx = original.IndexOf("/DSS ", StringComparison.Ordinal);
-        if (dssIdx >= 0)
-        {
-            int lineEnd = original.IndexOf('\n', dssIdx);
-            if (lineEnd >= 0)
-            {
-                original = original[..dssIdx] + original[(lineEnd + 1)..];
-            }
-        }
-
-        // Find the position to insert /DSS — just before the closing >> of the top-level dict.
-        // Normalise CRLF → LF so Windows / iText / Adobe source PDFs match the sentinel;
-        // fall back to a depth-aware search for the top-level dict close when the
-        // sentinel is not found (e.g. unusual line endings or nested dicts).
-        string normalised = original.Replace("\r\n", "\n", StringComparison.Ordinal);
-        int insertIdx = normalised.LastIndexOf(">>\nendobj", StringComparison.Ordinal);
-        if (insertIdx < 0)
-        {
-            insertIdx = PdfStructureParser.FindOutermostDictClose(normalised);
-        }
-
-        if (insertIdx < 0)
-        {
-            return System.Text.Encoding.Latin1.GetBytes(normalised);
-        }
-
-        // Splice against normalised (not original) so the index is correct even when
-        // the source catalog contained CRLF line endings.
-        string updated = normalised[..insertIdx] + $"   /DSS {dssObjNum} 0 R\n" + normalised[insertIdx..];
-
-        // ISO 32000 §7.3.10: endobj shall be followed by an EOL marker. The next
-        // object (XRef stream, written immediately after by the caller) would
-        // otherwise start with no EOL predecessor and fail spacingCompliesPDFA.
-        if (!updated.EndsWith('\n'))
-        {
-            updated += "\n";
-        }
-
-        return System.Text.Encoding.Latin1.GetBytes(updated);
-    }
-
-    private static int FindNextObjectNumber(byte[] pdf)
-    {
-        ReadOnlySpan<byte> sizeKey = "/Size "u8;
-        var span = pdf.AsSpan();
-        int idx = span.LastIndexOf(sizeKey);
-        if (idx < 0)
-        {
-            return 10;
-        }
-
-        int pos = idx + sizeKey.Length;
-        int size = 0;
-        while (pos < pdf.Length && pdf[pos] >= '0' && pdf[pos] <= '9')
-        {
-            size = size * 10 + (pdf[pos++] - '0');
-        }
-
-        // Also check highest object number to avoid collisions
-        ReadOnlySpan<byte> objMarker = " 0 obj"u8;
-        int highest = 0;
-        int searchPos = 0;
-        while (searchPos < pdf.Length)
-        {
-            int objIdx = pdf.AsSpan(searchPos).IndexOf(objMarker);
-            if (objIdx < 0)
-            {
-                break;
-            }
-
-            int absPos = searchPos + objIdx;
-            int numEnd = absPos;
-            int numStart = numEnd - 1;
-            while (numStart >= 0 && pdf[numStart] >= '0' && pdf[numStart] <= '9')
-            {
-                numStart--;
-            }
-
-            numStart++;
-            if (numStart < numEnd)
-            {
-                int objNum = 0;
-                for (int i = numStart; i < numEnd; i++)
-                {
-                    objNum = objNum * 10 + (pdf[i] - '0');
-                }
-
-                if (objNum > highest)
-                {
-                    highest = objNum;
-                }
-            }
-
-            searchPos = absPos + objMarker.Length;
-        }
-
-        return Math.Max(size, highest + 1);
-    }
-
-    private static long FindLastStartXRef(byte[] pdf)
-    {
-        ReadOnlySpan<byte> marker = "startxref"u8;
-        var span = pdf.AsSpan();
-        int idx = span.LastIndexOf(marker);
-        if (idx < 0)
-        {
-            return 0;
-        }
-
-        int pos = idx + marker.Length;
-        while (pos < pdf.Length && (pdf[pos] == ' ' || pdf[pos] == '\n' || pdf[pos] == '\r'))
-        {
-            pos++;
-        }
-
-        long val = 0;
-        while (pos < pdf.Length && pdf[pos] >= '0' && pdf[pos] <= '9')
-        {
-            val = val * 10 + (pdf[pos++] - '0');
-        }
-
-        return val;
     }
 
     /// <summary>

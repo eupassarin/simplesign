@@ -19,6 +19,14 @@ namespace SimpleSign.PAdES.Tests.Signing;
 [Trait("Category", "Unit")]
 public sealed class LtvEmbedderTests
 {
+    [Fact(DisplayName = "A document without a catalog is refused when the DSS is written")]
+    public void AppendDss_NoCatalog_ThrowsPdfStructureException()
+    {
+        byte[] pdf = Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Producer (x) >>\nendobj\ntrailer\n<< /Size 2 >>\n%%EOF\n");
+
+        Should.Throw<SimpleSign.PAdES.Pdf.Exceptions.PdfStructureException>(() => LtvEmbedder.AppendDss(pdf, [[1]], [], [], null, []));
+    }
+
 
 
 
