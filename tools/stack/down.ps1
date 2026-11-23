@@ -5,11 +5,15 @@
 #   pwsh -File tools/stack/down.ps1             stop; the Sandbox's PKI and the DSS download cache are kept
 #   pwsh -File tools/stack/down.ps1 -DropPki    stop and drop the Sandbox's PKI (the next up makes a new one); keep the DSS cache
 #   pwsh -File tools/stack/down.ps1 -Volumes    stop and drop every volume: the PKI and the DSS download cache
+#   pwsh -File tools/stack/down.ps1 -ContainerEngine Podman
+#   -ContainerEngine Docker|Podman (default: SIMPLESIGN_CONTAINER_ENGINE or Docker)
 # The SoftHSM token (.softhsm/) is left as is: up.ps1 fills it again from the Sandbox.
 # The project name (COMPOSE_PROJECT_NAME, default simplesign-stack) must be the one up was given.
 param(
     [switch]$DropPki,
     [switch]$Volumes,
+    [ValidateSet('Docker', 'Podman')]
+    [string]$ContainerEngine = $(if ($env:SIMPLESIGN_CONTAINER_ENGINE) { $env:SIMPLESIGN_CONTAINER_ENGINE } else { 'Docker' }),
     [switch]$Help,
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Rest
 )
@@ -32,19 +36,28 @@ function Invoke-Native {
 if ($Help) { Show-Help; exit 0 }
 if ($Rest) { [Console]::Error.WriteLine("Unknown option: $($Rest -join ' ')"); exit 2 }
 
+Import-Module (Join-Path $PSScriptRoot 'PodmanForwarding.psm1') -Force
+
 $project = if ($env:COMPOSE_PROJECT_NAME) { $env:COMPOSE_PROJECT_NAME } else { 'simplesign-stack' }
+$containerCli = if ($ContainerEngine -eq 'Podman') { 'podman' } else { 'docker' }
+if (-not (Get-Command $containerCli -ErrorAction SilentlyContinue)) {
+    throw "$containerCli was not found. Install it or select another engine with -ContainerEngine."
+}
 $compose = @('compose', '-p', $project, '-f', (Join-Path $PSScriptRoot 'docker-compose.yml'))
+if ($ContainerEngine -eq 'Podman' -and $IsWindows) {
+    Stop-SimpleSignPodmanForwarding -Project $project
+}
 
 if ($Volumes) {
-    Invoke-Native docker ($compose + @('down', '-v', '--remove-orphans'))
+    Invoke-Native $containerCli ($compose + @('down', '-v', '--remove-orphans'))
     Write-Host "Stopped $project; its volumes (the Sandbox's PKI, the DSS download cache) are gone."
 }
 elseif ($DropPki) {
-    Invoke-Native docker ($compose + @('down', '--remove-orphans'))
-    Invoke-Native docker @('volume', 'rm', '-f', "${project}_sandbox-data") | Out-Null
+    Invoke-Native $containerCli ($compose + @('down', '--remove-orphans'))
+    Invoke-Native $containerCli @('volume', 'rm', '-f', "${project}_sandbox-data") | Out-Null
     Write-Host "Stopped $project; the Sandbox's PKI is gone (the next up makes a new one), the DSS download cache is kept."
 }
 else {
-    Invoke-Native docker ($compose + @('down', '--remove-orphans'))
-    Write-Host "Stopped $project; the Sandbox's PKI and the DSS download cache are kept. Start again: pwsh -File tools/stack/up.ps1"
+    Invoke-Native $containerCli ($compose + @('down', '--remove-orphans'))
+    Write-Host "Stopped $project; the Sandbox's PKI and the DSS download cache are kept. Start again: pwsh -File tools/stack/up.ps1 -ContainerEngine $ContainerEngine"
 }
