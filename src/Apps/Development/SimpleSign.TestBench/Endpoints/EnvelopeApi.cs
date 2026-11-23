@@ -50,7 +50,7 @@ internal static class EnvelopeApi
 
         envelope.MapPost("/prepare", async (EnvelopePrepareRequest body, DocumentStore documents, CredentialStore credentials, CancellationToken ct) =>
         {
-            if (!documents.TryGet(body.FileId, out var file))
+            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
             {
                 return Results.NotFound(new { error = L.T("Choose a document.") });
             }
@@ -94,15 +94,15 @@ internal static class EnvelopeApi
         });
 
         envelope.MapPost("/status", (EnvelopeFileRequest body, DocumentStore documents) =>
-            !documents.TryGet(body.FileId, out var file)
+            string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file)
                 ? Results.NotFound(new { error = L.T("Choose a document.") })
                 : PdfEnvelopeReader.Read(file!.Content) is null
                     ? Results.BadRequest(new { error = L.T("The PDF holds no signature envelope.") })
                     : Results.Ok(View(file.Id, file.FileName, file.Content)));
 
-        envelope.MapPost("/sign", async (EnvelopeSignRequest body, DocumentStore documents, CredentialStore credentials, CancellationToken ct) =>
+        envelope.MapPost("/sign", async (EnvelopeSignRequest body, DocumentStore documents, CredentialStore credentials, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
         {
-            if (!documents.TryGet(body.FileId, out var file))
+            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
             {
                 return Results.NotFound(new { error = L.T("Choose a document.") });
             }
@@ -117,7 +117,9 @@ internal static class EnvelopeApi
                 var builder = credential!.External is { } external
                     ? PadesSigner.Document(file!.Content).WithExternalSigner(credential.Certificate, external, credential.Chain)
                     : PadesSigner.Document(file!.Content).WithCertificate(credential.Certificate, credential.Chain);
-                var timestamp = string.IsNullOrWhiteSpace(body.TsaUrl) ? null : new TimestampOptions(new Uri(body.TsaUrl));
+                // The TestBench's HTTP provider lets the connected Sandbox's loopback services in (its TSA).
+                builder = builder.WithHttpClientProvider(sandbox);
+                var timestamp = string.IsNullOrWhiteSpace(body.TsaUrl) ? null : new TimestampOptions(new Uri(body.TsaUrl), sandbox);
                 if (body.IcpPolicy is { Length: > 0 } policy)
                 {
                     builder = builder.WithCountryExtension(new IcpBrasilExtension())
@@ -147,16 +149,23 @@ internal static class EnvelopeApi
             }
         });
 
-        envelope.MapPost("/validate", async (EnvelopeFileRequest body, DocumentStore documents, CancellationToken ct) =>
+        envelope.MapPost("/validate", async (EnvelopeFileRequest body, DocumentStore documents, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
         {
-            if (!documents.TryGet(body.FileId, out var file))
+            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
             {
                 return Results.NotFound(new { error = L.T("Choose a document.") });
             }
 
             try
             {
-                var options = new SimpleSign.Core.Validation.ValidationOptions { CheckRevocation = false, Profile = IdentityProfile };
+                // The connected Sandbox's root is trusted, as the Sandbox's certificates sign the fields here.
+                var root = sandbox.Current?.Root;
+                var options = new SimpleSign.Core.Validation.ValidationOptions
+                {
+                    CheckRevocation = false,
+                    Profile = IdentityProfile,
+                    TrustedRoots = root is null ? null : [root],
+                };
                 var report = await new PdfEnvelopeValidator(options).ValidateAsync(file!.Content, ct);
                 return Results.Text(report.ToJson(), "application/json");
             }
