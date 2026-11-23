@@ -1,6 +1,5 @@
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Pdf;
 using Xunit;
 namespace SimpleSign.PAdES.Tests.Signing;
 
@@ -106,38 +105,6 @@ public sealed class DocMdpAndAppearanceTests
     {
         var app = new SignatureAppearance();
         app.BorderWidth.ShouldBe(0.5f);
-    }
-
-    // ── FindEmptySignatureField ──────────────────────────────────────────
-
-    [Fact(DisplayName = "Field not found returns -1")]
-    public void FindEmptySignatureField_NotFound_ReturnsNegative()
-    {
-        byte[] pdf = System.Text.Encoding.Latin1.GetBytes(
-            "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n");
-        var result = PdfStructureParser.FindEmptySignatureField(pdf, "MissingField");
-        result.ShouldBe(-1);
-    }
-
-    [Fact(DisplayName = "Empty field found returns object number")]
-    public void FindEmptySignatureField_EmptyField_ReturnsObjNum()
-    {
-        byte[] pdf = System.Text.Encoding.Latin1.GetBytes(
-            "%PDF-1.7\n" +
-            "5 0 obj\n<< /Type /Annot /Subtype /Widget /FT /Sig /T (Signature1) /Rect [0 0 0 0] >>\nendobj\n");
-        var result = PdfStructureParser.FindEmptySignatureField(pdf, "Signature1");
-        result.ShouldBe(5);
-    }
-
-    [Fact(DisplayName = "Already signed field throws exception")]
-    public void FindEmptySignatureField_SignedField_Throws()
-    {
-        byte[] pdf = System.Text.Encoding.Latin1.GetBytes(
-            "%PDF-1.7\n" +
-            "5 0 obj\n<< /FT /Sig /T (Signature1) /V 10 0 R >>\nendobj\n");
-        Action act = () => { PdfStructureParser.FindEmptySignatureField(pdf, "Signature1"); };
-        var ex = Should.Throw<InvalidOperationException>(act);
-        ex.Message.ShouldContain("already signed");
     }
 
     // ── SignatureFieldOptions ────────────────────────────────────────────

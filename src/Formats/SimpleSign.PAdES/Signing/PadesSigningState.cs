@@ -59,6 +59,9 @@ internal sealed record PadesSigningOptions(
     /// <summary>A signature policy with its hash, written as signature-policy-identifier.</summary>
     public SimpleSign.Core.Crypto.SignaturePolicyReference? SignaturePolicy { get; init; }
 
+    /// <summary>The roles the signer claims, written as signer-attributes-v2; empty: none.</summary>
+    public IReadOnlyList<string> SignerRoles { get; init; } = [];
+
     /// <summary>Entries to set in the document information dictionary in the signing revision.</summary>
     public IReadOnlyDictionary<string, string>? DocumentInfo { get; init; }
 

@@ -32,12 +32,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ask it; the anchor nearest to the signer decides; a chain is not refused when another provider of the same profile
   gives the anchor without conditions (`WithTrustFrom` stays a union). `ValidationOptions.ConstrainedTrustAnchors` and
   `TrustProfile.ConstrainedTrustAnchors` carry them. The chain of a time-stamp's TSA is not asked about.
+- **Claimed signer roles in PAdES**: `PadesSignerBuilder.WithSignerRole` / `WithSignerRoles` and the same on
+  `DeferredSignerBuilder` write the roles in signer-attributes-v2 (ETSI EN 319 122-1 §5.2.6.1, claimedAttributes), as
+  CAdES already did. `SignatureValidationResult.ClaimedRoles` and the inspector's `SignatureFieldInfo.ClaimedRoles` read
+  them back. Adding a role to an ICP-Brasil PBAD signature (AD-RB to AD-RA) keeps it valid under SimpleSign's policy
+  checks.
+- **`CmsAttribute.SignerAttributesV2`** (`SimpleSign.Core`): the signer-attributes-v2 encoder (claimed roles,
+  attribute certificates, signed assertions), public; CAdES now uses it (same bytes as before).
+- **`ISignerIdentityReader`** (`SimpleSign.Core`): reads the identifiers of a type (`SignerIdentifierTypes`: CPF, CNPJ, RESPONSIBLE-CPF,
+  NATURAL-PERSON-ID, LEGAL-PERSON-ID, EMAIL, SERIALNUMBER, ORGANIZATIONIDENTIFIER, CERT-SHA256) from a certificate, to check it is that of an expected signer.
+  `DefaultSignerIdentityReader` reads the email (SubjectAltName rfc822Name, subject E=), the subject serialNumber and
+  organizationIdentifier, the identifiers of a natural and a legal person in the form of ETSI EN 319 412-1 §5.1.3/§5.1.4
+  (`NATURAL-PERSON-ID` such as `PNOBE-85010112345`, `LEGAL-PERSON-ID` such as `VATBE-0123456789`: European qualified
+  certificates and others that follow the standard) and the SHA-256 of the certificate;
+  `ICountryExtension.SignerIdentityReaders` (default: none) gives a framework's.
+  `TrustProfile.SignerIdentityReaders` carries them (from `FromExtension`; `WithTrustFrom` adds the others').
+  `BrazilSignerIdentityReader` (`SimpleSign.Brazil`) reads the CPF (2.16.76.1.3.1) and CNPJ (2.16.76.1.3.3) of
+  ICP-Brasil and Gov.br certificates, and the CPF of the person responsible for an e-CNPJ (2.16.76.1.3.4) as
+  `RESPONSIBLE-CPF`, a type of its own; `IcpBrasilExtension` and `GovBrExtension` return it.
+- **`SigningErrorReason` values for the PDF signature envelope** (29–36): `EnvelopeFieldNotFound`,
+  `EnvelopeFieldAlreadySigned`, `UnexpectedSigner`, `NotYourTurn`, `TimestampRequired`, `SeedValueViolated`,
+  `LevelNotMet`, `EnvelopeTampered`. Nothing raises them yet.
 - **`PdfEmbeddedFiles.Read`** (`SimpleSign.PAdES`): the files embedded in a PDF (the catalog's `/Names /EmbeddedFiles`
   name tree), decoded. A file larger than 64 MB decoded, more than 1024 files, an unsupported filter or an encrypted
   document is refused.
 
 ### Changed
 
+- **The PDF code is an object model** (ADR 0032, accepted), internal: `SimpleSign.PAdES.Pdf.Model` reads a PDF through
+  its cross-reference (objects, filters, revisions, the views of a revision), and `SimpleSign.PAdES.Pdf.Writing` writes
+  incremental updates. Every reader and writer now uses it, and the scanning code they used is removed (some 7,000
+  lines, `PdfStructureParser` among them); the public API keeps its shape. The intended changes of behaviour are
+  listed under Fixed, and in the ADR with each difference that was explained before the old code went.
+  - Stream filters: FlateDecode with the 50 MB limit, ASCII85Decode, ASCIIHexDecode, the PNG predictors (Average and
+    Paeth too) and TIFF predictor 2; LZWDecode and RunLengthDecode are refused as unsupported.
+  - Cross-reference and revisions: tables, streams and hybrid files (`/XRefStm`), object streams within a budget, a
+    linearized file's two sections as one revision, objects found through the cross-reference by revision, and the
+    cross-reference rebuilt from the object headers when it cannot be read. Objects in an object stream must be listed
+    by a cross-reference stream (a table cannot list them): an object stream behind a table alone is not read.
+  - Reading: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree (fully
+    qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries, the certification
+    signature. The current reader lost tables with white-space before `xref` or `trailer`, lines ending with a lone CR,
+    and the objects only a hybrid file's `/XRefStm` lists; it did not see fields inside object streams, DSS arrays
+    written as references or without a space (`/Certs[`), nor an indirect `/VRI`; it read `/Name` from a nested
+    `/Prop_Build`; and it looked for pages in the root's `/Kids` only.
+  - Writing: a serializer, a patch that changes some entries of a dictionary and keeps every other byte (CRLF
+    included), and the incremental update; the appearance renderer gives its objects one by one.
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
   longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
   constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a
@@ -66,6 +106,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and unsigned attribute it lists must still be present. A value added after the time-stamp (the co-signer's
   certificate, for example) no longer makes it fail; that value is just not covered by the time-stamp. Signatures made
   before this fix were already correct, because co-signing leaves the existing SignerInfo byte-identical.
+- **A new signature field is written through the PDF object model** (ADR 0032): the catalog, the AcroForm, the page
+  and the document information are the objects the cross-reference lists, wherever they are, so signing no longer:
+  - names the field after a count of `/FT /Sig` in the file's text, which gave a name another field already had (20
+    of the golden test's cases); the name is `Signature` and one more than the form's fields, the first one free;
+  - writes `/Rect` and an `/AP` that points to no object when there is no page to draw the appearance on;
+  - draws on the file's first `/Type /Page`, or misses page N of a nested page tree (the signature then went
+    invisible), instead of the page tree's page;
+  - places an automatic stamp after every copy of the visible signatures in the file;
+  - rebuilds the AcroForm with the value of `/Type /AcroForm` as a key, loses its fields when the catalog is in an
+    object stream, or rewrites an older copy of the catalog, AcroForm or page;
+  - turns the CRLF line ends of the catalog, the page or the document information into LF.
+
+  The appearance renderer gives its objects one by one instead of bytes searched for `endobj`. Elsewhere the update
+  is the same, byte for byte: 415 of the 660 cases of the golden test (every document of the writers' corpus,
+  invisible, named, visible, certifying, with document information).
+- **Signing an existing signature field finds it in the field tree** (`ExistingFieldName`, ADR 0032): the field is
+  looked for by its fully qualified name (`Parent.Child`), else its `/T`, through the PDF object model, so a field
+  written `/FT/Sig` (no space), one inside an object stream, or one that inherits `/FT` from its parent is found
+  (each was "not found"). A visible signature of a field whose widget is a kid of its own is drawn on the widget's
+  rectangle (it was refused for want of one). The field keeps its CRLF line ends. Elsewhere the update is the same,
+  byte for byte: 29 of the 32 cases of the golden test the legacy writer could sign; the 3 others differ by the
+  line ends only.
+- **The DSS of B-LT and B-LTA (`LtvEmbedder`) is written through the PDF object model** (ADR 0032): the signatures,
+  the existing DSS and the catalog are the objects the cross-reference lists, so the update no longer:
+  - leaves out the VRI of a signature whose `/Contents<` is written without a space, is in an object stream, or is
+    short (the text search looked for `/Contents <` and more than 1000 hex digits);
+  - replaces a catalog it cannot find in the file (in an object stream) by one of `/Type` and `/DSS` only, losing the
+    pages and the form;
+  - removes, with the old `/DSS`, whatever followed it on its line (other keys, the catalog's `>>`);
+  - rewrites an older copy of the catalog, or a stray one;
+  - turns the catalog's CRLF line ends into LF.
+
+  An existing `/DSS` is now set where it is. A document without a catalog is refused with `PdfStructureException`.
+  Elsewhere the update is the same, byte for byte: 66 of the 112 documents of the golden test.
+- **The document timestamp (B-LTA, `DocTimeStampWriter`) is written through the PDF object model** (ADR 0032): the
+  catalog, the AcroForm and the first page are the objects the cross-reference lists, so the update no longer:
+  - rewrites an older copy of the page, or a stray one, left in the file, dropping the `/Annots` the current page has
+    (the widgets of the earlier signatures);
+  - loses the existing fields and AcroForm entries when the catalog is in an object stream, or when an inline
+    AcroForm's `/Fields` is a reference;
+  - writes the value of `/Type /AcroForm` as a key of its own in the AcroForm it rebuilds;
+  - ends the catalog it writes at `endobj` with the next object, or `xref`, straight after;
+  - takes the first `/Type /Page` of the file for the first page, instead of the page tree's first page;
+  - turns the page's CRLF line ends into LF.
+
+  A document without a catalog is refused with `PdfStructureException` before the TSA is asked. Elsewhere the update
+  is the same, byte for byte: 58 of the 110 documents of the golden test.
+- **Certifying into an existing signature field of a document whose AcroForm is inline kept the form**: the catalog
+  was rewritten with a reference to an AcroForm object that was never written, so the document lost its form (viewers
+  showed no field, and the field's name was lost). The catalog now keeps its inline AcroForm, without a stale `/Perms`.
+- **What changed after a signature is compared object by object** (ADR 0032): the revision a signature covers is the
+  file up to the end of its byte range, read as a document, and its objects are compared with the final ones
+  semantically. A page written again with its keys in another order, other spacing or `612.0` for `612` is no longer
+  reported as changed, nor is an object number the signed revision did not list (reused after a cross-reference
+  stream); a field name with escapes or in UTF-16 is decoded in the messages (it read `þÿ S i g n …`). The messages
+  are otherwise the same.
+- **Signature fields are read through the cross-reference** (`PdfStructureReader.ReadSignatureFieldsAsync`, and with it
+  validation, inspection and `PadesExtractor`): a signature whose field is inside an object stream has its field name
+  (it was `Signature_N`); a signature dictionary written again in a later revision is reported once, not once per
+  copy; a file is refused as encrypted only when its trailer says so. The order is still the file's, the CMS still the
+  one the byte range leaves out, and the name still the field's partial name. Inspection reads the document once.
+- **The DSS is read wherever it is written**: a `/VRI` written as its own object (as most signers write it), DSS
+  arrays written as references or without a space (`/Certs[`), inline VRI entries, and a DSS or catalog inside an
+  object stream were not read; validation now gets each signature's VRI data, and inspection no longer reports such a
+  VRI as malformed. The VRI's own `/Type` is not counted as an entry.
+- **Document facts come from the document's structure** (ADR 0032): the PDF/A level is what the catalog's
+  `/Metadata` declares (a `pdfaid:part` elsewhere in the file no longer counts); a document is encrypted when its
+  trailer has `/Encrypt` (the word in a content stream no longer counts); the DocMDP level is read from the
+  certification signature's `/Reference` however it is spaced (`/TransformMethod/DocMDP` was missed), still 1 when `/P`
+  is absent.
+- **`PdfEmbeddedFiles.Read` reads what the cross-reference says**: an embedded file compressed with a predictor
+  (`/DecodeParms`) or ASCIIHexDecode is decoded instead of refused; a file name without a byte order mark is decoded
+  as PDFDocEncoding (it was Latin-1); a name tree node that its kids point back to is read once; a FlateDecode stream
+  that is not zlib is refused as corrupt.
+- **Text anchors find text drawn with a Type 0 font whose CIDFont is written inline** in `/DescendantFonts`: its
+  widths were lost and the anchor's position drifted along the line.
+- **A PDF text string with a UTF-8 byte order mark (PDF 2.0) is read as UTF-8**: the signature dictionary's `/Name`,
+  `/Reason`, `/Location` and `/ContactInfo` written as `EF BB BF …` were decoded as PDFDocEncoding.
 - **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and
   `XadesAugmenter` ignored `TimestampOptions.ExpectedTsaCertificate` and accepted a token from any TSA; such a token now
   throws `SigningException` with `SigningErrorReason.TimestampUntrusted`. New, on each augmenter: `WithSigningPolicy`
@@ -80,6 +198,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declares an ICP-Brasil signature policy (AD-RB…) and lacks the attribute still shows that policy as `Invalid`.
 
 ### Tests
+
+- **Golden snapshots of the PDF object model** (ADR 0032): what it reads from each document of the corpus (committed
+  and generated) and what each writer writes (SHA-256 of the update, per framework) are snapshots, taken when they had
+  been checked against the code they replaced; `SIMPLESIGN_UPDATE_SNAPSHOTS=1` rewrites them. They replace the parity
+  harness and the golden tests against the legacy writers.
 
 - **The ETSI conformance corpus has several signatures in one file, and each sample is validated by SimpleSign
   first.** Eight more samples (40 in all): a PDF with three signatures, a certified PDF signed again, two PDF

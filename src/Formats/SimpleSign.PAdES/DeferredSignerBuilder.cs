@@ -84,6 +84,7 @@ public sealed class DeferredSignerBuilder
             EnforcePdfA = options.EnforcePdfA,
             SigningTime = options.SigningTime,
             SignaturePolicy = options.SignaturePolicy,
+            SignerRoles = options.SignerRoles,
             Metadata = options.Metadata,
             DocumentInfo = options.DocumentInfo,
             DssArtifacts = options.DssArtifacts,
@@ -334,6 +335,28 @@ public sealed class DeferredSignerBuilder
     }
 
     /// <summary>
+    /// Sets the roles the signer claims, in the signer-attributes-v2 signed attribute (ETSI EN 319 122-1 §5.2.6.1,
+    /// claimedAttributes): for example "Diretor" or "Testemunha". Each role is written as an X.509 role attribute
+    /// (id-at-role) holding the role as text. Empty roles are left out; an empty list writes no attribute.
+    /// Replaces the roles set before.
+    /// </summary>
+    /// <param name="roles">The claimed roles, in order.</param>
+    /// <returns>A new builder with the signer roles configured.</returns>
+    /// <exception cref="InvalidOperationException">The builder was resumed.</exception>
+    public DeferredSignerBuilder WithSignerRoles(IReadOnlyList<string> roles) =>
+        PhaseOne(_state with { SignerRoles = PadesSigningInputs.SignerRoles(roles) });
+
+    /// <summary>Sets one role the signer claims (see <see cref="WithSignerRoles(IReadOnlyList{string})"/>).</summary>
+    /// <param name="role">The claimed role.</param>
+    /// <returns>A new builder with the signer role configured.</returns>
+    /// <exception cref="InvalidOperationException">The builder was resumed.</exception>
+    public DeferredSignerBuilder WithSignerRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return WithSignerRoles([role]);
+    }
+
+    /// <summary>
     /// Configures generic signer metadata for the signature. Replaces signer, reason, location, and contact
     /// field values (omitted values clear earlier ones) and adds the commitment type, the policy and the extra
     /// signed attributes of the metadata.
@@ -502,7 +525,7 @@ public sealed class DeferredSignerBuilder
             EnforcePdfA = _state.EnforcePdfA,
             SigningTime = _state.SigningTime,
             DocumentInfo = _state.DocumentInfo,
-            ExtraAttributes = PadesSigningInputs.ExtraSignedAttributes(_state.Metadata, _state.SignaturePolicy),
+            ExtraAttributes = PadesSigningInputs.ExtraSignedAttributes(_state.Metadata, _state.SignaturePolicy, _state.SignerRoles),
             DssArtifacts = _state.DssArtifacts,
         };
 
@@ -687,6 +710,8 @@ public sealed class DeferredSignerBuilder
         public DateTimeOffset? SigningTime { get; init; }
 
         public SignaturePolicyReference? SignaturePolicy { get; init; }
+
+        public IReadOnlyList<string> SignerRoles { get; init; } = [];
 
         public SignatureMetadata? Metadata { get; init; }
 

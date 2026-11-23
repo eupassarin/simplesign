@@ -1,11 +1,11 @@
-using System.Text;
-using System.Text.RegularExpressions;
+
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
-using SimpleSign.PAdES.Validation;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Pdf;
+using SimpleSign.PAdES.Pdf.Model;
+using SimpleSign.PAdES.Validation;
 
 namespace SimpleSign.PAdES.Inspection;
 
@@ -41,13 +41,17 @@ public static partial class PdfSignatureInspector
             throw new ArgumentException("Stream must be seekable.", nameof(pdfStream));
         }
 
-        // Read all data in parallel-safe order
+        // The signatures go first: an encrypted document is refused (EncryptedPdfException) before anything else is read.
         var fields = await PdfStructureReader.ReadSignatureFieldsAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var isEncrypted = await PdfStructureReader.IsEncryptedAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var docMdpLevel = await PdfStructureReader.GetDocMdpPermissionLevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var pdfALevel = await PdfStructureReader.DetectPdfALevelAsync(pdfStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // The rest from one reading of the document (ADR 0032).
+        var document = await PdfStructureReader.OpenDocumentAsync(pdfStream, cancellationToken).ConfigureAwait(false);
+        var view = document.View();
+        bool isEncrypted = document.IsEncrypted;
+        int docMdpLevel = view.DocMdpLevel;
+        var pdfALevel = PdfStructureReader.PdfALevelOf(view);
         var pdfVersion = await PdfStructureReader.DetectPdfVersionAsync(pdfStream, cancellationToken).ConfigureAwait(false);
-        var dssInfo = await ExtractDssInfoAsync(pdfStream, cancellationToken).ConfigureAwait(false);
+        var dssInfo = DssSummary(view);
 
         var signatures = new List<SignatureFieldInfo>(fields.Count);
         foreach (var field in fields)
@@ -137,87 +141,22 @@ public static partial class PdfSignatureInspector
             HasSigningCertificateV2 = cms.SigningCertificateHash is not null,
             CommitmentTypeOid = cms.CommitmentTypeOid,
             SignaturePolicyOid = cms.SignaturePolicyOid,
+            ClaimedRoles = Core.Validation.Policy.SignedAttributeFacts.FromCms(cms.SignedAttrs)?.ClaimedRoles ?? [],
             ManifestJson = cms.ManifestJson,
             CmsRawData = field.ContentsBytes
         };
     }
 
-    private static async Task<DssInfo?> ExtractDssInfoAsync(
-        Stream pdfStream,
-        CancellationToken ct)
+    private static DssInfo? DssSummary(PdfRevisionView view)
     {
         try
         {
-            pdfStream.Seek(0, SeekOrigin.Begin);
-            int length = (int)Math.Min(pdfStream.Length, PdfStructureReader.MaxPdfSize);
-            var pdfBytes = new byte[length];
-            int read = 0;
-            while (read < length)
-            {
-                int n = await pdfStream.ReadAsync(pdfBytes.AsMemory(read, length - read), ct).ConfigureAwait(false);
-                if (n == 0)
-                {
-                    break;
-                }
-                read += n;
-            }
-
-            var data = pdfBytes.AsSpan(0, read);
-            var dssDictSlice = DssExtractor.FindDssDictionary(data);
-            if (dssDictSlice is null)
-            {
-                return null;
-            }
-
-            var dssSpan = dssDictSlice.Value.Span;
-            int crlCount = CountArrayEntries(dssSpan, "/CRLs ["u8);
-            int ocspCount = CountArrayEntries(dssSpan, "/OCSPs ["u8);
-            int certCount = CountArrayEntries(dssSpan, "/Certs ["u8);
-            bool hasVri = DssExtractor.IndexOfBytes(dssSpan, "/VRI "u8) >= 0
-                       || DssExtractor.IndexOfBytes(dssSpan, "/VRI<<"u8) >= 0;
-
-            // Validate VRI structure per ISO 32000-2 §12.8.4.4
-            var vriResult = hasVri
-                ? VriValidator.Validate(dssSpan)
-                : null;
-
-            return new DssInfo
-            {
-                CrlCount = crlCount,
-                OcspResponseCount = ocspCount,
-                CertificateCount = certCount,
-                HasVri = hasVri,
-                VriEntryCount = vriResult?.EntryCount ?? 0,
-                VriHasTimestamps = vriResult?.AllHaveTimestamps ?? false,
-                VriWarnings = vriResult?.Warnings ?? []
-            };
+            return DssReader.Summary(view);
         }
-        catch
+        catch (Exception ex) when (ex is PdfFilterException or PdfUnsupportedFilterException or InvalidOperationException)
         {
             return null;
         }
     }
 
-    private static int CountArrayEntries(ReadOnlySpan<byte> dssDictSlice, ReadOnlySpan<byte> arrayKey)
-    {
-        int idx = DssExtractor.IndexOfBytes(dssDictSlice, arrayKey);
-        if (idx < 0)
-        {
-            return 0;
-        }
-
-        int arrayStart = idx + arrayKey.Length;
-        int arrayEnd = DssExtractor.IndexOfBytesFrom(dssDictSlice, "]"u8, arrayStart);
-        if (arrayEnd <= arrayStart)
-        {
-            return 0;
-        }
-
-        var arraySlice = dssDictSlice[arrayStart..arrayEnd];
-        var text = Encoding.ASCII.GetString(arraySlice.ToArray());
-        return ObjRefRegex().Count(text);
-    }
-
-    [GeneratedRegex(@"(\d+)\s+0\s+R")]
-    private static partial Regex ObjRefRegex();
 }

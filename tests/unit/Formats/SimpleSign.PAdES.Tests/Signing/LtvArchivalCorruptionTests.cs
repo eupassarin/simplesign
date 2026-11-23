@@ -177,11 +177,11 @@ public sealed class LtvArchivalCorruptionTests
         var embedder = new LtvEmbedder(httpClient);
         byte[] ltvPdf = await embedder.EmbedLtvDataAsync(signedPdf, [cert]);
 
-        _out.WriteLine($"Original xref streams: {PdfStructureParser.UsesXRefStreams(pdf)}");
-        _out.WriteLine($"Signed xref streams: {PdfStructureParser.UsesXRefStreams(signedPdf)}");
+        _out.WriteLine($"Original xref streams: {Tests.Pdf.ModelProbe.UsesXrefStream(pdf)}");
+        _out.WriteLine($"Signed xref streams: {Tests.Pdf.ModelProbe.UsesXrefStream(signedPdf)}");
         if (!ReferenceEquals(ltvPdf, signedPdf))
         {
-            _out.WriteLine($"LTV xref streams: {PdfStructureParser.UsesXRefStreams(ltvPdf)}");
+            _out.WriteLine($"LTV xref streams: {Tests.Pdf.ModelProbe.UsesXrefStream(ltvPdf)}");
             _out.WriteLine($"Signed: {signedPdf.Length}, LTV: {ltvPdf.Length}");
             VerifyPdfStructure(ltvPdf);
         }
@@ -203,8 +203,8 @@ public sealed class LtvArchivalCorruptionTests
         if (ReferenceEquals(ltvPdf, signedPdf)) return;
 
         // Find the catalog in the LTV PDF
-        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(ltvPdf);
-        var (catStart, catEnd) = PdfStructureParser.FindObjectBytes(ltvPdf, catalogObjNum);
+        int catalogObjNum = Tests.Pdf.ModelProbe.Root(ltvPdf);
+        var (catStart, catEnd) = Tests.Pdf.ModelProbe.ObjectRange(ltvPdf, catalogObjNum);
         catStart.ShouldBeGreaterThanOrEqualTo(0, "catalog object must be found");
 
         string catalog = Encoding.Latin1.GetString(ltvPdf.AsSpan().Slice(catStart, catEnd - catStart));
@@ -248,10 +248,10 @@ public sealed class LtvArchivalCorruptionTests
         (isClassic || isStream).ShouldBeTrue($"xref at offset {xrefOffset} must be valid, found: '{atXref}'");
 
         // Verify /Root points to a valid catalog object
-        int rootObjNum = PdfStructureParser.FindRootObjectNumber(pdf);
+        int rootObjNum = Tests.Pdf.ModelProbe.Root(pdf);
         rootObjNum.ShouldBeGreaterThan(0, "must have valid /Root");
 
-        var (rootStart, rootEnd) = PdfStructureParser.FindObjectBytes(pdf, rootObjNum);
+        var (rootStart, rootEnd) = Tests.Pdf.ModelProbe.ObjectRange(pdf, rootObjNum);
         rootStart.ShouldBeGreaterThanOrEqualTo(0, $"catalog object {rootObjNum} must be found");
 
         string rootText = Encoding.Latin1.GetString(pdf.AsSpan().Slice(rootStart, rootEnd - rootStart));

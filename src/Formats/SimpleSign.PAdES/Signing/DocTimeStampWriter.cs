@@ -1,11 +1,14 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.Internal;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Model;
+using SimpleSign.PAdES.Pdf.Writing;
 
 namespace SimpleSign.PAdES.Signing;
 
@@ -22,6 +25,8 @@ public static class DocTimeStampWriter
     /// Timestamp tokens are typically 4–8 KB; 12 KB provides ample margin.
     /// </summary>
     public const int DefaultTimestampReservedBytes = 12288;
+
+    private const string ByteRangePlaceholder = "[0000000000 0000000000 0000000000 0000000000]";
 
     /// <summary>
     /// Appends a document-level timestamp to a signed PDF with embedded DSS/LTV data.
@@ -45,9 +50,19 @@ public static class DocTimeStampWriter
         ITimestampClientFactory? tsaFactory = null,
         CancellationToken cancellationToken = default) =>
         await AppendDocTimeStampAsync(
-            signedPdf, tsaUrl, httpClient, NullLogger.Instance, hashAlgorithm, pdfALevel, tsaFactory, cancellationToken).ConfigureAwait(false);
+            signedPdf, tsaUrl, httpClient, NullLogger.Instance, hashAlgorithm, pdfALevel, tsaFactory, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-    /// <summary>Same as the public overload, logging each step to <paramref name="logger"/>.</summary>
+    /// <summary>
+    /// Same as the public overload, logging each step to <paramref name="logger"/>; <paramref name="timeProvider"/> gives
+    /// the time that names the field.
+    /// </summary>
+    /// <remarks>
+    /// The document is read through the PDF object model (ADR 0032): the catalog, the AcroForm and the first page are
+    /// the objects the cross-reference lists, wherever they are (an object stream included). The update is written as
+    /// the writer has always written it: the signature dictionary, the field, the AcroForm when it is an
+    /// object of its own (rebuilt with its <c>/Fields</c> and the new field), the catalog when the AcroForm changes
+    /// (an inline AcroForm is kept inline), and the first page with the field in its <c>/Annots</c>.
+    /// </remarks>
     internal static async Task<byte[]> AppendDocTimeStampAsync(
         byte[] signedPdf,
         string tsaUrl,
@@ -56,6 +71,7 @@ public static class DocTimeStampWriter
         HashAlgorithmName? hashAlgorithm = null,
         PdfALevel? pdfALevel = null,
         ITimestampClientFactory? tsaFactory = null,
+        TimeProvider? timeProvider = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(signedPdf);
@@ -64,256 +80,23 @@ public static class DocTimeStampWriter
 
         var hashAlg = hashAlgorithm ?? HashAlgorithmName.SHA256;
         int contentsReservedBytes = DefaultTimestampReservedBytes;
-        int contentsHexLength = contentsReservedBytes * 2;
         logger.DocTimeStampPrepared(signedPdf.Length, hashAlg.Name ?? "?", contentsReservedBytes);
-        DateTime sigNow = DateTime.UtcNow;
+        DateTime now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
 
-        // Determine object numbers
-        int nextObjNum = PdfStructureParser.DetermineNextObjectNumber(signedPdf);
-        int sigObjNum = nextObjNum;
-        int fieldObjNum = nextObjNum + 1;
-        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(signedPdf);
-        int existingAcroFormObjNum = PdfStructureParser.FindAcroFormObjNum(signedPdf, catalogObjNum);
-        bool reuseAcroForm = existingAcroFormObjNum > 0;
-        // An inline /AcroForm dictionary must stay inline (same as PdfSignatureWriter):
-        // converting it drops /DA, /DR, … and invalidates earlier signatures in Acrobat.
-        bool preserveInlineAcroForm = !reuseAcroForm
-            && PdfStructureParser.HasUpdatableInlineAcroForm(signedPdf, catalogObjNum);
-        int acroFormObjNum = reuseAcroForm ? existingAcroFormObjNum : (nextObjNum + 2);
+        var update = PrepareUpdate(signedPdf, now, pdfALevel, contentsReservedBytes, out var contents);
 
-        // Build the timestamp signature dictionary (/SubFilter /ETSI.RFC3161)
-        string contentsPlaceholder = new string('0', contentsHexLength);
-        string fieldName = $"DocTimeStamp_{sigNow:yyyyMMddHHmmss}";
+        // The byte range: everything but the /Contents string, delimiters included.
+        long hexStart = contents.Start + 1;
+        int hexLength = contents.Length - 2;
+        long beforeLength = contents.Start;
+        long afterOffset = contents.Start + contents.Length;
+        long afterLength = update.Length - afterOffset;
+        string byteRange = string.Create(CultureInfo.InvariantCulture, $"[0 {beforeLength} {afterOffset} {afterLength}]")
+            .PadRight(ByteRangePlaceholder.Length);
+        Encoding.Latin1.GetBytes(byteRange).CopyTo(update.Bytes, update.ByteRangeStart);
 
-        var sigDict = new StringBuilder();
-        sigDict.Append($"{sigObjNum} 0 obj\n");
-        sigDict.Append("<< /Type /DocTimeStamp\n");
-        sigDict.Append("   /Filter /Adobe.PPKLite\n");
-        sigDict.Append("   /SubFilter /ETSI.RFC3161\n");
-        sigDict.Append("   /ByteRange [0000000000 0000000000 0000000000 0000000000]\n");
-        sigDict.Append($"   /Contents <{contentsPlaceholder}>\n");
-        sigDict.Append(">>\nendobj\n");
-        string sigDictText = sigDict.ToString();
+        byte[] signedBytes = [.. update.Bytes.AsSpan(0, (int)beforeLength), .. update.Bytes.AsSpan((int)afterOffset, (int)afterLength)];
 
-        // Locate first page for /P reference and /Annots update
-        var (pageObjNum, pageObjDictStart, pageObjDictEnd) = PdfStructureParser.FindFirstPageObject(signedPdf);
-
-        // Build the field annotation (invisible — no /Rect)
-        var fieldDict = new StringBuilder();
-        fieldDict.Append($"{fieldObjNum} 0 obj\n");
-        fieldDict.Append("<< /Type /Annot\n");
-        fieldDict.Append("   /Subtype /Widget\n");
-        fieldDict.Append("   /FT /Sig\n");
-        fieldDict.Append($"   /T ({fieldName})\n");
-        fieldDict.Append($"   /V {sigObjNum} 0 R\n");
-        if (pageObjNum > 0)
-        {
-            fieldDict.Append($"   /P {pageObjNum} 0 R\n");
-        }
-        bool isPdfA1 = pdfALevel is PdfALevel.A1a or PdfALevel.A1b;
-        fieldDict.Append(isPdfA1 ? "   /F 4\n" : "   /F 132\n");
-        fieldDict.Append("   /Rect [0 0 0 0]\n");
-        fieldDict.Append(">>\nendobj\n");
-
-        // Build AcroForm — delegate to shared builder to preserve all existing keys.
-        // When the Catalog holds an inline AcroForm, keep it inline and update only /Fields.
-        byte[]? acroFormBytes = preserveInlineAcroForm
-            ? null
-            : PdfSignatureWriter.BuildAcroFormDictionary(acroFormObjNum, signedPdf, existingAcroFormObjNum, fieldObjNum, catalogObjNum);
-
-        // Only rewrite the Catalog when the AcroForm reference changes.
-        // Rewriting the Catalog unnecessarily causes Adobe diff analysis
-        // to flag earlier signatures as modified.
-        bool needCatalogUpdate = !reuseAcroForm;
-        byte[]? catalogBytes = null;
-        if (needCatalogUpdate)
-        {
-            if (preserveInlineAcroForm)
-            {
-                catalogBytes = PdfSignatureWriter.BuildCatalogWithUpdatedInlineAcroForm(catalogObjNum, signedPdf, fieldObjNum);
-            }
-            else
-            {
-                var (catStart, catEnd) = PdfStructureParser.FindObjectBytes(signedPdf, catalogObjNum);
-                string catalogText;
-                if (catStart >= 0)
-                {
-                    string origCatalog = Encoding.Latin1.GetString(signedPdf.AsSpan().Slice(catStart, catEnd - catStart));
-                    string updCatalog = PdfStructureParser.RemoveKeyFromDict(origCatalog, "/AcroForm");
-                    catalogText = PdfStructureParser.InsertIntoDict(updCatalog, $"   /AcroForm {acroFormObjNum} 0 R\n");
-                }
-                else
-                {
-                    // Catalog may be in a compressed Object Stream
-                    string? compressedCatalog = PdfStructureParser.ExtractObjectFromObjStm(signedPdf, catalogObjNum);
-                    if (compressedCatalog != null)
-                    {
-                        string fullObj = $"{catalogObjNum} 0 obj\n{compressedCatalog.Trim()}\nendobj\n";
-                        string updCatalog = PdfStructureParser.RemoveKeyFromDict(fullObj, "/AcroForm");
-                        catalogText = PdfStructureParser.InsertIntoDict(updCatalog, $"   /AcroForm {acroFormObjNum} 0 R\n");
-                    }
-                    else
-                    {
-                        catalogText = $"{catalogObjNum} 0 obj\n<< /Type /Catalog /AcroForm {acroFormObjNum} 0 R >>\nendobj\n";
-                    }
-                }
-
-                catalogBytes = Encoding.Latin1.GetBytes(catalogText);
-            }
-        }
-
-        // Write all objects to output
-        using var output = new MemoryStream();
-        output.Write(signedPdf);
-        IncrementalUpdateUtility.EnsureTrailingEol(output);
-
-        byte[] sigDictBytes = Encoding.Latin1.GetBytes(sigDictText);
-        byte[] fieldDictBytes = Encoding.Latin1.GetBytes(fieldDict.ToString());
-
-        long sigObjOffset = output.Position;
-        output.Write(sigDictBytes);
-        long fieldObjOffset = output.Position;
-        output.Write(fieldDictBytes);
-        long acroFormObjOffset = 0L;
-        if (acroFormBytes != null)
-        {
-            acroFormObjOffset = output.Position;
-            output.Write(acroFormBytes);
-        }
-
-        long catalogObjOffset = 0L;
-        if (catalogBytes != null)
-        {
-            catalogObjOffset = output.Position;
-            output.Write(catalogBytes);
-        }
-
-        // Update page /Annots to include the timestamp field
-        long updPageObjOffset = 0L;
-        if (pageObjNum > 0)
-        {
-            byte[] updatedPageBytes;
-            if (pageObjDictStart >= 0)
-            {
-                updatedPageBytes = PdfSignatureWriter.BuildUpdatedPageObject(pageObjNum, signedPdf, pageObjDictStart, pageObjDictEnd, fieldObjNum);
-            }
-            else
-            {
-                updatedPageBytes = PdfSignatureWriter.BuildUpdatedPageObjectFromObjStm(pageObjNum, signedPdf, fieldObjNum);
-            }
-
-            if (updatedPageBytes.Length > 0)
-            {
-                updPageObjOffset = output.Position;
-                output.Write(updatedPageBytes);
-            }
-            else
-            {
-                pageObjNum = -1;
-            }
-        }
-
-        // Build xref and trailer
-        var objectOffsets = new SortedDictionary<int, long>
-        {
-            [sigObjNum] = sigObjOffset,
-            [fieldObjNum] = fieldObjOffset
-        };
-        if (acroFormBytes != null)
-        {
-            objectOffsets[acroFormObjNum] = acroFormObjOffset;
-        }
-        if (needCatalogUpdate)
-        {
-            objectOffsets[catalogObjNum] = catalogObjOffset;
-        }
-        if (pageObjNum > 0)
-        {
-            objectOffsets[pageObjNum] = updPageObjOffset;
-        }
-
-        long prevXRef = FindLastStartXRef(signedPdf);
-        int trailerSize = Math.Max(acroFormObjNum + 1, objectOffsets.Keys.Max() + 1);
-        long xrefOffset = output.Position;
-
-        string? trailerId = PdfStructureParser.FindTrailerId(signedPdf);
-        string? trailerInfo = PdfStructureParser.FindTrailerInfo(signedPdf);
-
-        bool useXRefStream = PdfStructureParser.UsesXRefStreams(signedPdf);
-        if (useXRefStream)
-        {
-            int xrefObjNum = objectOffsets.Keys.Max() + 1;
-            trailerSize = Math.Max(trailerSize, xrefObjNum + 1);
-            var (xrefBytes, _) = PdfSignatureWriter.BuildXrefStream(objectOffsets, xrefObjNum, trailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            output.Write(xrefBytes);
-        }
-        else
-        {
-            var xref = new StringBuilder();
-            xref.Append("xref\n");
-            var sortedKeys = objectOffsets.Keys.ToList();
-            int idx = 0;
-            while (idx < sortedKeys.Count)
-            {
-                int groupStart = sortedKeys[idx];
-                int j = idx;
-                while (j + 1 < sortedKeys.Count && sortedKeys[j + 1] == sortedKeys[j] + 1)
-                {
-                    j++;
-                }
-
-                int count = j - idx + 1;
-                xref.Append($"{groupStart} {count}\n");
-                for (int k = idx; k <= j; k++)
-                {
-                    xref.Append($"{objectOffsets[sortedKeys[k]]:D10} 00000 n\r\n");
-                }
-
-                idx = j + 1;
-            }
-
-            xref.Append("trailer\n");
-            xref.Append($"<< /Size {trailerSize}\n");
-            xref.Append($"   /Root {catalogObjNum} 0 R\n");
-            xref.Append($"   /Prev {prevXRef}\n");
-            if (trailerId != null)
-            {
-                xref.Append($"   {trailerId}\n");
-            }
-            if (trailerInfo != null)
-            {
-                xref.Append($"   {trailerInfo}\n");
-            }
-            xref.Append(">>\n");
-            xref.Append($"startxref\n{xrefOffset}\n%%EOF\n");
-
-            output.Write(Encoding.Latin1.GetBytes(xref.ToString()));
-        }
-
-        // Back-fill ByteRange
-        long totalFileLength = output.Position;
-        int contentsHexLocalOffset = sigDictText.IndexOf("/Contents <", StringComparison.Ordinal) + "/Contents <".Length;
-        long byteRange1Length = sigObjOffset + contentsHexLocalOffset - 1;
-        long byteRange2Offset = sigObjOffset + contentsHexLocalOffset + contentsHexLength + 1;
-        long byteRange2Length = totalFileLength - byteRange2Offset;
-
-        string byteRangeValue = $"[0 {byteRange1Length} {byteRange2Offset} {byteRange2Length}]"
-            .PadRight("[0000000000 0000000000 0000000000 0000000000]".Length);
-
-        int byteRangeLocalOffset = sigDictText.IndexOf("/ByteRange ", StringComparison.Ordinal);
-        long byteRangeWriteOffset = sigObjOffset + byteRangeLocalOffset + "/ByteRange ".Length;
-
-        output.Seek(byteRangeWriteOffset, SeekOrigin.Begin);
-        output.Write(Encoding.Latin1.GetBytes(byteRangeValue));
-        output.Seek(0, SeekOrigin.End);
-
-        // Read the signed bytes (ByteRange 1 + ByteRange 2)
-        byte[] pdfBytes = output.ToArray();
-        byte[] signedBytes = new byte[byteRange1Length + byteRange2Length];
-        Array.Copy(pdfBytes, 0, signedBytes, 0, (int)byteRange1Length);
-        Array.Copy(pdfBytes, (int)byteRange2Offset, signedBytes, (int)byteRange1Length, (int)byteRange2Length);
-
-        // Request timestamp from TSA
         var tsaClient = tsaFactory is not null
             ? tsaFactory.Create(tsaUrl)
             : new TimestampClient(httpClient, tsaUrl);
@@ -325,38 +108,114 @@ public static class DocTimeStampWriter
                 $"Timestamp token ({timestampToken.Length} bytes) exceeds reserved space ({contentsReservedBytes} bytes).");
         }
 
-        // Write timestamp token as hex into /Contents
-        string hexTimestamp = Convert.ToHexString(timestampToken)
-            .PadRight(contentsHexLength, '0');
+        string hexTimestamp = Convert.ToHexString(timestampToken).PadRight(hexLength, '0');
+        Encoding.Latin1.GetBytes(hexTimestamp).CopyTo(update.Bytes, hexStart);
 
-        long contentsWriteOffset = sigObjOffset + contentsHexLocalOffset;
-        Array.Copy(Encoding.Latin1.GetBytes(hexTimestamp), 0, pdfBytes, (int)contentsWriteOffset, contentsHexLength);
-
-        logger.DocTimeStampWritten(timestampToken.Length, pdfBytes.Length);
-        return pdfBytes;
+        logger.DocTimeStampWritten(timestampToken.Length, update.Bytes.Length);
+        return update.Bytes;
     }
 
-    private static long FindLastStartXRef(byte[] pdf)
+    /// <summary>The update written, before its byte range and contents are filled.</summary>
+    private sealed record PreparedUpdate(byte[] Bytes, long ByteRangeStart)
     {
-        ReadOnlySpan<byte> marker = "startxref"u8;
-        int idx = pdf.AsSpan().LastIndexOf(marker);
-        if (idx < 0)
+        public long Length => Bytes.Length;
+    }
+
+    /// <summary>
+    /// Writes the update with the placeholders: <paramref name="contents"/> is where the <c>/Contents</c> string is
+    /// (its <c>&lt;</c> to its <c>&gt;</c>).
+    /// </summary>
+    private static PreparedUpdate PrepareUpdate(byte[] signedPdf, DateTime now, PdfALevel? pdfALevel, int contentsReservedBytes, out (long Start, int Length) contents)
+    {
+        var document = PdfDocument.Open(signedPdf);
+        var view = document.View();
+        if (document.RootId is not { } rootId || document.GetObject(rootId) is not { Value: PdfDictionary catalog } catalogObject)
         {
-            return 0;
+            throw new PdfStructureException("The document has no catalog: a document timestamp cannot be added to it.");
         }
 
-        int pos = idx + marker.Length;
-        while (pos < pdf.Length && (pdf[pos] == ' ' || pdf[pos] == '\n' || pdf[pos] == '\r'))
+        int root = rootId.Number;
+        int next = view.NextObjectNumber;
+        int sigNumber = next;
+        int fieldNumber = next + 1;
+        string fieldRef = $"{fieldNumber} 0 R";
+
+        var acroFormValue = catalog.Get(PdfName.AcroForm);
+        int existingAcroForm = acroFormValue is PdfReference acroFormReference ? acroFormReference.Id.Number : 0;
+        bool reuseAcroForm = existingAcroForm > 0;
+        var catalogSource = PdfObjectSource.Of(document, root, catalogObject, keepHeader: true);
+
+        // An inline AcroForm stays inline (as in PdfSignatureWriter): converting it drops /DA, /DR, … and invalidates
+        // earlier signatures in Acrobat. It is updated where it is when its /Fields is an array (or absent).
+        bool preserveInlineAcroForm = !reuseAcroForm && !catalogSource.Compressed
+            && acroFormValue is PdfDictionary inlineAcroForm && inlineAcroForm.Get(PdfName.Fields) is null or PdfArray;
+        int acroFormNumber = reuseAcroForm ? existingAcroForm : next + 2;
+
+        var page = view.Pages.Count > 0 ? view.Pages[0] : null;
+        int pageNumber = page?.Id?.Number ?? 0;
+
+        var update = new PdfIncrementalUpdate(document);
+        var signature = new PdfDictionary(
+            (PdfName.Type.Value, PdfName.Of("DocTimeStamp")),
+            (PdfName.Filter.Value, PdfName.Of("Adobe.PPKLite")),
+            ("SubFilter", PdfName.Of("ETSI.RFC3161")),
+            (PdfName.ByteRange.Value, PdfNull.Instance),
+            (PdfName.Contents.Value, new PdfString(new byte[contentsReservedBytes], PdfStringForm.Hexadecimal)));
+        var (_, values) = update.Add(sigNumber, signature, new Dictionary<string, string>(StringComparer.Ordinal) { ["ByteRange"] = ByteRangePlaceholder });
+
+        var field = new List<PdfDictionaryEntry>
         {
-            pos++;
+            new(PdfName.Type, PdfName.Of("Annot")),
+            new(PdfName.Subtype, PdfName.Of("Widget")),
+            new(PdfName.FT, PdfName.Sig),
+            new(PdfName.T, PdfObjectSerializer.TextString($"DocTimeStamp_{now:yyyyMMddHHmmss}")),
+            new(PdfName.V, new PdfReference(sigNumber)),
+        };
+        if (pageNumber > 0)
+        {
+            field.Add(new(PdfName.Of("P"), new PdfReference(pageNumber)));
         }
 
-        long val = 0;
-        while (pos < pdf.Length && pdf[pos] >= '0' && pdf[pos] <= '9')
+        field.Add(new(PdfName.Of("F"), new PdfInteger(pdfALevel is PdfALevel.A1a or PdfALevel.A1b ? 4 : 132)));
+        field.Add(new(PdfName.Of("Rect"), new PdfArray([new PdfInteger(0), new PdfInteger(0), new PdfInteger(0), new PdfInteger(0)])));
+        update.Add(fieldNumber, new PdfDictionary(field));
+
+        if (!preserveInlineAcroForm)
         {
-            val = val * 10 + (pdf[pos++] - '0');
+            // The AcroForm as an object of its own: the one the catalog points to, or the inline one moved out.
+            var (existing, source) = reuseAcroForm
+                ? document.GetObject(existingAcroForm) is { Value: PdfDictionary indirect } acroFormObject
+                    ? (indirect, PdfObjectSource.Of(document, existingAcroForm, acroFormObject).Buffer)
+                    : (null, ReadOnlyMemory<byte>.Empty)
+                : (acroFormValue as PdfDictionary, catalogSource.Buffer);
+            update.Add(acroFormNumber, PdfFormUpdate.AcroFormObject(document, acroFormNumber, existing, source, fieldRef));
         }
 
-        return val;
+        // The catalog is written again only when its /AcroForm changes: rewriting it needlessly makes Acrobat's diff
+        // analysis flag earlier signatures as modified.
+        if (!reuseAcroForm)
+        {
+            var patch = new PdfDictionaryPatch(catalogSource.ObjectBytes);
+            if (preserveInlineAcroForm)
+            {
+                patch.AppendToArray([PdfName.AcroForm.Value, PdfName.Fields.Value], fieldRef);
+            }
+            else
+            {
+                patch.Remove(PdfName.AcroForm.Value).Set(PdfName.AcroForm.Value, $"{acroFormNumber} 0 R");
+            }
+
+            update.Add(root, PdfFormUpdate.WithFinalLineFeed(patch.ToBytes()));
+        }
+
+        if (page?.Id is { } pageId && document.GetObject(pageId) is { } pageObject)
+        {
+            update.Add(pageNumber, PdfFormUpdate.WithFinalLineFeed(PdfFormUpdate.PageWithAnnotation(document, pageNumber, pageObject, fieldRef)));
+        }
+
+        int size = Math.Max(acroFormNumber + 1, update.Offsets.Keys.Max() + 1);
+        byte[] bytes = update.Finish(size, root);
+        contents = values["Contents"];
+        return new PreparedUpdate(bytes, values["ByteRange"].Start);
     }
 }

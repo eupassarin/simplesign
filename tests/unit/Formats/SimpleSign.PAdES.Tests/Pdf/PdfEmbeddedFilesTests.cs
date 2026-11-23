@@ -107,7 +107,8 @@ public sealed class PdfEmbeddedFilesTests
             "3 0 obj\n<< /F (k) /EF << /F 4 0 R >> >>\nendobj\n" +
             "4 0 obj\n<< /Length 1 >>\nstream\nx\nendstream\nendobj\n");
 
-        PdfEmbeddedFiles.Read(pdf).Count.ShouldBe(2);
+        // The root is node 2: its kids that point back to it are not read again (the scanning reader read it twice).
+        PdfEmbeddedFiles.Read(pdf).Count.ShouldBe(1);
     }
 
     [Fact]
@@ -129,6 +130,31 @@ public sealed class PdfEmbeddedFilesTests
             "3 0 obj\n<< /Filter [ /LZWDecode ] /Length 1 >>\nstream\nx\nendstream\nendobj\n");
 
         Should.Throw<PdfStructureException>(() => PdfEmbeddedFiles.Read(pdf)).Message.ShouldContain("/LZWDecode");
+    }
+
+    [Fact]
+    public void Read_FlateWithPngPredictor_IsDecoded()
+    {
+        // Two PNG "Up" rows of two bytes: 1 2, then 1+1 1+2.
+        string rows = Encoding.Latin1.GetString(Zlib([2, 1, 2, 2, 1, 1]));
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /Names << /EmbeddedFiles << /Names [ (k) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /F (rows.bin) /EF << /F 3 0 R >> >>\nendobj\n" +
+            $"3 0 obj\n<< /Filter /FlateDecode /DecodeParms << /Predictor 12 /Columns 2 >> /Length {rows.Length} >>\nstream\n{rows}\nendstream\nendobj\n");
+
+        PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem().Data.ToArray().ShouldBe([1, 2, 2, 3]);
+    }
+
+    [Fact]
+    public void Read_NameWithoutByteOrderMark_IsPdfDocEncoding()
+    {
+        // 0x80 is a bullet in PDFDocEncoding (ISO 32000-1 Annex D), a control character in Latin-1.
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /Names << /EmbeddedFiles << /Names [ (k) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /F (\\200 notes.txt) /EF << /F 3 0 R >> >>\nendobj\n" +
+            "3 0 obj\n<< /Length 1 >>\nstream\nx\nendstream\nendobj\n");
+
+        PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem().Name.ShouldBe("\u2022 notes.txt");
     }
 
     [Fact]
@@ -232,6 +258,17 @@ public sealed class PdfEmbeddedFilesTests
         Should.Throw<PdfStructureException>(() => PdfEmbeddedFiles.Read("%PDF-1.7\n%%EOF"u8.ToArray()));
 
     /// <summary>The objects between a header and a trailer that names object 1 as the catalog.</summary>
+    private static byte[] Zlib(byte[] data)
+    {
+        using var output = new MemoryStream();
+        using (var zlib = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+        {
+            zlib.Write(data);
+        }
+
+        return output.ToArray();
+    }
+
     private static byte[] Pdf(string objects) =>
         Encoding.Latin1.GetBytes("%PDF-1.7\n" + objects + "trailer\n<< /Root 1 0 R >>\n%%EOF");
 }

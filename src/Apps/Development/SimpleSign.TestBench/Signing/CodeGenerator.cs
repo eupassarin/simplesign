@@ -164,6 +164,7 @@ internal static class CodeGenerator
                     context.Controls.Cli(complete);
                     context.CliNetwork(complete);
                     notes.Add(L.T("Between the two commands, the signer hashes document.pdf.tbs and signs it; signature.bin is the raw signature."));
+                    NoteSignerRoles(o, notes);
                     return ([prepare, complete], notes);
                 }
 
@@ -204,8 +205,18 @@ internal static class CodeGenerator
                     Document(sign, o);
                     sign.AddIf("--operation-id", o.OperationId);
                     context.CliNetwork(sign);
+                    NoteSignerRoles(o, notes);
                     return ([sign], notes);
                 }
+        }
+    }
+
+    /// <summary>The CLI's <c>sign</c> claims no roles: the command signs without them.</summary>
+    private static void NoteSignerRoles(SigningOptions o, List<string> notes)
+    {
+        if (o.SignerRoles.Count > 0)
+        {
+            notes.Add(L.T("simplesign sign has no option for signer roles: the command signs without them (the library's WithSignerRoles does)."));
         }
     }
 

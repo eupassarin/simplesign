@@ -84,6 +84,19 @@ XAdES results), the ETSI TS 119 102-2 report (`SignatureQuality`, with DSS's URI
 `urn:cef:dss:signatureQualification:QESig`…), the simple JSON report and the HTML report. A qualifier of another
 framework implements `ISignatureQualifier`; a country extension returns it in `SignatureQualifiers`.
 
+## Identifying the signer
+
+European qualified certificates name their holder as ETSI EN 319 412-1 defines: a natural person in the subject's
+serialNumber (`PNOBE-85010112345`: type of identity PAS, IDC, PNO or TIN, country, identifier), a legal person in its
+organizationIdentifier (`VATBE-0123456789`: VAT, NTR, PSD or LEI). Core's `DefaultSignerIdentityReader` reads them
+(`SignerIdentifierTypes.NaturalPersonId`, `LegalPersonId`) from any certificate written in that form, so the eIDAS
+package adds no reader of its own: whoever checks that a certificate is an expected signer's (the PDF signature
+envelope) matches the identifier as the certificate writes it.
+
+```csharp
+var ids = DefaultSignerIdentityReader.Instance.Read(certificate, SignerIdentifierTypes.NaturalPersonId); // ["PNOBE-85010112345"]
+```
+
 ## CLI
 
 eIDAS is an extension of the `simplesign` command line (`SimpleSign.Europe.Eidas.Cli`, in

@@ -10,12 +10,12 @@ using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Exceptions;
-using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Validation;
 
 namespace SimpleSign.PAdES;
 
@@ -364,6 +364,26 @@ public sealed partial class PadesSignerBuilder
     {
         ArgumentNullException.ThrowIfNull(policy);
         return With(_options with { SignaturePolicy = policy });
+    }
+
+    /// <summary>
+    /// Sets the roles the signer claims, in the signer-attributes-v2 signed attribute (ETSI EN 319 122-1 §5.2.6.1,
+    /// claimedAttributes): for example "Diretor" or "Testemunha". Each role is written as an X.509 role attribute
+    /// (id-at-role) holding the role as text. Empty roles are left out; an empty list writes no attribute.
+    /// Replaces the roles set before. A validator reads them back in <see cref="SignatureValidationResult.ClaimedRoles"/>.
+    /// </summary>
+    /// <param name="roles">The claimed roles, in order.</param>
+    /// <returns>A new builder with the signer roles configured.</returns>
+    public PadesSignerBuilder WithSignerRoles(IReadOnlyList<string> roles) =>
+        With(_options with { SignerRoles = PadesSigningInputs.SignerRoles(roles) });
+
+    /// <summary>Sets one role the signer claims (see <see cref="WithSignerRoles(IReadOnlyList{string})"/>).</summary>
+    /// <param name="role">The claimed role.</param>
+    /// <returns>A new builder with the signer role configured.</returns>
+    public PadesSignerBuilder WithSignerRole(string role)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(role);
+        return WithSignerRoles([role]);
     }
 
     /// <summary>
@@ -1058,7 +1078,7 @@ public sealed partial class PadesSignerBuilder
     }
 
     private IReadOnlyList<CmsAttribute>? BuildExtraAttributes() =>
-        PadesSigningInputs.ExtraSignedAttributes(_options.Metadata, _options.SignaturePolicy);
+        PadesSigningInputs.ExtraSignedAttributes(_options.Metadata, _options.SignaturePolicy, _options.SignerRoles);
 
     private async Task<byte[]?> ApplyTimestampAsync(
         byte[] cms,

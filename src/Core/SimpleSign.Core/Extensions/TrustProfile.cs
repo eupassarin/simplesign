@@ -50,6 +50,13 @@ public sealed record TrustProfile(
     public IReadOnlyList<ISignatureQualifier> SignatureQualifiers { get; init; } = [];
 
     /// <summary>
+    /// The readers of the identifiers the framework's certificates carry (the CPF and CNPJ of the Brazilian profiles), to
+    /// check that a certificate is that of an expected signer; empty for none. <see cref="WithTrustFrom"/> adds the
+    /// others': a signer whose certificate another profile trusts is identified by that profile's readers.
+    /// </summary>
+    public IReadOnlyList<ISignerIdentityReader> SignerIdentityReaders { get; init; } = [];
+
+    /// <summary>
     /// The providers of <see cref="TrustAnchorProviders"/> whose anchors have conditions
     /// (<see cref="IConstrainedTrustAnchorProvider"/>), each accepting a chain whose anchor another provider of this
     /// profile gives without conditions. Empty for none.
@@ -78,13 +85,14 @@ public sealed record TrustProfile(
         return new(name, title, signing, validation, extension.TrustAnchorProviders, extension.ChainValidationProviders)
         {
             SignatureQualifiers = extension.SignatureQualifiers,
+            SignerIdentityReaders = extension.SignerIdentityReaders,
         };
     }
 
     /// <summary>
-    /// This profile with the trust of <paramref name="others"/> added (their anchors and chain validation, and the
-    /// operating system's roots when one of them trusts those, as <see cref="Default"/> does); the policies stay this
-    /// profile's. For example ICP-Brasil's policies, trusting ICP-Brasil and Gov.br.
+    /// This profile with the trust of <paramref name="others"/> added (their anchors and chain validation, their signer
+    /// identity readers, and the operating system's roots when one of them trusts those, as <see cref="Default"/> does);
+    /// the policies stay this profile's. For example ICP-Brasil's policies, trusting ICP-Brasil and Gov.br.
     /// </summary>
     /// <param name="others">The profiles whose trust is added.</param>
     /// <returns>The combined profile.</returns>
@@ -96,6 +104,7 @@ public sealed record TrustProfile(
             TrustAnchorProviders = [.. TrustAnchorProviders, .. others.SelectMany(o => o.TrustAnchorProviders)],
             ChainValidationProviders = [.. ChainValidationProviders, .. others.SelectMany(o => o.ChainValidationProviders)],
             TrustSystemRoots = TrustSystemRoots || others.Any(o => o.TrustSystemRoots),
+            SignerIdentityReaders = [.. SignerIdentityReaders.Concat(others.SelectMany(o => o.SignerIdentityReaders)).Distinct()],
         };
     }
 

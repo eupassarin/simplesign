@@ -3,7 +3,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -75,7 +74,7 @@ public sealed class FontEmbeddingTests
 
         int fontFileObjNum = int.Parse(pdfText.AsSpan(numStart, numEnd - numStart));
 
-        var (objStart, objEnd) = PdfStructureParser.FindObjectBytes(pdf, fontFileObjNum);
+        var (objStart, objEnd) = Tests.Pdf.ModelProbe.ObjectRange(pdf, fontFileObjNum);
         objStart.ShouldBeGreaterThanOrEqualTo(0, "FontFile2 object must be locatable via object number");
 
         return ParseFontFile2Object(pdf.AsSpan(objStart, objEnd - objStart).ToArray());

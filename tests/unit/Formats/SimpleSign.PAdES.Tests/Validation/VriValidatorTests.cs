@@ -2,6 +2,8 @@ using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Inspection;
+using SimpleSign.PAdES.Tests.Pdf.Parity;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Validation;
@@ -27,63 +29,59 @@ public sealed class VriValidatorTests
     [InlineData("")] // empty
     public void IsValidVriKey_InvalidKey_ReturnsFalse(string key) => VriValidator.IsValidVriKey(key).ShouldBeFalse();
 
-    // ── VRI Validation on well-formed DSS ───────────────────────────────────
+    // ── VRI checks of the DSS, as inspection reports them (read through the model) ──
 
-    [Fact(DisplayName = "Validate returns success for well-formed VRI with /TU")]
-    public void Validate_WellFormedVriWithTu_ReturnsNoWarnings()
+    private static DssInfo Summary(string dss)
     {
-        // Build a DSS dict with a VRI entry containing /Cert, /CRL, /OCSP, and /TU
-        var dss = BuildDssWithVri(
-            "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2",
-            includeRevocationData: true,
-            includeTu: true);
-        var span = Encoding.Latin1.GetBytes(dss).AsSpan();
-
-        var result = VriValidator.Validate(span);
-
-        result.EntryCount.ShouldBe(1);
-        result.AllHaveTimestamps.ShouldBeTrue();
-        result.Warnings.Where(w => w.Contains("/TU")).ShouldBeEmpty();
+        byte[] pdf = new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /DSS 4 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Object(4, dss)
+            .Object(5, "<< >>")
+            .Object(6, "<< >>")
+            .EndRevision()
+            .ToArray();
+        return DssReader.Summary(SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf).View()).ShouldNotBeNull();
     }
 
-    [Fact(DisplayName = "Validate warns on missing /TU")]
-    public void Validate_MissingTu_WarnsAboutTimestamp()
+    [Fact(DisplayName = "A well-formed VRI entry with /TU gives no /TU warning")]
+    public void Summary_WellFormedVriWithTu_ReturnsNoWarnings()
     {
-        var dss = BuildDssWithVri(
-            "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2",
-            includeRevocationData: true,
-            includeTu: false);
-        var span = Encoding.Latin1.GetBytes(dss).AsSpan();
+        var result = Summary(BuildDssWithVri("A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2", includeRevocationData: true, includeTu: true));
 
-        var result = VriValidator.Validate(span);
-
-        result.EntryCount.ShouldBe(1);
-        result.AllHaveTimestamps.ShouldBeFalse();
-        result.Warnings.ShouldContain(w => w.Contains("/TU"));
+        result.VriEntryCount.ShouldBe(1);
+        result.VriHasTimestamps.ShouldBeTrue();
+        result.VriWarnings.Where(w => w.Contains("/TU")).ShouldBeEmpty();
     }
 
-    [Fact(DisplayName = "Validate warns when VRI not found")]
-    public void Validate_NoVri_WarnsNotFound()
+    [Fact(DisplayName = "A VRI entry without /TU is warned about")]
+    public void Summary_MissingTu_WarnsAboutTimestamp()
     {
-        var dss = "<< /Type /DSS /CRLs [5 0 R] >>";
-        var span = Encoding.Latin1.GetBytes(dss).AsSpan();
+        var result = Summary(BuildDssWithVri("A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2", includeRevocationData: true, includeTu: false));
 
-        var result = VriValidator.Validate(span);
-
-        result.EntryCount.ShouldBe(0);
-        result.Warnings.ShouldContain(w => w.Contains("not found"));
+        result.VriEntryCount.ShouldBe(1);
+        result.VriHasTimestamps.ShouldBeFalse();
+        result.VriWarnings.ShouldContain(w => w.Contains("/TU"));
     }
 
-    [Fact(DisplayName = "Validate handles empty VRI dictionary")]
-    public void Validate_EmptyVri_WarnsEmpty()
+    [Fact(DisplayName = "A DSS without /VRI reports none")]
+    public void Summary_NoVri_ReportsNone()
     {
-        var dss = "<< /Type /DSS /VRI << >> >>";
-        var span = Encoding.Latin1.GetBytes(dss).AsSpan();
+        var result = Summary("<< /Type /DSS /CRLs [5 0 R] >>");
 
-        var result = VriValidator.Validate(span);
+        result.HasVri.ShouldBeFalse();
+        result.VriEntryCount.ShouldBe(0);
+        result.CrlCount.ShouldBe(1);
+    }
 
-        result.EntryCount.ShouldBe(0);
-        result.Warnings.ShouldContain(w => w.Contains("empty"));
+    [Fact(DisplayName = "An empty VRI dictionary is warned about")]
+    public void Summary_EmptyVri_WarnsEmpty()
+    {
+        var result = Summary("<< /Type /DSS /VRI << >> >>");
+
+        result.HasVri.ShouldBeTrue();
+        result.VriEntryCount.ShouldBe(0);
+        result.VriWarnings.ShouldContain(w => w.Contains("empty"));
     }
 
     // ── LtvEmbedder /TU output ──────────────────────────────────────────────
@@ -91,11 +89,11 @@ public sealed class VriValidatorTests
     [Fact(DisplayName = "ExtractSignatureContentHashes produces uppercase hex SHA-1")]
     public void ExtractSignatureContentHashes_ProducesUppercaseHex()
     {
-        // Build a minimal PDF with a fake /Contents <hex...>
-        var fakeHex = new string('A', 2048); // >1000 chars to be recognized as sig
+        // Build a minimal PDF with a signature dictionary holding /Contents <hex...>
+        var fakeHex = new string('A', 2048);
         var pdf = Encoding.Latin1.GetBytes(
             $"%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n" +
-            $"2 0 obj\n<< /Contents <{fakeHex}> >>\nendobj\n" +
+            $"2 0 obj\n<< /Type /Sig /ByteRange [0 10 20 30] /Contents <{fakeHex}> >>\nendobj\n" +
             "xref\n0 3\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n" +
             "trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n200\n%%EOF");
 

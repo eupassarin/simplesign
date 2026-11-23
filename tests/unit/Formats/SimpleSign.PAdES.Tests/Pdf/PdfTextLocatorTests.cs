@@ -75,6 +75,21 @@ public sealed class PdfTextLocatorTests
         PdfTextLocator.Find(pdf, "A CDE", false).ShouldHaveSingleItem().X.ShouldBe(20f, 0.01f);
     }
 
+    [Fact(DisplayName = "A Type0 font whose CIDFont is written inline in /DescendantFonts uses that CIDFont's /W")]
+    public void Find_Type0InlineDescendant_UsesItsWidths()
+    {
+        string cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap 1 begincodespacerange <0000> <FFFF> endcodespacerange "
+            + "2 beginbfchar <0001> <0041> <0002> <0020> endbfchar 1 beginbfrange <0003> <0005> <0043> endbfrange endcmap end end";
+        string font = "<< /Type /Font /Subtype /Type0 /BaseFont /ABCDEF+Arial /Encoding /Identity-H /ToUnicode 5 0 R "
+            + "/DescendantFonts [<< /Type /Font /Subtype /CIDFontType2 /BaseFont /ABCDEF+Arial /FontDescriptor 6 0 R /DW 1000 /W [1 [500 250] 3 5 600] >>] >>";
+        byte[] pdf = TextPdf.Build(
+            ["BT /F1 10 Tf 20 40 Td <00010002000300040005> Tj ET"], font: font,
+            extraObjects: [TextPdf.Stream("<< >>", cmap), "<< /Type /FontDescriptor /FontName /ABCDEF+Arial >>"]);
+
+        // The reference inside the inline CIDFont (its /FontDescriptor) is not the CIDFont.
+        PdfTextLocator.Find(pdf, "CDE", false).ShouldHaveSingleItem().X.ShouldBe(20 + ((500 + 250) / 1000f * 10), 0.01f);
+    }
+
     [Fact(DisplayName = "Accented letters from /Differences and WinAnsi match the text")]
     public void Find_Accents_Match()
     {

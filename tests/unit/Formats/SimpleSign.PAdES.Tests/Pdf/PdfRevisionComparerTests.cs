@@ -204,10 +204,38 @@ public sealed class PdfRevisionComparerTests
         changes.FieldMdp.ShouldBeNull();
     }
 
+    [Fact]
+    public void Compare_PageWrittenAgainWithOtherSpacingOrderAndNumbers_IsNotAChange()
+    {
+        var changes = Compare(SignedRevision, """
+            3 0 obj
+            <</Annots[5 0 R 7 0 R]/Contents 4 0 R/MediaBox[0 0 612.0 792.00]/Parent 2 0 R/Type/Page>>
+            endobj
+            """);
+
+        changes.Undefined.ShouldBeEmpty();
+        changes.Annotations.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Compare_FieldNameWithEscapes_IsDecodedInTheMessage()
+    {
+        var changes = Compare(SignedRevision, """
+            1 0 obj
+            << /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R 7 0 R 8 0 R] /SigFlags 3 >> >>
+            endobj
+            8 0 obj
+            << /FT /Sig /T (\376\377\000S\000i\000g\0002) /Subtype /Widget /Rect [0 0 0 0] /P 3 0 R >>
+            endobj
+            """);
+
+        changes.Signatures.ShouldBe(["Signature field 'Sig2' added."]);
+    }
+
     private static PdfChangeFacts Compare(string signed, string later)
     {
         byte[] pdf = Encoding.Latin1.GetBytes(signed + later);
-        return PdfRevisionComparer.Compare(PdfObjectIndex.Build(pdf), pdf, Encoding.Latin1.GetByteCount(signed), 6);
+        return PdfRevisionComparer.Compare(SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf), Encoding.Latin1.GetByteCount(signed), 6);
     }
 
     private sealed class LockComparer : IEqualityComparer<PdfFieldLock>

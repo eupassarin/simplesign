@@ -69,6 +69,12 @@ public sealed class SignatureFieldInfo
     public string? SignaturePolicyOid { get; init; }
 
     /// <summary>
+    /// The roles the signer claims in the signed attributes (signer-attributes-v2 or signer-attributes,
+    /// ETSI EN 319 122-1 §5.2.6.1, claimedAttributes), in the order written. Empty when the signature claims none.
+    /// </summary>
+    public IReadOnlyList<string> ClaimedRoles { get; init; } = [];
+
+    /// <summary>
     /// Raw UTF-8 JSON bytes of the signature manifest.
     /// Contains tamper-proof signer evidence: name, CPF, email, IP, auth method, institution.
     /// Present when the signature includes a manifest attribute (OID <see cref="SimpleSign.Core.Constants.Oids.SignatureManifest"/>).

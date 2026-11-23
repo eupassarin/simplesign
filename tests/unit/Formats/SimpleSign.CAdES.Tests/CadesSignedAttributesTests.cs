@@ -61,9 +61,9 @@ public sealed class CadesSignedAttributesTests : IDisposable
     }
 
     [Fact]
-    public void EncodeClaimedRoles_WritesOneRoleAttributePerRoleInClaimedAttributes()
+    public void EncodeSignerAttributes_ClaimedRoles_WritesOneRoleAttributePerRoleInClaimedAttributes()
     {
-        var attribute = CadesSignedAttributes.EncodeClaimedRoles(["A"]);
+        var attribute = CadesSignedAttributes.EncodeSignerAttributes(["A"], [], []);
 
         // SEQUENCE { [0] EXPLICIT { SEQUENCE OF { SEQUENCE { OID id-at-role, SET { UTF8String "A" } } } } }
         attribute.Oid.ShouldBe("0.4.0.19122.1.1");
@@ -72,6 +72,19 @@ public sealed class CadesSignedAttributesTests : IDisposable
             0x30, 0x10, 0xA0, 0x0E, 0x30, 0x0C, 0x30, 0x0A,
             0x06, 0x03, 0x55, 0x04, 0x48, 0x31, 0x03, 0x0C, 0x01, 0x41,
         ]);
+    }
+
+    [Fact]
+    public void EncodeSignerAttributes_AllThreeLists_SameBytesAsTheCoreEncoder()
+    {
+        byte[] attributeCertificate = [0x30, 0x03, 0x04, 0x01, 0xAA];
+        var assertion = CadesSignedAssertion.Saml("<a/>"u8);
+
+        var cades = CadesSignedAttributes.EncodeSignerAttributes(["Diretor", "Sócio"], [attributeCertificate], [assertion]);
+        var core = CmsAttribute.SignerAttributesV2(["Diretor", "Sócio"], [attributeCertificate], [(assertion.Oid, assertion.Value)]);
+
+        cades.Oid.ShouldBe(core.Oid);
+        cades.DerValue.ShouldBe(core.DerValue);
     }
 
     [Fact]

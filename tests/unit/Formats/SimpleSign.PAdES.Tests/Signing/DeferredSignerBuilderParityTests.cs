@@ -206,7 +206,7 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
     [Fact]
     public async Task WithPdfAPreservation_OptionsThatBreakThePdfALevel_AreRefusedWhilePreparing()
     {
-        byte[] pdfA1 = PdfA1(TestPdfFactory.CreateMinimalPdfWithPage());
+        byte[] pdfA1 = TestPdfFactory.CreateMinimalPdfA(1, 'B');
         var audit = new RecordingAuditSink();
 
         // PDF/A-1 takes the adbe.pkcs7.detached SubFilter only; the default is ETSI.CAdES.detached.
@@ -251,6 +251,28 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
         embedded.Hash.ToArray().ShouldBe(policy.Hash.ToArray());
         CmsParser.Parse(signature.CmsRawData.ToArray()).SignedAttrs.ShouldBe(prepared.HashToSign);
         await ShouldBeValid(signed);
+    }
+
+    [Fact]
+    public async Task WithSignerRoles_AreSignedInPhaseOneAndReadBack()
+    {
+        DeferredSigningPrepareResult prepared = await Prepare().WithSignerRoles(["Diretor", "Testemunha"]).PrepareAsync();
+        byte[] signed = await Complete(prepared);
+
+        (await InspectSignature(signed)).ClaimedRoles.ShouldBe(["Diretor", "Testemunha"]);
+        await ShouldBeValid(signed);
+    }
+
+    [Fact]
+    public async Task WithSignerRoles_OneCallBuilderTurnedDeferred_KeepsTheRoles()
+    {
+        DeferredSigningPrepareResult prepared = await DeferredSigner.From(PadesSigner.Document(TestPdfFactory.CreateMinimalPdfWithPage())
+                .WithCertificate(_publicCertificate)
+                .WithSignerRole("Testemunha"))
+            .WithSessionIntegrityKey(s_key)
+            .PrepareAsync();
+
+        (await InspectSignature(await Complete(prepared))).ClaimedRoles.ShouldBe(["Testemunha"]);
     }
 
     [Fact]
@@ -481,6 +503,7 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
         Should.Throw<InvalidOperationException>(() => resumed.WithSigningTime(DateTimeOffset.UtcNow));
         Should.Throw<InvalidOperationException>(() => resumed.WithSignaturePolicy(new SignaturePolicyReference("1.2.3", Oids.Sha256, new byte[32], null)));
         Should.Throw<InvalidOperationException>(() => resumed.WithMetadata(new SignatureMetadata { SignerName = "x" }));
+        Should.Throw<InvalidOperationException>(() => resumed.WithSignerRole("x"));
         Should.Throw<InvalidOperationException>(() => resumed.WithDocumentInfo("Title", "x"));
         Should.Throw<InvalidOperationException>(() => resumed.WithPdfAPreservation());
         Should.Throw<InvalidOperationException>(() => resumed.WithDssArtifacts([]));
@@ -539,10 +562,6 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
 
         DeferredSigningSession.Deserialize(prepared.SessionData, s_key).LongTermClockSkewSeconds.ShouldBe(90);
     }
-
-    /// <summary>The same PDF declared as PDF/A-1b: the identification the detector reads, after the last %%EOF.</summary>
-    private static byte[] PdfA1(byte[] pdf) =>
-        [.. pdf, .. "\n%<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>\n"u8];
 
     private sealed class AnchorExtension(X509Certificate2 anchor) : ICountryExtension
     {

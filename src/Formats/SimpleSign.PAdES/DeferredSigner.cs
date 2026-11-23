@@ -7,10 +7,10 @@ using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
 using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
-using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
-using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Signing;
 
 namespace SimpleSign.PAdES;
 

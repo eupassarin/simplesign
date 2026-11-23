@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <VRI index="1">
+      <CheckSuccess check="MatchReferencedSignature" testedBy="Tool">This VRI dictionary corresponds to the signature that is within the signature whose signing certificate has the details that follow: Issuer:"O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA"; SerialNumber: 67744109412637397817256270351795771034; SubjectName:  "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer"</CheckSuccess>
+      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Specification: (Type || Cert || CRL || OCSP || TU || TS)+</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: Type CRL Cert TS TU</br>
+      </CheckSuccess>
+      <Type>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Type: 0..1. Instances found: 1</CheckSuccess>
+      </Type>
+      <TU>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child TU: 0..1. Instances found: 1</CheckSuccess>
+      </TU>
+      <TS>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child TS: 0..1. Instances found: 1</CheckSuccess>
+      </TS>
+      <CRL>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child CRL: 0..1. Instances found: 1</CheckSuccess>
+         <arrayComponent index="1">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Mon Nov 23 11:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+         <arrayComponent index="2">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Mon Nov 23 11:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+         <arrayComponent index="3">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Sun Nov 22 12:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+      </CRL>
+      <Cert>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Cert: 0..1. Instances found: 1</CheckSuccess>
+         <arrayComponent index="1">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">67744109412637397817256270351795771034</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic Signer, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter">Mon Nov 22 12:55:57 UTC 2027</Value>
+         </arrayComponent>
+         <arrayComponent index="2">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
+         </arrayComponent>
+         <arrayComponent index="3">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">11430520584097866626</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2036</Value>
+         </arrayComponent>
+         <arrayComponent index="4">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+            <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
+         </arrayComponent>
+      </Cert>
+      <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child OCSP: 0..1. Instances found: 0</CheckSuccess>
+   </VRI>
+   <VRI index="2">
+      <CheckSuccess check="MatchReferencedSignature" testedBy="Tool">This VRI dictionary corresponds to the signature that is within the signature whose signing certificate has the details that follow: Issuer:"O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA"; SerialNumber: 121660264943868223807391793049902211930; SubjectName:  "O=SimpleSign Tests,CN=SimpleSign Synthetic ECDSA Signer"</CheckSuccess>
+      <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
+         <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Specification: (Type || Cert || CRL || OCSP || TU || TS)+</br>
+         <br xmlns="http://www.w3.org/1999/xhtml">Elements found: Type CRL Cert TS TU</br>
+      </CheckSuccess>
+      <Type>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Type: 0..1. Instances found: 1</CheckSuccess>
+      </Type>
+      <TU>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child TU: 0..1. Instances found: 1</CheckSuccess>
+      </TU>
+      <TS>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child TS: 0..1. Instances found: 1</CheckSuccess>
+      </TS>
+      <CRL>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child CRL: 0..1. Instances found: 1</CheckSuccess>
+         <arrayComponent index="1">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Sun Nov 22 12:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+         <arrayComponent index="2">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Mon Nov 23 11:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+         <arrayComponent index="3">
+            <CheckSuccess check="CheckIfX509CRL" testedBy="Tool"/>
+            <Value field="version">1</Value>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="thisUpdate">Mon Nov 23 11:56:01 UTC 2026</Value>
+            <Value field="nextUpdate">Wed Dec 23 12:56:01 UTC 2026</Value>
+         </arrayComponent>
+      </CRL>
+      <Cert>
+         <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Cert: 0..1. Instances found: 1</CheckSuccess>
+         <arrayComponent index="1">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">121660264943868223807391793049902211930</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic ECDSA Signer, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+            <Value field="NotAfter">Mon Nov 22 12:56:57 UTC 2027</Value>
+         </arrayComponent>
+         <arrayComponent index="2">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
+         </arrayComponent>
+         <arrayComponent index="3">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">11430520584097866626</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2036</Value>
+         </arrayComponent>
+         <arrayComponent index="4">
+            <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
+            <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+            <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
+            <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+            <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+            <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
+         </arrayComponent>
+      </Cert>
+      <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child OCSP: 0..1. Instances found: 0</CheckSuccess>
+   </VRI>
+</xcc:ConformanceReports>

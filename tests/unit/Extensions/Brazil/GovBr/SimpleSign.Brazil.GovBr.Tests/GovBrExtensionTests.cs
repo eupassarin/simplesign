@@ -22,6 +22,14 @@ public class GovBrExtensionTests
     }
 
     [Fact]
+    public void SignerIdentityReaders_AreTheBrazilianReader()
+    {
+        var reader = Assert.Single(new GovBrExtension().SignerIdentityReaders);
+
+        Assert.IsType<BrazilSignerIdentityReader>(reader);
+    }
+
+    [Fact]
     public void TrustAnchorProviders_ContainsGovBrOnly()
     {
         var ext = new GovBrExtension();

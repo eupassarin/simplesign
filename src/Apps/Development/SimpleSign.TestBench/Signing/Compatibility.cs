@@ -310,6 +310,11 @@ public static class Compatibility
         }
 
         Set("operationId", OptionState.Shown);
+        Set("roles", builderOnly is not null ? OptionState.Off(builderOnly) : OptionState.Shown);
+        effective = effective with
+        {
+            SignerRoles = builderOnly is not null ? [] : [.. o.SignerRoles.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim())],
+        };
 
         // ── 2. Signer ──────────────────────────────────────────────────
         Set("signingPolicy", OptionState.Shown);

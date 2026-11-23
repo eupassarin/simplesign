@@ -49,6 +49,17 @@ public class IcpBrasilExtensionTests
     }
 
     [Fact]
+    public void SignerIdentityReaders_ReadTheCpfOfAnIcpBrasilCertificate()
+    {
+        using var certificate = SanCertificates.Create(("2.16.76.1.3.1", "01011980" + "52998224725" + "00000000000"));
+
+        var reader = Assert.Single(new IcpBrasilExtension().SignerIdentityReaders);
+
+        Assert.IsType<BrazilSignerIdentityReader>(reader);
+        Assert.Equal(["52998224725"], reader.Read(certificate, SimpleSign.Core.Extensions.SignerIdentifierTypes.Cpf));
+    }
+
+    [Fact]
     public async Task CreateValidator_SelfSignedSignature_IsNotValid()
     {
         using var cert = TestCertificateFactory.CreateSelfSignedCert("CN=Not ICP-Brasil, C=BR");

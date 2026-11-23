@@ -56,6 +56,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `metadata.institutionName` | text |  | Institution: The organization the signer acts for. |
 | `metadata.legalBasis` | text |  | Legal basis: The law or contract clause that gives the signature its effect. |
 | `metadata.policyOid` | text |  | Policy OID: Adds a signature-policy-identifier with this OID. |
+| `signerRoles` | lines |  | Signer roles: The roles the signer claims, one per line (signer-attributes-v2, claimedAttributes). |
 | `subFilter` | choice | `EtsiCadesDetached`, `AdbePkcs7Detached` | Sub-filter: How the PDF signature dictionary identifies the CMS format. |
 | `contentsReservedBytes` | number |  | Reserved /Contents size: Bytes reserved for the CMS in the PDF (default 16384). |
 | `preservePdfA` | toggle |  | Preserve PDF/A: Refuse options that would break the document's PDF/A conformance. |
