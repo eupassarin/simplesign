@@ -226,6 +226,9 @@ internal class TrustedValidationSettings : CommonSettings
     /// <summary>The profile's anchors that have conditions (the AATL's policy restrictions): they may refuse a chain.</summary>
     internal List<IConstrainedTrustAnchorProvider> LoadedConstrainedAnchors { get; } = [];
 
+    /// <summary>The profile's identity readers (CPF, CNPJ…): who signed a field of a signature envelope.</summary>
+    internal List<ISignerIdentityReader> LoadedIdentityReaders { get; } = [];
+
     /// <summary>The profile's qualifiers (eIDAS): each signature's qualification, QESig, AdESig-QC…</summary>
     internal List<ISignatureQualifier> LoadedQualifiers { get; } = [];
 
@@ -259,6 +262,7 @@ internal class TrustedValidationSettings : CommonSettings
 
             TrustsSystemRoots &= profile.TrustSystemRoots;
             LoadedQualifiers.AddRange(profile.SignatureQualifiers);
+            LoadedIdentityReaders.AddRange(profile.SignerIdentityReaders);
             if (TrustedList is null && Lotl is null)
             {
                 anchors.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetTrustAnchors()));

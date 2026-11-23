@@ -90,4 +90,10 @@ public interface ICliExtension
     /// <param name="signature">The signature.</param>
     /// <returns>The annotations, in the order they are shown.</returns>
     IReadOnlyList<CliSignatureAnnotation> Annotate(CliSignatureFacts signature) => [];
+
+    /// <summary>
+    /// The levels of the extension's framework a field of a signature envelope can ask for, by id
+    /// (<c>simplesign envelope prepare --signer "…;level=icp-ad-rt"</c>, ADR 0033). None by default.
+    /// </summary>
+    IReadOnlyList<SimpleSign.PAdES.Envelope.EnvelopeLevel> EnvelopeLevels => [];
 }

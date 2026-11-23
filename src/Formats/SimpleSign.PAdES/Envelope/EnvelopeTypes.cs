@@ -155,4 +155,16 @@ public sealed record EnvelopeManifest
 
     /// <summary>The signers, in order.</summary>
     public IReadOnlyList<EnvelopeManifestSigner> Signers { get; init; } = [];
+
+    /// <summary>The manifest as the envelope's associated file holds it: JSON, version 1, indented.</summary>
+    public string ToJson() => System.Text.Encoding.UTF8.GetString(EnvelopeManifestJson.Serialize(this));
+
+    /// <summary>Reads a manifest written as <see cref="ToJson"/> writes it.</summary>
+    /// <param name="json">The JSON.</param>
+    /// <exception cref="FormatException">It is not a manifest of a version this library reads.</exception>
+    public static EnvelopeManifest Parse(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        return EnvelopeManifestJson.Parse(System.Text.Encoding.UTF8.GetBytes(json));
+    }
 }

@@ -10,6 +10,7 @@ using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Envelope;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -77,6 +78,11 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
         [Description("Output as JSON (machine-readable)")]
         public bool Json { get; init; }
 
+        /// <summary>Validate the PDF's signature envelope instead: each field signed, by its signer, at its level, in order.</summary>
+        [CommandOption("--envelope")]
+        [Description("Validate the PDF's signature envelope (ADR 0033): each field signed, by its signer, at its level, in order")]
+        public bool Envelope { get; init; }
+
         /// <summary>One-line summary per signature instead of full tree.</summary>
         [CommandOption("--simple")]
         [Description("One-line summary per signature instead of full tree")]
@@ -132,6 +138,12 @@ internal sealed class ValidateCommand : AsyncCommand<ValidateCommand.Settings>
             cmsParser: _cmsParser,
             timestampValidator: _timestampValidator,
             chainValidationProviders: CliExtensions.ChainValidationProviders(_httpClientProvider.GetClient(), logger));
+
+        if (settings.Envelope)
+        {
+            return await EnvelopeReport.WriteAsync(
+                new PdfEnvelopeValidator(validator, settings.LoadedIdentityReaders), settings.InputPath, settings.Json, cancellationToken);
+        }
 
         await using var stream = File.OpenRead(settings.InputPath);
         var results = await validator.ValidateAsync(stream, cancellationToken: cancellationToken);
