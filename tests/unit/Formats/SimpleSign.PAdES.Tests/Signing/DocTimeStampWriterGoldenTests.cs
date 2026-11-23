@@ -49,7 +49,7 @@ public sealed class DocTimeStampWriterGoldenTests(ITestOutputHelper output)
 
         if (WriterCorpus.IsDeterministic(name))
         {
-            Snapshot.MatchKey($"writers/doc-timestamp.{Snapshot.Framework}.txt", name, Snapshot.Hash(model));
+            Snapshot.MatchCompressed("writers/doc-timestamp", name, model);
         }
     }
 

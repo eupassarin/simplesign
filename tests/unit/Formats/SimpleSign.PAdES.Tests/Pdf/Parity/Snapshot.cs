@@ -27,14 +27,41 @@ internal static class Snapshot
     /// </summary>
     public static string Framework => $"net{Environment.Version.Major}";
 
+    /// <summary>
+    /// Whether bytes compressed at run time are those the per-framework snapshots hold: zlib-ng on every system from
+    /// .NET 9; on .NET 8, the system zlib of Linux and macOS, not the zlib .NET 8 bundles for Windows, whose bytes differ.
+    /// </summary>
+    public static bool CompressionMatches => Environment.Version.Major >= 9 || !OperatingSystem.IsWindows();
+
+    /// <summary>
+    /// Checks (or writes) an entry of a per-framework keyed snapshot (<c>{file}.{Framework}.txt</c>): bytes compressed at
+    /// run time. Not checked where <see cref="CompressionMatches"/> is false.
+    /// </summary>
+    /// <param name="file">Its path under <c>Snapshots/</c>, without the framework and extension.</param>
+    /// <param name="key">The entry's key.</param>
+    /// <param name="bytes">The bytes whose SHA-256 it holds.</param>
+    public static void MatchCompressed(string file, string key, ReadOnlySpan<byte> bytes)
+    {
+        if (CompressionMatches)
+        {
+            MatchKey($"{file}.{Framework}.txt", key, Hash(bytes));
+        }
+    }
+
     /// <summary>The SHA-256 of some bytes, in hexadecimal.</summary>
     public static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 
     /// <summary>Checks (or writes) a whole-file snapshot.</summary>
     /// <param name="name">Its path under <c>Snapshots/</c>.</param>
     /// <param name="actual">What it must hold.</param>
-    public static void MatchFile(string name, string actual)
+    /// <param name="compressed">Whether it holds facts of bytes compressed at run time (not checked where <see cref="CompressionMatches"/> is false).</param>
+    public static void MatchFile(string name, string actual, bool compressed = false)
     {
+        if (compressed && !CompressionMatches)
+        {
+            return;
+        }
+
         string path = Path.Combine(Folder(), name);
         if (Updating)
         {

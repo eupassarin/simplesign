@@ -20,3 +20,7 @@
 # External EU DSS corpus vectors are byte-exact fixtures with recorded SHA-256 hashes (see their Fixtures/README.md).
 tests/integration/SimpleSign.Integration.Tests/Fixtures/ades/cades/** binary
 tests/integration/SimpleSign.Integration.Tests/Fixtures/ades/xades/** binary
+
+# PDFs are byte-exact: a checkout that turns LF into CRLF (core.autocrlf on Windows) changes every offset in them, and
+# git takes a PDF without NUL bytes for text. Never convert them.
+*.pdf binary

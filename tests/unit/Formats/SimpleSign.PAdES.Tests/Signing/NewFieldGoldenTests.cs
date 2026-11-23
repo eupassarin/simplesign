@@ -83,7 +83,7 @@ public sealed class NewFieldGoldenTests(ITestOutputHelper output)
 
         if (WriterCorpus.IsDeterministic(document))
         {
-            Snapshot.MatchKey($"writers/new-field.{Snapshot.Framework}.txt", $"{document}|{optionsKind}", Snapshot.Hash(model));
+            Snapshot.MatchCompressed("writers/new-field", $"{document}|{optionsKind}", model);
         }
     }
 }

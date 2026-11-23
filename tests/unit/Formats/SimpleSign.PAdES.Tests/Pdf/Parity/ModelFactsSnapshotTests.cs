@@ -35,5 +35,5 @@ public sealed class ModelFactsSnapshotTests
     [MemberData(nameof(GeneratedNames))]
     public void Read_Generated_IsItsSnapshot(string name) =>
         // Generated with zlib at run time: their bytes (offsets, stream hashes) depend on the framework's zlib.
-        Snapshot.MatchFile($"model-facts/generated/{name}.{Snapshot.Framework}.txt", ModelFacts.Read(PdfDocument.Open(ParityCorpus.Generated[name]())).ToString());
+        Snapshot.MatchFile($"model-facts/generated/{name}.{Snapshot.Framework}.txt", ModelFacts.Read(PdfDocument.Open(ParityCorpus.Generated[name]())).ToString(), compressed: true);
 }

@@ -219,7 +219,7 @@ var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Loc
 - What the PDF object model reads and writes on the corpus is snapshotted (`tests/unit/Formats/SimpleSign.PAdES.Tests/Pdf/Parity/Snapshots`,
   ADR 0032): a change to reading or writing fails those tests until it is looked at; then rewrite them with
   `SIMPLESIGN_UPDATE_SNAPSHOTS=1 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests` (on net8.0 and net10.0: the
-  writers' snapshots are per framework)
+  writers' snapshots are per framework, zlib's bytes; .NET 8 on Windows bundles another zlib, so those are not checked there)
 - Each test class maps to one production class
 
 ## When Making Changes

@@ -72,7 +72,7 @@ public sealed class PdfIncrementalUpdateTests(ITestOutputHelper output)
         updated.GetObject(first + 1)!.Value.ShouldBeOfType<PdfArray>();
         updated.RootId.ShouldBe(document.RootId);
 
-        Snapshot.MatchKey($"writing/incremental-update.{Snapshot.Framework}.txt", name, Snapshot.Hash(actual));
+        Snapshot.MatchCompressed("writing/incremental-update", name, actual);
     }
 
     [Fact]

@@ -88,7 +88,7 @@ public sealed class LtvEmbedderGoldenTests(ITestOutputHelper output)
 
         if (WriterCorpus.IsDeterministic(name))
         {
-            Snapshot.MatchKey($"writers/dss.{Snapshot.Framework}.txt", name, Snapshot.Hash(model));
+            Snapshot.MatchCompressed("writers/dss", name, model);
         }
     }
 }

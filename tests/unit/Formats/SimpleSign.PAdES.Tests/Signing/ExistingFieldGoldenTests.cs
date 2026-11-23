@@ -132,7 +132,7 @@ public sealed class ExistingFieldGoldenTests(ITestOutputHelper output)
             output.WriteLine($"the writer before the model could not sign it: {legacyFails}");
         }
 
-        Snapshot.MatchKey($"writers/existing-field.{Snapshot.Framework}.txt", $"{document}|{optionsKind}", Snapshot.Hash(model));
+        Snapshot.MatchCompressed("writers/existing-field", $"{document}|{optionsKind}", model);
     }
 
     [Fact]
