@@ -360,4 +360,28 @@ public sealed class TimestampClientTests
         // Token must appear in the result
         result.AsSpan().IndexOf(fakeToken).ShouldBeGreaterThan(0);
     }
+
+    [Theory(DisplayName = "EmbedTimestamp in a co-signed CMS adds to the chosen SignerInfo and keeps the other")]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void EmbedTimestampInCms_CoSigned_AddsToTheChosenSignerAndKeepsTheOther(int signerIndex)
+    {
+        using var alice = TestCertificateFactory.CreateSelfSignedCert("CN=Alice");
+        using var bob = TestCertificateFactory.CreateSelfSignedCert("CN=Bob");
+        byte[] cms = CmsSignatureBuilderUnsignedAttributesTests.CoSignedOutOfDerOrder(alice, bob);
+        List<byte[]> before = CmsSignatureBuilderUnsignedAttributesTests.SignerInfos(cms);
+        var fakeToken = new byte[] { 0x30, 0x03, 0x02, 0x01, 0x01 };
+
+        byte[] result = signerIndex == 0
+            ? TimestampClient.EmbedTimestampInCms(cms, fakeToken)
+            : TimestampClient.EmbedTimestampInCms(cms, fakeToken, signerIndex);
+
+        List<byte[]> after = CmsSignatureBuilderUnsignedAttributesTests.SignerInfos(result);
+        after.Count.ShouldBe(2);
+        after[1 - signerIndex].ShouldBe(before[1 - signerIndex]);
+        CmsParser.ParseAll(result).Signers[signerIndex].SignatureTimestampToken.ShouldBe(fakeToken);
+        CmsParser.ParseAll(result).Signers[1 - signerIndex].SignatureTimestampToken.ShouldBeNull();
+        CmsSignatureBuilderUnsignedAttributesTests.CheckEverySignature(result);
+        Should.Throw<ArgumentOutOfRangeException>(() => TimestampClient.EmbedTimestampInCms(cms, fakeToken, 2));
+    }
 }
