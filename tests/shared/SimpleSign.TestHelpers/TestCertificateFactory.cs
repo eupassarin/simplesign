@@ -29,11 +29,19 @@ public static class TestCertificateFactory
         return CertificateLoader.LoadCertificate(x509Certificate.RawData);
     }
 
-    public static X509Certificate2 CreateSelfSignedCert(string subject = "CN=Self Signed, O=Tests")
+    public static X509Certificate2 CreateSelfSignedCert(string subject = "CN=Self Signed, O=Tests") => CreateSelfSignedCert(subject, []);
+
+    /// <summary>A self-signed signing certificate (digitalSignature) with more extensions, such as a SubjectAltName.</summary>
+    public static X509Certificate2 CreateSelfSignedCert(string subject, params X509Extension[] extensions)
     {
         using RSA key = RSA.Create(2048);
         CertificateRequest certificateRequest = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         certificateRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: false));
+        foreach (var extension in extensions)
+        {
+            certificateRequest.CertificateExtensions.Add(extension);
+        }
+
         X509Certificate2 x509Certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1.0), DateTimeOffset.UtcNow.AddYears(1));
         return ExportAndReload(x509Certificate);
     }
