@@ -9,9 +9,9 @@ using SimpleSign.Core.Policies;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
+using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.PAdES.Pdf;
 
 // ReSharper disable once CheckNamespace — standard .NET convention for DI extensions
 namespace SimpleSign.PAdES.DependencyInjection;

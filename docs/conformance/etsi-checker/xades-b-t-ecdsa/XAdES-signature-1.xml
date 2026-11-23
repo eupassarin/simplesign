@@ -10,7 +10,7 @@
       <Reference index="2">
          <DigestValue>
             <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
-            <CheckSuccess check="CheckSignedInfoReference" testedBy="Tool" xmlns="">The digest computed value is the same as the present digest value: 'rUBA4tUZVBCSAPgHbYfQ831j4pMkeSHu1MXTgUh1ZhU='</CheckSuccess>
+            <CheckSuccess check="CheckSignedInfoReference" testedBy="Tool" xmlns="">The digest computed value is the same as the present digest value: '7E+FwBotCMjdJ39Rb2v9spMf3pufErKz13peFIjeS0I='</CheckSuccess>
          </DigestValue>
       </Reference>
    </SignedInfo>
@@ -22,30 +22,30 @@
             <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
             <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-            <Value field="SerialNumber" xmlns="">139370088757402215646703032922773809157</Value>
+            <Value field="SerialNumber" xmlns="">121660264943868223807391793049902211930</Value>
             <Value field="Subject" xmlns="">CN=SimpleSign Synthetic ECDSA Signer, O=SimpleSign Tests</Value>
-            <Value field="NotBefore" xmlns="">Tue Nov 17 22:17:09 UTC 2026</Value>
-            <Value field="NotAfter" xmlns="">Wed Nov 17 22:17:09 UTC 2027</Value>
+            <Value field="NotBefore" xmlns="">Sun Nov 22 12:56:57 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Mon Nov 22 12:56:57 UTC 2027</Value>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
          </X509Certificate>
          <X509Certificate index="2">
             <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
             <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-            <Value field="SerialNumber" xmlns="">52790410017019294210311131642313461929</Value>
+            <Value field="SerialNumber" xmlns="">164098806040052484591494843153036097472</Value>
             <Value field="Subject" xmlns="">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-            <Value field="NotBefore" xmlns="">Tue Nov 17 22:16:09 UTC 2026</Value>
-            <Value field="NotAfter" xmlns="">Mon Nov 17 22:16:09 UTC 2031</Value>
+            <Value field="NotBefore" xmlns="">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Sat Nov 22 12:55:57 UTC 2031</Value>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
          </X509Certificate>
          <X509Certificate index="3">
             <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns=""/>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns=""> This component encapsulates a X509 certificate.</CheckSuccess>
             <Value field="Issuer" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-            <Value field="SerialNumber" xmlns="">7628999631337988352</Value>
+            <Value field="SerialNumber" xmlns="">11430520584097866626</Value>
             <Value field="Subject" xmlns="">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-            <Value field="NotBefore" xmlns="">Tue Nov 17 22:16:09 UTC 2026</Value>
-            <Value field="NotAfter" xmlns="">Mon Nov 17 22:16:09 UTC 2036</Value>
+            <Value field="NotBefore" xmlns="">Sun Nov 22 12:55:57 UTC 2026</Value>
+            <Value field="NotAfter" xmlns="">Sat Nov 22 12:55:57 UTC 2036</Value>
             <CheckSuccess check="CheckEncapsulatesX509CertificateAndAddToVariable" testedBy="Tool" xmlns="">Certificate bytes added to 'KeyInfoX509Certs' context variable.</CheckSuccess>
          </X509Certificate>
       </X509Data>
@@ -92,7 +92,7 @@
                   <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
                   <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
                   <CheckSuccess check="CheckIfValueIsXMLDateTime" testedBy="Tool" xmlns=""/>
-                  <Value xmlns="">2026-11-18T22:17:42Z</Value>
+                  <Value xmlns="">2026-11-23T12:57:09Z</Value>
                </SigningTime>
                <SigningCertificateV2>
                   <CheckSuccess check="CheckIfSigningCertIsReferenced" testedBy="Tool" xmlns=""> Digest found in the first Cert element.</CheckSuccess>
@@ -135,9 +135,9 @@
                         <DigestValue xmlns="http://www.w3.org/2000/09/xmldsig#">
                            <CheckSuccess check="CheckNoChildrenElements" testedBy="Tool" xmlns=""/>
                            <CheckSuccess check="CheckNoAttributes" testedBy="Tool" xmlns=""> No attributes were found for this component, as specified by the schema </CheckSuccess>
-                           <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns="">Value found cE7LeznoCAIsWA3IFhbJXhndOD0sQ3ff5UhNBRgYrlM=</CheckSuccess>
-                           <Value xmlns="">cE7LeznoCAIsWA3IFhbJXhndOD0sQ3ff5UhNBRgYrlM=</Value>
-                           <CheckSuccess check="ReportValue" testedBy="Tool" xmlns="">Value found: cE7LeznoCAIsWA3IFhbJXhndOD0sQ3ff5UhNBRgYrlM=</CheckSuccess>
+                           <CheckSuccess check="MustBeBase64" testedBy="Tool" xmlns="">Value found 1H/KAlysR8PiOu6rn8YADdSzXrnovvO9oEuPLzKaiL8=</CheckSuccess>
+                           <Value xmlns="">1H/KAlysR8PiOu6rn8YADdSzXrnovvO9oEuPLzKaiL8=</Value>
+                           <CheckSuccess check="ReportValue" testedBy="Tool" xmlns="">Value found: 1H/KAlysR8PiOu6rn8YADdSzXrnovvO9oEuPLzKaiL8=</CheckSuccess>
                         </DigestValue>
                      </CertDigest>
                   </Cert>
@@ -170,7 +170,7 @@
                      <br xmlns="http://www.w3.org/1999/xhtml">Attributes found: ObjectReference</br>
                   </CheckSuccess>
                   <Attribute_ObjectReference>
-                     <CheckSuccess check="CheckIfDOFPointsToReferenceToSignedObject" testedBy="Tool" xmlns="">The xades:DataObjectFormat points to one ds:Reference referencing a signed data object. Value found for attribute ObjectReference: ' #Reference-doc-a4cd3de9'. The pointed ds:Reference is ds:Signature/ds:SignedInfo/ds:Reference[1] (first in sequence is number 1)</CheckSuccess>
+                     <CheckSuccess check="CheckIfDOFPointsToReferenceToSignedObject" testedBy="Tool" xmlns="">The xades:DataObjectFormat points to one ds:Reference referencing a signed data object. Value found for attribute ObjectReference: ' #Reference-doc-3b0cea19'. The pointed ds:Reference is ds:Signature/ds:SignedInfo/ds:Reference[1] (first in sequence is number 1)</CheckSuccess>
                   </Attribute_ObjectReference>
                   <MimeType>
                      <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child MimeType: 1. Instances found: 1</CheckSuccess>
@@ -237,28 +237,28 @@
                      </CheckSuccess>
                      <Attribute_Encoding/>
                      <Value field="sid.Issuer" xmlns="">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
-                     <Value field="sid.SerialNumber" xmlns="">21149756606269829945436664107069721478</Value>
-                     <Value field="genTime" xmlns="">Mon Jan 01 00:00:00 UTC 2024</Value>
+                     <Value field="sid.SerialNumber" xmlns="">124892183201622030097034710631094011806</Value>
+                     <Value field="genTime" xmlns="">Mon Nov 23 12:57:09 UTC 2026</Value>
                      <Value field="ordering" xmlns="">false</Value>
                      <Value field="policy" xmlns="">1.2.3.4</Value>
                      <Value field="serialNumber" xmlns="">1</Value>
-                     <Value field="nonce" xmlns="">109800449235443793985279332983961301246</Value>
+                     <Value field="nonce" xmlns="">139755797091100926906677662364224247119</Value>
                      <X509Certificate index="1" xmlns="">
                         <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-                        <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+                        <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
                         <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-                        <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-                        <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+                        <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+                        <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
                      </X509Certificate>
                      <X509Certificate index="2" xmlns="">
                         <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-                        <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+                        <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
                         <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
-                        <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
-                        <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+                        <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+                        <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
                      </X509Certificate>
-                     <Trace contribution="1" what="MssImprintPart" xmlns="">&lt;SignatureValue xmlns="http://www.w3.org/2000/09/xmldsig#" Id="S-e54ec792-SignatureValue"&gt;nG0CTVB19/w2O6yAjStU7+NQ5xIT59AqQfg7ARE8RxUr8gBJVAS8YAQ4IE95x+A3psG3taMTBZ8lE3vPh/W/qw==&lt;/SignatureValue&gt;</Trace>
-                     <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool" xmlns="">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  4877ce84b50a004c8dc9e21787fb433a7b7afb6f7cd28049eff496a183e0c48c</CheckSuccess>
+                     <Trace contribution="1" what="MssImprintPart" xmlns="">&lt;SignatureValue xmlns="http://www.w3.org/2000/09/xmldsig#" Id="S-2288fcfd-SignatureValue"&gt;dsIkI/7sjh+avPuzWs1dd6I9oCth+x771IldZHIgHBBSyEVqScFHsSkCeQ0Lo8x15crepbNzBamlGnRBx2rB+A==&lt;/SignatureValue&gt;</Trace>
+                     <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool" xmlns="">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  c628e22ec02dd34c19489223a5e8253a4dc308fc965794b642dee04ee4c7b2ff</CheckSuccess>
                   </EncapsulatedTimeStamp>
                   <CheckSuccess check="InstancesNumber" testedBy="Tool" xmlns=""> Instances specified for child XMLTimeStamp: *. Instances found: 0</CheckSuccess>
                </SignatureTimeStamp>

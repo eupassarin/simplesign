@@ -21,7 +21,7 @@ public sealed class PdfIso32000ComplianceTests
     {
         // "test" = 0x74657374 → encoded as "FCfN8"
         byte[] encoded = Encoding.ASCII.GetBytes("FCfN8");
-        var result = PdfStructureReader.DecodeAscii85(encoded);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(encoded);
         result.ShouldBe(Encoding.ASCII.GetBytes("test"));
     }
 
@@ -30,7 +30,7 @@ public sealed class PdfIso32000ComplianceTests
     {
         // 'z' = four zero bytes, combined with "!!" (which decodes to \x00\x00 partial)
         byte[] encoded = Encoding.ASCII.GetBytes("z");
-        var result = PdfStructureReader.DecodeAscii85(encoded);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(encoded);
         result.ShouldBe([0, 0, 0, 0]);
     }
 
@@ -40,7 +40,7 @@ public sealed class PdfIso32000ComplianceTests
         // Partial group: 2 chars → 1 output byte
         // "!!" → padded with 'u' to "!!uuu" → decodes first byte only
         byte[] encoded = Encoding.ASCII.GetBytes("!!");
-        var result = PdfStructureReader.DecodeAscii85(encoded);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(encoded);
         result.Count().ShouldBe(1);
     }
 
@@ -48,7 +48,7 @@ public sealed class PdfIso32000ComplianceTests
     public void Ascii85_PartialGroup_ThreeChars()
     {
         byte[] encoded = Encoding.ASCII.GetBytes("!!!");
-        var result = PdfStructureReader.DecodeAscii85(encoded);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(encoded);
         result.Count().ShouldBe(2);
     }
 
@@ -57,8 +57,8 @@ public sealed class PdfIso32000ComplianceTests
     {
         byte[] withWs = Encoding.ASCII.GetBytes("9 j q o ^");
         byte[] without = Encoding.ASCII.GetBytes("9jqo^");
-        var resultWs = PdfStructureReader.DecodeAscii85(withWs);
-        var resultNoWs = PdfStructureReader.DecodeAscii85(without);
+        var resultWs = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(withWs);
+        var resultNoWs = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(without);
         resultWs.ShouldBe(resultNoWs);
     }
 
@@ -66,14 +66,14 @@ public sealed class PdfIso32000ComplianceTests
     public void Ascii85_DelimitersStripped()
     {
         byte[] encoded = Encoding.ASCII.GetBytes("<~FCfN8~>");
-        var result = PdfStructureReader.DecodeAscii85(encoded);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85(encoded);
         result.ShouldBe(Encoding.ASCII.GetBytes("test"));
     }
 
     [Fact(DisplayName = "§7.4.3: ASCII85 empty input returns empty output")]
     public void Ascii85_EmptyInput()
     {
-        var result = PdfStructureReader.DecodeAscii85([]);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfFilters.DecodeAscii85([]);
         result.ShouldBeEmpty();
     }
 
@@ -121,7 +121,7 @@ public sealed class PdfIso32000ComplianceTests
     {
         // BOM (0xFE 0xFF) + "AB" in UTF-16BE
         byte[] str = [0xFE, 0xFF, 0x00, 0x41, 0x00, 0x42];
-        var result = PdfStructureReader.DecodePdfTextString(str);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfText.Decode(str);
         result.ShouldBe("AB");
     }
 
@@ -129,7 +129,7 @@ public sealed class PdfIso32000ComplianceTests
     public void Utf16Be_NoBom_DecodesAsLatin1()
     {
         byte[] str = Encoding.Latin1.GetBytes("Hello World");
-        var result = PdfStructureReader.DecodePdfTextString(str);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfText.Decode(str);
         result.ShouldBe("Hello World");
     }
 
@@ -140,7 +140,7 @@ public sealed class PdfIso32000ComplianceTests
         byte[] bom = [0xFE, 0xFF];
         byte[] jose = Encoding.BigEndianUnicode.GetBytes("José");
         byte[] str = [.. bom, .. jose];
-        var result = PdfStructureReader.DecodePdfTextString(str);
+        var result = SimpleSign.PAdES.Pdf.Model.PdfText.Decode(str);
         result.ShouldBe("José");
     }
 
@@ -167,9 +167,8 @@ public sealed class PdfIso32000ComplianceTests
         sb.Append($"startxref\n{xrefOffset}\n%%EOF");
 
         byte[] data = Encoding.Latin1.GetBytes(sb.ToString());
-        string pageDict = "<< /Type /Page /Parent 2 0 R >>";
 
-        float width = PdfStructureParser.ParseMediaBoxWidth(data, pageDict);
+        float width = PlacementWidth(data);
         width.ShouldBe(595f);
     }
 
@@ -191,9 +190,8 @@ public sealed class PdfIso32000ComplianceTests
         sb.Append($"startxref\n{xrefOffset}\n%%EOF");
 
         byte[] data = Encoding.Latin1.GetBytes(sb.ToString());
-        string pageDict = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>";
 
-        float width = PdfStructureParser.ParseMediaBoxWidth(data, pageDict);
+        float width = PlacementWidth(data);
         width.ShouldBe(612f);
     }
 
@@ -219,9 +217,8 @@ public sealed class PdfIso32000ComplianceTests
         sb.Append($"startxref\n{xrefOffset}\n%%EOF");
 
         byte[] data = Encoding.Latin1.GetBytes(sb.ToString());
-        string pageDict = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /CropBox [50 50 562 742] >>";
 
-        float width = PdfStructureParser.ParseMediaBoxWidth(data, pageDict);
+        float width = PlacementWidth(data);
         // CropBox width = urx - llx = 562 - 50 = 512
         width.ShouldBe(512f);
     }
@@ -233,9 +230,8 @@ public sealed class PdfIso32000ComplianceTests
     [Fact(DisplayName = "§8.3.2.4: /Rotate 90 parsed from page dict")]
     public void Rotation_90Degrees_Parsed()
     {
-        byte[] data = Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Type /Page /Rotate 90 >>\nendobj\n");
-        string pageDict = "<< /Type /Page /Rotate 90 >>";
-        int rotation = PdfStructureParser.ParsePageRotation(data, pageDict);
+        byte[] data = PageDocument("/Rotate 90");
+        int rotation = FirstPageRotation(data);
         rotation.ShouldBe(90);
     }
 
@@ -248,27 +244,24 @@ public sealed class PdfIso32000ComplianceTests
         sb.Append("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 /Rotate 270 >>\nendobj\n");
         sb.Append("3 0 obj\n<< /Type /Page /Parent 2 0 R >>\nendobj\n");
         byte[] data = Encoding.Latin1.GetBytes(sb.ToString());
-        string pageDict = "<< /Type /Page /Parent 2 0 R >>";
 
-        int rotation = PdfStructureParser.ParsePageRotation(data, pageDict);
+        int rotation = FirstPageRotation(data);
         rotation.ShouldBe(270);
     }
 
     [Fact(DisplayName = "§8.3.2.4: /Rotate 0 when not specified")]
     public void Rotation_NotSpecified_ReturnsZero()
     {
-        byte[] data = Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Type /Page >>\nendobj\n");
-        string pageDict = "<< /Type /Page >>";
-        int rotation = PdfStructureParser.ParsePageRotation(data, pageDict);
+        byte[] data = PageDocument("");
+        int rotation = FirstPageRotation(data);
         rotation.ShouldBe(0);
     }
 
     [Fact(DisplayName = "§8.3.2.4: Negative rotation normalizes correctly")]
     public void Rotation_Negative_Normalizes()
     {
-        byte[] data = Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Type /Page /Rotate -90 >>\nendobj\n");
-        string pageDict = "<< /Type /Page /Rotate -90 >>";
-        int rotation = PdfStructureParser.ParsePageRotation(data, pageDict);
+        byte[] data = PageDocument("/Rotate -90");
+        int rotation = FirstPageRotation(data);
         rotation.ShouldBe(270);
     }
 
@@ -296,59 +289,9 @@ public sealed class PdfIso32000ComplianceTests
     // § 12.7.3 — AcroForm /Fields validation
     // ═══════════════════════════════════════════════════════════════════════════
 
-    [Fact(DisplayName = "§12.7.3: Valid fields pass validation")]
-    public void AcroFormFields_AllValid_NoWarnings()
-    {
-        var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Sig >>\nendobj\n7 0 obj\n<< /FT /Tx >>\nendobj\n";
-        byte[] data = Encoding.Latin1.GetBytes(pdf);
-        var warnings = PdfStructureParser.ValidateAcroFormFields(data, ["5 0 R", "7 0 R"]);
-        warnings.ShouldBeEmpty();
-    }
-
-    [Fact(DisplayName = "§12.7.3: Orphaned field reference detected")]
-    public void AcroFormFields_OrphanedRef_Warning()
-    {
-        var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Sig >>\nendobj\n";
-        byte[] data = Encoding.Latin1.GetBytes(pdf);
-        var warnings = PdfStructureParser.ValidateAcroFormFields(data, ["5 0 R", "42 0 R"]);
-        warnings.Count().ShouldBe(1);
-        warnings[0].ShouldContain("42");
-    }
-
     // ═══════════════════════════════════════════════════════════════════════════
     // § 12.7.4.4 — Signature field validation
     // ═══════════════════════════════════════════════════════════════════════════
-
-    [Fact(DisplayName = "§12.7.4.4: Valid sig field with /V → /Type /Sig passes")]
-    public void SigField_ValidWithV_NoWarnings()
-    {
-        var pdf = "%PDF-1.7\n" +
-                  "5 0 obj\n<< /FT /Sig /T (Sig1) /V 6 0 R >>\nendobj\n" +
-                  "6 0 obj\n<< /Type /Sig /Filter /Adobe.PPKLite /Contents <00> /ByteRange [0 1 2 3] >>\nendobj\n";
-        byte[] data = Encoding.Latin1.GetBytes(pdf);
-        var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.ShouldBeEmpty();
-    }
-
-    [Fact(DisplayName = "§12.7.4.4: Field without /FT /Sig yields warning")]
-    public void SigField_NoFtSig_Warning()
-    {
-        var pdf = "%PDF-1.7\n5 0 obj\n<< /FT /Tx /T (TextField) >>\nendobj\n";
-        byte[] data = Encoding.Latin1.GetBytes(pdf);
-        var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.ShouldContain(w => w.Contains("/FT /Sig"));
-    }
-
-    [Fact(DisplayName = "§12.7.4.4: /V pointing to non-Sig dict yields warning")]
-    public void SigField_VNotSigDict_Warning()
-    {
-        var pdf = "%PDF-1.7\n" +
-                  "5 0 obj\n<< /FT /Sig /T (Sig1) /V 6 0 R >>\nendobj\n" +
-                  "6 0 obj\n<< /Type /Font /BaseFont /Helvetica >>\nendobj\n";
-        byte[] data = Encoding.Latin1.GetBytes(pdf);
-        var warnings = PdfStructureParser.ValidateSignatureField(data, 5);
-        warnings.ShouldContain(w => w.Contains("not a /Type /Sig"));
-    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // § 12.8.2.2 — ByteRange validation
@@ -387,24 +330,22 @@ public sealed class PdfIso32000ComplianceTests
     // § 7.5.8.2 — Cross-reference stream /Index default
     // ═══════════════════════════════════════════════════════════════════════════
 
-    [Fact(DisplayName = "§7.5.8.2: ParseFieldsArray handles multiline /Fields with tabs")]
-    public void ParseFields_Multiline_WithTabs()
+    /// <summary>The width the signer places a stamp across on the first page.</summary>
+    private static float PlacementWidth(byte[] pdf)
     {
-        const string obj = "/Fields [\t1 0 R\t2 0 R\t3 0 R\t]";
-        var refs = PdfStructureParser.ParseFieldsArray(obj);
-        refs.Count().ShouldBe(3);
+        var document = SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf);
+        return SimpleSign.PAdES.Signing.PdfSignatureWriter.PlacementWidth(document, document.View().Pages[0]);
     }
 
-    [Fact(DisplayName = "§7.5.8.2: ParseFieldsArray with 20+ refs (many-signature PDF)")]
-    public void ParseFields_ManyRefs()
-    {
-        var sb = new StringBuilder("/Fields [");
-        for (int i = 1; i <= 25; i++)
-        {
-            sb.Append($"{i} 0 R\n");
-        }
-        sb.Append(']');
-        var refs = PdfStructureParser.ParseFieldsArray(sb.ToString());
-        refs.Count().ShouldBe(25);
-    }
+    /// <summary>The first page's rotation, as the signer reads it.</summary>
+    private static int FirstPageRotation(byte[] pdf) =>
+        SimpleSign.PAdES.Signing.PdfSignatureWriter.Rotation(SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf).View().Pages[0]);
+
+    /// <summary>A one-page document whose page has the entries given.</summary>
+    private static byte[] PageDocument(string pageEntries) => new Tests.Pdf.Parity.PdfFileBuilder()
+        .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+        .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+        .Object(3, $"<< /Type /Page /Parent 2 0 R {pageEntries} >>")
+        .EndRevision()
+        .ToArray();
 }

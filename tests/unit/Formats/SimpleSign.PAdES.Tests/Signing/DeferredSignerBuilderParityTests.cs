@@ -206,7 +206,7 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
     [Fact]
     public async Task WithPdfAPreservation_OptionsThatBreakThePdfALevel_AreRefusedWhilePreparing()
     {
-        byte[] pdfA1 = PdfA1(TestPdfFactory.CreateMinimalPdfWithPage());
+        byte[] pdfA1 = TestPdfFactory.CreateMinimalPdfA(1, 'B');
         var audit = new RecordingAuditSink();
 
         // PDF/A-1 takes the adbe.pkcs7.detached SubFilter only; the default is ETSI.CAdES.detached.
@@ -539,10 +539,6 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
 
         DeferredSigningSession.Deserialize(prepared.SessionData, s_key).LongTermClockSkewSeconds.ShouldBe(90);
     }
-
-    /// <summary>The same PDF declared as PDF/A-1b: the identification the detector reads, after the last %%EOF.</summary>
-    private static byte[] PdfA1(byte[] pdf) =>
-        [.. pdf, .. "\n%<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>\n"u8];
 
     private sealed class AnchorExtension(X509Certificate2 anchor) : ICountryExtension
     {

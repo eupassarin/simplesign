@@ -10,9 +10,9 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Validation;
 using SimpleSign.Core.Validation.Policy;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Exceptions;
-using SimpleSign.PAdES.Internal;
 
 namespace SimpleSign.PAdES.Validation;
 
@@ -1087,8 +1087,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         return true;
     }
 
-    /// <summary>The PDF objects of each stream, indexed once for all its signatures.</summary>
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Stream, PdfObjectIndex> s_objectIndexes = new();
+    /// <summary>The document read from each stream, read once for all its signatures (ADR 0032).</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Stream, Pdf.Model.PdfDocument> s_documents = new();
 
     /// <summary>What the revisions after the signature changed; null when the stream cannot be read again.</summary>
     private static async Task<PdfChangeFacts?> RevisionChangesAsync(Stream pdf, PdfSignatureField field, CancellationToken cancellationToken)
@@ -1111,13 +1111,13 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         }
 
         long end = field.ByteRange.Offset2 + field.ByteRange.Length2;
-        if (!s_objectIndexes.TryGetValue(pdf, out var index) || index.Length != bytes.Length)
+        if (!s_documents.TryGetValue(pdf, out var document) || !document.Data.Span.SequenceEqual(bytes))
         {
-            index = PdfObjectIndex.Build(bytes);
-            s_objectIndexes.AddOrUpdate(pdf, index);
+            document = Pdf.Model.PdfDocument.Open(bytes);
+            s_documents.AddOrUpdate(pdf, document);
         }
 
-        return PdfRevisionComparer.Compare(index, bytes, end, field.SigDictObjectNumber);
+        return PdfRevisionComparer.Compare(document, end, field.SigDictObjectNumber);
     }
 
     /// <summary>Two signatures collide when they have the same ranges or their /Contents holes overlap.</summary>

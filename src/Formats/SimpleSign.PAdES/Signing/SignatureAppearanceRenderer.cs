@@ -38,7 +38,14 @@ internal static class SignatureAppearanceRenderer
     /// <see cref="SrgbIccProfile"/>, so the stamp conforms whatever OutputIntent the document has (ADR 0014 §5).
     /// <c>/DefaultGray</c> is written only when a grayscale background image needs it.
     /// </remarks>
-    public static byte[] BuildAppearanceXObject(int objNum, SignatureFieldOptions options, DateTime sigTime, float width, float height, int imageObjNum = 0, int fontFileObjNum = 0, int fontDescriptorObjNum = 0, int softMaskObjNum = 0, AppearanceColorProfiles? colorProfiles = null)
+    public static byte[] BuildAppearanceXObject(int objNum, SignatureFieldOptions options, DateTime sigTime, float width, float height, int imageObjNum = 0, int fontFileObjNum = 0, int fontDescriptorObjNum = 0, int softMaskObjNum = 0, AppearanceColorProfiles? colorProfiles = null) =>
+        [.. BuildAppearanceObjects(objNum, options, sigTime, width, height, imageObjNum, fontFileObjNum, fontDescriptorObjNum, softMaskObjNum, colorProfiles).SelectMany(part => part.Bytes)];
+
+    /// <summary>
+    /// The objects of <see cref="BuildAppearanceXObject"/>, each with its number, in the order they are written: the form
+    /// XObject, the image and its soft mask, the ICC profiles.
+    /// </summary>
+    internal static IReadOnlyList<(int Number, byte[] Bytes)> BuildAppearanceObjects(int objNum, SignatureFieldOptions options, DateTime sigTime, float width, float height, int imageObjNum = 0, int fontFileObjNum = 0, int fontDescriptorObjNum = 0, int softMaskObjNum = 0, AppearanceColorProfiles? colorProfiles = null)
     {
         var appearance = options.Appearance!;
         AppearanceImage? image = imageObjNum > 0 ? AppearanceImage.FromAppearance(appearance) : null;
@@ -113,30 +120,26 @@ internal static class SignatureAppearanceRenderer
         Line(stream, "Q");
 
         byte[] streamBytes = Encoding.Latin1.GetBytes(stream.ToString());
-        byte[] form = WrapInFormXObject(objNum, width, height, streamBytes, baseFontName, fontFileObjNum, fontDescriptorObjNum, image is not null ? imageObjNum : 0, defaultRgbObjNum, defaultGrayObjNum);
-        if (image is null && defaultRgbObjNum == 0)
+        var parts = new List<(int Number, byte[] Bytes)>
         {
-            return form;
-        }
-
-        using var result = new MemoryStream();
-        result.Write(form);
+            (objNum, WrapInFormXObject(objNum, width, height, streamBytes, baseFontName, fontFileObjNum, fontDescriptorObjNum, image is not null ? imageObjNum : 0, defaultRgbObjNum, defaultGrayObjNum)),
+        };
         if (image is not null)
         {
-            result.Write(image.BuildObjects(imageObjNum, softMaskObjNum));
+            parts.AddRange(image.BuildObjectParts(imageObjNum, softMaskObjNum));
         }
 
         if (defaultRgbObjNum > 0)
         {
-            result.Write(SrgbIccProfile.BuildStreamObject(defaultRgbObjNum, rgb: true));
+            parts.Add((defaultRgbObjNum, SrgbIccProfile.BuildStreamObject(defaultRgbObjNum, rgb: true)));
         }
 
         if (defaultGrayObjNum > 0)
         {
-            result.Write(SrgbIccProfile.BuildStreamObject(defaultGrayObjNum, rgb: false));
+            parts.Add((defaultGrayObjNum, SrgbIccProfile.BuildStreamObject(defaultGrayObjNum, rgb: false)));
         }
 
-        return result.ToArray();
+        return parts;
     }
 
     /// <summary>Draws the background image with the requested fit mode.</summary>

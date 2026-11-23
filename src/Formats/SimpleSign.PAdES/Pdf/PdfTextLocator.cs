@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
 
@@ -15,10 +16,9 @@ internal readonly record struct PdfTextMatch(int Page, float X, float Y);
 /// fonts are read with their ToUnicode map, or their encoding (WinAnsi, MacRoman, Standard and /Differences); composite
 /// fonts with two-byte codes through their ToUnicode map. A page that cannot be read gives no text.
 /// </summary>
-internal static class PdfTextLocator
+internal static partial class PdfTextLocator
 {
     private const int MaxFormDepth = 8;
-    private const int MaxPageDepth = 64;
     private const int MaxOperators = 5_000_000;
     private const int MaxGlyphs = 2_000_000;
 
@@ -26,6 +26,37 @@ internal static class PdfTextLocator
     public static IReadOnlyList<PdfTextMatch> Find(byte[] pdf, string text, bool ignoreCase)
     {
         ArgumentNullException.ThrowIfNull(pdf);
+        return Match(ReadPages(pdf), text, ignoreCase);
+    }
+
+    /// <summary>
+    /// The text of each page with the origin of each character, read through the object model (ADR 0032); null for a
+    /// page that cannot be read.
+    /// </summary>
+    internal static List<(string Text, List<(float X, float Y)> Origins)?> ReadPages(byte[] pdf)
+    {
+        var pages = new List<(string Text, List<(float X, float Y)> Origins)?>();
+        var source = new ModelSource(PdfDocument.Open(pdf).View());
+        foreach (var page in source.View.Pages)
+        {
+            try
+            {
+                pages.Add(Join(source.ReadPage(page)));
+            }
+#pragma warning disable CA1031 // A page that cannot be read has no text to find; the others are still searched.
+            catch (Exception)
+#pragma warning restore CA1031
+            {
+                pages.Add(null);
+            }
+        }
+
+        return pages;
+    }
+
+    /// <summary>Where <paramref name="text"/> starts in pages already read.</summary>
+    private static List<PdfTextMatch> Match(List<(string Text, List<(float X, float Y)> Origins)?> pages, string text, bool ignoreCase)
+    {
         string needle = Collapse(text.Normalize(NormalizationForm.FormC)).Trim();
         var matches = new List<PdfTextMatch>();
         if (needle.Length == 0)
@@ -33,31 +64,18 @@ internal static class PdfTextLocator
             return matches;
         }
 
-        var document = new Document(PdfObjectIndex.Build(pdf).Revision(pdf.Length));
-        int root = PdfStructureParser.FindRootObjectNumber(pdf);
-        string? pagesRef = document.Dict(document.Object(root)).GetValueOrDefault("Pages");
-        int pageNumber = 0;
-        foreach (var (page, resources) in document.Pages(PdfDictionary.Reference(pagesRef)))
+        StringComparison comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        for (int i = 0; i < pages.Count; i++)
         {
-            pageNumber++;
-            List<Glyph> glyphs;
-            try
-            {
-                glyphs = document.ReadPage(page, resources);
-            }
-#pragma warning disable CA1031 // A page that cannot be read has no text to find; the others are still searched.
-            catch (Exception)
-#pragma warning restore CA1031
+            if (pages[i] is not var (line, origins))
             {
                 continue;
             }
 
-            var (line, origins) = Join(glyphs);
-            StringComparison comparison = ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             for (int at = line.IndexOf(needle, comparison); at >= 0; at = line.IndexOf(needle, at + needle.Length, comparison))
             {
                 var (x, y) = origins[at];
-                matches.Add(new PdfTextMatch(pageNumber, x, y));
+                matches.Add(new PdfTextMatch(i + 1, x, y));
             }
         }
 
@@ -145,152 +163,188 @@ internal static class PdfTextLocator
         public static Matrix Translate(double x, double y) => new(1, 0, 0, 1, x, y);
     }
 
-    /// <summary>The objects of the document, and what is read from them: pages, resources, fonts, streams.</summary>
-    private sealed class Document(Dictionary<int, string> objects)
+    /// <summary>A form XObject to run: its content, matrix and resources (null: the caller's).</summary>
+    private sealed record FormXObject(byte[] Content, Matrix Matrix, object? Resources);
+
+    /// <summary>What running a content stream needs from the document: fonts and form XObjects by resource name.</summary>
+    private interface IContentSource
     {
-        private readonly Dictionary<string, Font> _fonts = new(StringComparer.Ordinal);
+        /// <summary>Counts an operator; false once the document has run too many.</summary>
+        bool Count();
+
+        /// <summary>The font a resource name refers to; null when there is none.</summary>
+        Font? Font(object? resources, string name);
+
+        /// <summary>The form XObject a resource name refers to; null when it is not one, or cannot be read.</summary>
+        FormXObject? Form(object? resources, string name);
+    }
+
+    /// <summary>The pages, resources, fonts and streams of a document, read through the object model (ADR 0032).</summary>
+    private sealed class ModelSource(PdfRevisionView view) : IContentSource
+    {
+        private static readonly PdfName s_contents = PdfName.Of("Contents");
+        private static readonly PdfName s_font = PdfName.Of("Font");
+        private static readonly PdfName s_xObject = PdfName.Of("XObject");
+        private static readonly PdfName s_form = PdfName.Of("Form");
+        private static readonly PdfName s_matrix = PdfName.Of("Matrix");
+        private static readonly PdfName s_resources = PdfName.Of("Resources");
+
+        private readonly Dictionary<object, Font> _fonts = [];
         private int _operators;
 
-        public string? Object(int number) => number > 0 ? objects.GetValueOrDefault(number) : null;
-
-        /// <summary>The value, or the object it refers to.</summary>
-        public string? Resolve(string? value)
-        {
-            int number = PdfDictionary.Reference(value);
-            return number > 0 ? Object(number) : value;
-        }
-
-        /// <summary>The entries of a dictionary value (inline, or the object it refers to; a stream's dictionary).</summary>
-        public Dictionary<string, string> Dict(string? value)
-        {
-            string? body = Resolve(value);
-            return body is null ? new Dictionary<string, string>(StringComparer.Ordinal) : PdfDictionary.Parse(PdfDictionary.Head(body));
-        }
-
-        /// <summary>The pages under a page tree node, in order, with the resources each inherits or has.</summary>
-        public IEnumerable<(Dictionary<string, string> Page, string? Resources)> Pages(int node)
-        {
-            var visited = new HashSet<int>();
-            var stack = new Stack<(int Node, string? Resources, int Depth)>();
-            stack.Push((node, null, 0));
-            while (stack.Count > 0)
-            {
-                var (number, inherited, depth) = stack.Pop();
-                if (number <= 0 || depth > MaxPageDepth || !visited.Add(number))
-                {
-                    continue;
-                }
-
-                var dict = Dict(Object(number));
-                string? resources = dict.GetValueOrDefault("Resources") ?? inherited;
-                if (dict.TryGetValue("Kids", out string? kids))
-                {
-                    var children = PdfDictionary.References(Resolve(kids));
-                    for (int i = children.Count - 1; i >= 0; i--)
-                    {
-                        stack.Push((children[i], resources, depth + 1));
-                    }
-                }
-                else
-                {
-                    yield return (dict, resources);
-                }
-            }
-        }
+        public PdfRevisionView View => view;
 
         /// <summary>The glyphs a page draws, in content order.</summary>
-        public List<Glyph> ReadPage(Dictionary<string, string> page, string? resources)
+        public List<Glyph> ReadPage(PdfPage page)
         {
             var glyphs = new List<Glyph>();
             _operators = 0;
-            string? contents = Resolve(page.GetValueOrDefault("Contents"));
-            if (contents is null)
-            {
-                return glyphs;
-            }
-
             var content = new List<byte>();
-            if (contents.TrimStart().StartsWith('['))
+            switch (view.Resolve(page.Dictionary.Get(s_contents)))
             {
-                foreach (int part in PdfDictionary.References(contents))
-                {
-                    content.AddRange(StreamData(Object(part)) ?? []);
-                    content.Add((byte)'\n');
-                }
-            }
-            else
-            {
-                content.AddRange(StreamData(contents) ?? []);
+                case PdfStream stream:
+                    content.AddRange(Decode(stream));
+                    break;
+                case PdfArray parts:
+                    foreach (var part in parts)
+                    {
+                        if (view.Resolve(part) is PdfStream stream)
+                        {
+                            content.AddRange(Decode(stream));
+                            content.Add((byte)'\n');
+                        }
+                    }
+
+                    break;
+                default:
+                    return glyphs;
             }
 
-            new ContentReader(this, glyphs).Run([.. content], resources, Matrix.Identity, 0);
+            new ContentReader(this, glyphs).Run([.. content], page.Resources, Matrix.Identity, 0);
             return glyphs;
         }
 
-        /// <summary>Counts an operator; false once the document has run too many.</summary>
         public bool Count() => ++_operators <= MaxOperators;
 
-        /// <summary>The decoded data of a stream object; null when it is not a stream or cannot be decoded.</summary>
-        public byte[]? StreamData(string? body)
+        public Font? Font(object? resources, string name)
         {
-            if (body is null)
+            var entry = (view.Resolve((resources as PdfDictionary)?.Get(s_font)) as PdfDictionary)?.Get(name);
+            if (view.Resolve(entry) is not PdfDictionary font)
             {
                 return null;
             }
 
-            string head = PdfDictionary.Head(body);
-            if (head.Length >= body.Length || !body.AsSpan(head.Length).TrimStart().StartsWith("stream", StringComparison.Ordinal))
+            object key = entry is PdfReference reference ? reference.Id : font;
+            if (!_fonts.TryGetValue(key, out var read))
             {
-                return null;
+                read = ReadFont(font);
+                _fonts[key] = read;
             }
 
-            int start = body.IndexOf("stream", head.Length, StringComparison.Ordinal) + 6;
-            if (start < body.Length && body[start] == '\r')
-            {
-                start++;
-            }
-
-            if (start < body.Length && body[start] == '\n')
-            {
-                start++;
-            }
-
-            var dict = PdfDictionary.Parse(head);
-            int end = int.TryParse(Resolve(dict.GetValueOrDefault("Length"))?.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int length)
-                && length >= 0 && start + length <= body.Length
-                ? start + length
-                : body.LastIndexOf("endstream", StringComparison.Ordinal);
-            if (end < start)
-            {
-                return null;
-            }
-
-            byte[] raw = Encoding.Latin1.GetBytes(body[start..end]);
-            return PdfStructureReader.ApplyStreamFilters(raw, Encoding.Latin1.GetBytes(head));
+            return read;
         }
 
-        /// <summary>The font a resource name refers to; a font read once is kept.</summary>
-        public Font? Font(string? resources, string name)
+        public FormXObject? Form(object? resources, string name)
         {
-            string? value = Dict(resources).GetValueOrDefault("Font") is { } fonts ? Dict(fonts).GetValueOrDefault(name) : null;
-            if (value is null)
+            if (view.Resolve((view.Resolve((resources as PdfDictionary)?.Get(s_xObject)) as PdfDictionary)?.Get(name)) is not PdfStream stream
+                || !s_form.Equals(stream.Dictionary.Get(PdfName.Subtype)))
             {
                 return null;
             }
 
-            string key = PdfDictionary.Reference(value) is > 0 and var number ? number.ToString(CultureInfo.InvariantCulture) : value;
-            if (!_fonts.TryGetValue(key, out var font))
+            byte[] content;
+            try
             {
-                font = Fonts.Read(this, Dict(value));
-                _fonts[key] = font;
+                content = Decode(stream);
+            }
+            catch (Exception ex) when (ex is PdfFilterException or PdfUnsupportedFilterException)
+            {
+                return null;
             }
 
-            return font;
+            var matrix = Matrix.Identity;
+            if (Values(stream.Dictionary.Get(s_matrix)) is { Count: 6 } m && m.All(v => v is double))
+            {
+                matrix = new Matrix((double)m[0], (double)m[1], (double)m[2], (double)m[3], (double)m[4], (double)m[5]);
+            }
+
+            return new FormXObject(content, matrix, view.Resolve(stream.Dictionary.Get(s_resources)) as PdfDictionary);
+        }
+
+        private byte[] Decode(PdfStream stream) => view.Document.DecodeStream(stream, view.Revision);
+
+        private Font ReadFont(PdfDictionary font)
+        {
+            Dictionary<int, string>? toUnicode = null;
+            if (view.Resolve(font.Get("ToUnicode")) is PdfStream map)
+            {
+                try
+                {
+                    toUnicode = Fonts.ReadCMap(System.Text.Encoding.Latin1.GetString(Decode(map)));
+                }
+                catch (Exception ex) when (ex is PdfFilterException or PdfUnsupportedFilterException)
+                {
+                    toUnicode = null;
+                }
+            }
+
+            if ((font.Get(PdfName.Subtype) as PdfName)?.Value == "Type0")
+            {
+                var descendants = view.Resolve(font.Get("DescendantFonts"));
+                var descendant = view.Resolve(descendants is PdfArray { Count: > 0 } array ? array[0] : descendants) as PdfDictionary;
+                return Fonts.Composite(toUnicode, Values(descendant?.Get("W")), Number(descendant?.Get("DW")));
+            }
+
+            var encoding = view.Resolve(font.Get("Encoding"));
+            var differences = encoding as PdfDictionary;
+            return Fonts.Simple(
+                toUnicode,
+                Fonts.Encoding((encoding as PdfName)?.Value, (view.Resolve(differences?.Get("BaseEncoding")) as PdfName)?.Value, Values(differences?.Get("Differences"))),
+                Number(font.Get("FirstChar")) is double first ? (int)first : null,
+                Values(font.Get("Widths")),
+                (view.Resolve(font.Get("BaseFont")) as PdfName)?.Value ?? "");
+        }
+
+        private double? Number(PdfObject? value) => view.Resolve(value) switch
+        {
+            PdfInteger integer => integer.Value,
+            PdfReal real => real.Value,
+            _ => null,
+        };
+
+        /// <summary>An array as the content lexer gives one: numbers as doubles, names, nested arrays; null when it is not one.</summary>
+        private List<object>? Values(PdfObject? value)
+        {
+            if (view.Resolve(value) is not PdfArray array)
+            {
+                return null;
+            }
+
+            var values = new List<object>(array.Count);
+            foreach (var item in array)
+            {
+                var resolved = item is PdfReference ? view.Resolve(item) : item;
+                object? converted = resolved switch
+                {
+                    PdfInteger integer => (double)integer.Value,
+                    PdfReal real => real.Value,
+                    PdfName name => new Name(name.Value),
+                    PdfArray nested => Values(nested),
+                    _ => null,
+                };
+
+                if (converted is not null)
+                {
+                    values.Add(converted);
+                }
+            }
+
+            return values;
         }
     }
 
     /// <summary>Runs a content stream and records the glyphs it draws.</summary>
-    private sealed class ContentReader(Document document, List<Glyph> glyphs)
+    private sealed class ContentReader(IContentSource document, List<Glyph> glyphs)
     {
         private struct State
         {
@@ -308,7 +362,7 @@ internal static class PdfTextLocator
         private Matrix _tm = Matrix.Identity;
         private Matrix _tlm = Matrix.Identity;
 
-        public void Run(byte[] content, string? resources, Matrix ctm, int depth)
+        public void Run(byte[] content, object? resources, Matrix ctm, int depth)
         {
             _state.Ctm = ctm;
             var saved = new Stack<State>();
@@ -332,7 +386,7 @@ internal static class PdfTextLocator
             }
         }
 
-        private void Execute(string op, List<object> operands, string? resources, Stack<State> saved, int depth, ContentLexer lexer)
+        private void Execute(string op, List<object> operands, object? resources, Stack<State> saved, int depth, ContentLexer lexer)
         {
             switch (op)
             {
@@ -451,24 +505,15 @@ internal static class PdfTextLocator
             }
         }
 
-        private void RunForm(string name, string? resources, int depth)
+        private void RunForm(string name, object? resources, int depth)
         {
-            string? value = document.Dict(resources).GetValueOrDefault("XObject") is { } xobjects ? document.Dict(xobjects).GetValueOrDefault(name) : null;
-            string? body = document.Resolve(value);
-            var dict = document.Dict(body);
-            if (body is null || dict.GetValueOrDefault("Subtype") != "/Form" || document.StreamData(body) is not { } content)
+            if (document.Form(resources, name) is not { } form)
             {
                 return;
             }
 
-            Matrix matrix = Matrix.Identity;
-            if (dict.TryGetValue("Matrix", out string? m) && ContentLexer.ReadArray(m) is { Count: 6 } values && values.All(v => v is double))
-            {
-                matrix = new Matrix((double)values[0], (double)values[1], (double)values[2], (double)values[3], (double)values[4], (double)values[5]);
-            }
-
-            var form = new ContentReader(document, glyphs) { _state = _state };
-            form.Run(content, dict.GetValueOrDefault("Resources") ?? resources, matrix.Then(_state.Ctm), depth + 1);
+            var reader = new ContentReader(document, glyphs) { _state = _state };
+            reader.Run(form.Content, form.Resources ?? resources, form.Matrix.Then(_state.Ctm), depth + 1);
         }
 
         private static double[]? Numbers(List<object> operands, int count)
@@ -831,37 +876,27 @@ internal static class PdfTextLocator
     /// <summary>Reads fonts: their kind, encoding, ToUnicode map and widths.</summary>
     private static class Fonts
     {
-        private static readonly string[] s_standard14 =
+        internal static readonly string[] s_standard14 =
         [
             "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
             "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
             "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
         ];
 
-        public static Font Read(Document document, Dictionary<string, string> font)
+        /// <summary>A Type 0 font (§9.7): two-byte codes, read through its ToUnicode map, with its CIDFont's widths.</summary>
+        internal static Font Composite(Dictionary<int, string>? toUnicode, List<object>? cidWidths, double? defaultWidth) => new()
         {
-            Dictionary<int, string>? toUnicode = font.TryGetValue("ToUnicode", out string? map)
-                && document.StreamData(document.Resolve(map)) is { } cmap
-                ? ReadCMap(System.Text.Encoding.Latin1.GetString(cmap))
-                : null;
+            TwoByte = true,
+            ToUnicode = toUnicode,
+            Widths = CidWidths(cidWidths),
+            DefaultWidth = defaultWidth ?? 1000,
+        };
 
-            if (font.GetValueOrDefault("Subtype") == "/Type0")
-            {
-                string? descendants = document.Resolve(font.GetValueOrDefault("DescendantFonts"))?.Trim();
-                var descendant = document.Dict(descendants is null ? null
-                    : PdfDictionary.References(descendants) is { Count: > 0 } refs ? document.Object(refs[0])
-                    : descendants.TrimStart('[').TrimEnd(']'));
-                double dw = double.TryParse(descendant.GetValueOrDefault("DW"), NumberStyles.Float, CultureInfo.InvariantCulture, out double d) ? d : 1000;
-                return new Font
-                {
-                    TwoByte = true,
-                    ToUnicode = toUnicode,
-                    Widths = ReadCidWidths(document.Resolve(descendant.GetValueOrDefault("W"))),
-                    DefaultWidth = dw,
-                };
-            }
-
-            string baseFont = (font.GetValueOrDefault("BaseFont") ?? "").TrimStart('/');
+        /// <summary>A simple font (§9.6): one-byte codes, its encoding, its widths from FirstChar on.</summary>
+        internal static Font Simple(
+            Dictionary<int, string>? toUnicode, string?[] encoding, int? firstChar, List<object>? widthValues, string baseFont)
+        {
+            baseFont = baseFont.TrimStart('/');
             int plus = baseFont.IndexOf('+', StringComparison.Ordinal);
             if (plus == 6)
             {
@@ -869,13 +904,11 @@ internal static class PdfTextLocator
             }
 
             var widths = new Dictionary<int, double>();
-            if (int.TryParse(font.GetValueOrDefault("FirstChar"), out int first)
-                && document.Resolve(font.GetValueOrDefault("Widths")) is { } widthArray
-                && ContentLexer.ReadArray(widthArray) is { } values)
+            if (firstChar is int first && widthValues is not null)
             {
-                for (int i = 0; i < values.Count; i++)
+                for (int i = 0; i < widthValues.Count; i++)
                 {
-                    if (values[i] is double w)
+                    if (widthValues[i] is double w)
                     {
                         widths[first + i] = w;
                     }
@@ -885,60 +918,41 @@ internal static class PdfTextLocator
             return new Font
             {
                 ToUnicode = toUnicode,
-                Encoding = ReadEncoding(document, font.GetValueOrDefault("Encoding")),
+                Encoding = encoding,
                 Widths = widths,
                 Standard = Array.Find(s_standard14, f => f.Equals(baseFont, StringComparison.OrdinalIgnoreCase)) ?? (baseFont.Length == 0 ? null : StandardFor(baseFont)),
             };
         }
 
-        /// <summary>The standard font with the metrics of a font named like one (Arial is Helvetica, TimesNewRoman is Times).</summary>
-        private static string? StandardFor(string baseFont)
-        {
-            string name = baseFont.Replace(",", "-", StringComparison.Ordinal);
-            bool bold = name.Contains("Bold", StringComparison.OrdinalIgnoreCase);
-            if (name.StartsWith("Arial", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Helvetica", StringComparison.OrdinalIgnoreCase))
-            {
-                return bold ? "Helvetica-Bold" : "Helvetica";
-            }
-
-            return name.StartsWith("Times", StringComparison.OrdinalIgnoreCase) ? (bold ? "Times-Bold" : "Times-Roman") : null;
-        }
-
-        private static string?[] ReadEncoding(Document document, string? value)
+        /// <summary>A simple font's encoding (§9.6.6): a named one, or a base encoding changed by /Differences.</summary>
+        internal static string?[] Encoding(string? name, string? baseEncoding, List<object>? differences)
         {
             string?[] table = Tables.WinAnsi();
-            string? resolved = document.Resolve(value)?.Trim();
-            if (resolved is null)
+            if (name is not null)
             {
-                return table;
+                return Tables.ByName(name) ?? table;
             }
 
-            if (resolved.StartsWith('/'))
+            if (baseEncoding is not null)
             {
-                return Tables.ByName(resolved[1..]) ?? table;
+                table = Tables.ByName(baseEncoding) ?? table;
             }
 
-            var dict = PdfDictionary.Parse(resolved);
-            if (dict.GetValueOrDefault("BaseEncoding") is { } baseEncoding)
-            {
-                table = Tables.ByName(baseEncoding.TrimStart('/')) ?? table;
-            }
-
-            if (dict.TryGetValue("Differences", out string? differences) && ContentLexer.ReadArray(differences) is { } items)
+            if (differences is not null)
             {
                 table = (string?[])table.Clone();
                 int code = 0;
-                foreach (object item in items)
+                foreach (object item in differences)
                 {
                     if (item is double d)
                     {
                         code = (int)d;
                     }
-                    else if (item is Name name)
+                    else if (item is Name glyph)
                     {
                         if (code is >= 0 and < 256)
                         {
-                            table[code] = GlyphNames.Text(name.Value);
+                            table[code] = GlyphNames.Text(glyph.Value);
                         }
 
                         code++;
@@ -950,10 +964,10 @@ internal static class PdfTextLocator
         }
 
         /// <summary>The /W array of a CIDFont (§9.7.4.3): <c>c [w1 w2 …]</c> and <c>cfirst clast w</c>.</summary>
-        private static Dictionary<int, double> ReadCidWidths(string? value)
+        internal static Dictionary<int, double> CidWidths(List<object>? items)
         {
             var widths = new Dictionary<int, double>();
-            if (value is null || ContentLexer.ReadArray(value) is not { } items)
+            if (items is null)
             {
                 return widths;
             }
@@ -988,6 +1002,19 @@ internal static class PdfTextLocator
             }
 
             return widths;
+        }
+
+        /// <summary>The standard font with the metrics of a font named like one (Arial is Helvetica, TimesNewRoman is Times).</summary>
+        internal static string? StandardFor(string baseFont)
+        {
+            string name = baseFont.Replace(",", "-", StringComparison.Ordinal);
+            bool bold = name.Contains("Bold", StringComparison.OrdinalIgnoreCase);
+            if (name.StartsWith("Arial", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Helvetica", StringComparison.OrdinalIgnoreCase))
+            {
+                return bold ? "Helvetica-Bold" : "Helvetica";
+            }
+
+            return name.StartsWith("Times", StringComparison.OrdinalIgnoreCase) ? (bold ? "Times-Bold" : "Times-Roman") : null;
         }
 
         /// <summary>The code → text map of a ToUnicode CMap (§9.10.3): its bfchar and bfrange sections.</summary>

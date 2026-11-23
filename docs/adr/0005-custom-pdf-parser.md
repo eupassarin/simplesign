@@ -49,3 +49,8 @@ It does **not** attempt to be a general-purpose PDF library — no rendering, no
 **Status:** This decision is permanent. No third-party PDF library dependency will be added.
 
 **Update (v0.11):** the parser is no longer a separate package. It lives in `SimpleSign.PAdES` under `Pdf/`, namespace `SimpleSign.PAdES.Pdf`. See ADR 0018.
+
+**Update (ADR 0032):** the parser is an object model now, internal: `SimpleSign.PAdES.Pdf.Model` reads a PDF through
+its cross-reference (objects, filters, revisions, the views of a revision) and `SimpleSign.PAdES.Pdf.Writing` writes
+incremental updates (serializer, dictionary patch, cross-reference). Nothing searches a file's text any more; still no
+third-party PDF library.

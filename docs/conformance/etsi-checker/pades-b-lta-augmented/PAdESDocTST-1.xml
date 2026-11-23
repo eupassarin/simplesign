@@ -12,25 +12,25 @@
    </Type>
    <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child V: 0..1. Instances found: 0</CheckSuccess>
    <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
-   <Value field="sid.SerialNumber">21149756606269829945436664107069721478</Value>
-   <Value field="genTime">Mon Jan 01 00:00:00 UTC 2024</Value>
+   <Value field="sid.SerialNumber">124892183201622030097034710631094011806</Value>
+   <Value field="genTime">Mon Nov 23 12:57:58 UTC 2026</Value>
    <Value field="ordering">false</Value>
    <Value field="policy">1.2.3.4</Value>
    <Value field="serialNumber">1</Value>
-   <Value field="nonce">232498828592060682514229117827029433836</Value>
+   <Value field="nonce">85348197672578468022390210847860400386</Value>
    <X509Certificate index="1">
       <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-      <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+      <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
       <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-      <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-      <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+      <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+      <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
    </X509Certificate>
    <X509Certificate index="2">
       <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-      <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+      <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
       <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
-      <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
-      <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+      <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+      <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
    </X509Certificate>
-   <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  13e1fa2697a1bbd25bebee2045d48276163e5c05785ca82d741ff98a6d0621b6</CheckSuccess>
+   <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  e1177081e83eca69a78a3de8cc86a297e947e3b1261e9af9a47650e154324716</CheckSuccess>
 </xcc:ConformanceReports>

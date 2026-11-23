@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Text;
 using SimpleSign.PAdES.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
 
@@ -12,9 +12,10 @@ public sealed record PdfEmbeddedFile(string Name, ReadOnlyMemory<byte> Data);
 
 /// <summary>
 /// Reads the files embedded in a PDF document: the entries of the catalog's <c>/Names /EmbeddedFiles</c> name tree
-/// (ISO 32000-1 §7.11.4, §7.9.6), each decoded (<c>/FlateDecode</c>, <c>/ASCII85Decode</c>).
+/// (ISO 32000-1 §7.11.4, §7.9.6), each decoded (<c>/FlateDecode</c> with its predictors, <c>/ASCII85Decode</c>,
+/// <c>/ASCIIHexDecode</c>).
 /// <para>
-/// The document is read as it is now, its last revision, wherever in the file an object is. To know that a signature
+/// The document is read as it is now, its last revision, through its cross-reference. To know that a signature
 /// covers what is read, check that the signature's byte range covers the whole file
 /// (<see cref="PdfByteRange.CoversEntireFile"/>) and that the bytes it leaves out — the signature's own
 /// <c>/Contents</c> — hold a hexadecimal string and nothing else: an object written there is read like any other.
@@ -36,9 +37,7 @@ public static class PdfEmbeddedFiles
     /// <summary>The most files read from one document.</summary>
     public const int MaxFiles = 1024;
 
-    private const int MaxTreeDepth = 32;
     private const int MaxValueDepth = 64;
-    private const int MaxReferenceHops = 16;
 
     /// <summary>Reads the embedded files of a PDF document.</summary>
     /// <param name="pdf">The PDF document.</param>
@@ -50,226 +49,73 @@ public static class PdfEmbeddedFiles
     /// </exception>
     public static IReadOnlyList<PdfEmbeddedFile> Read(ReadOnlyMemory<byte> pdf)
     {
-        var data = pdf.Span;
-        if (PdfStructureReader.IsEncrypted(data))
+        var document = PdfDocument.Open(pdf);
+        if (document.IsEncrypted)
         {
             throw new EncryptedPdfException("This PDF is encrypted: its embedded files cannot be read. Decrypt it first.");
         }
 
-        var files = new List<PdfEmbeddedFile>();
-        if (Dictionary(data, new Reference(PdfStructureParser.FindRootObjectNumber(data))) is not { } catalog)
+        var view = document.View();
+        if (view.Catalog is null)
         {
             throw new PdfStructureException("The PDF's catalog cannot be read.");
         }
 
-        if (Dictionary(data, catalog.GetValueOrDefault("Names")) is { } names
-            && Dictionary(data, names.GetValueOrDefault("EmbeddedFiles")) is { } tree)
+        var files = new List<PdfEmbeddedFile>();
+        foreach (var (key, value) in view.NameTree("EmbeddedFiles"))
         {
-            Walk(data, tree, 0, [], files);
+            if (File(view, key, value) is not { } file)
+            {
+                continue;
+            }
+
+            if (files.Count == MaxFiles)
+            {
+                throw new PdfStructureException($"The PDF embeds more than {MaxFiles} files.");
+            }
+
+            files.Add(file);
         }
 
         return files;
     }
 
-    /// <summary>Adds the files of a name tree node and of its kids.</summary>
-    private static void Walk(ReadOnlySpan<byte> data, Dictionary<string, object?> node, int depth, HashSet<int> visited, List<PdfEmbeddedFile> files)
-    {
-        if (Resolve(data, node.GetValueOrDefault("Names")) is List<object?> entries)
-        {
-            for (int i = 0; i + 1 < entries.Count; i += 2)
-            {
-                if (File(data, entries[i], entries[i + 1]) is not { } file)
-                {
-                    continue;
-                }
-
-                if (files.Count == MaxFiles)
-                {
-                    throw new PdfStructureException($"The PDF embeds more than {MaxFiles} files.");
-                }
-
-                files.Add(file);
-            }
-        }
-
-        if (depth == MaxTreeDepth || Resolve(data, node.GetValueOrDefault("Kids")) is not List<object?> kids)
-        {
-            return;
-        }
-
-        foreach (object? kid in kids)
-        {
-            // A node reached twice is a loop in the tree: read once.
-            if (kid is Reference reference && !visited.Add(reference.Number))
-            {
-                continue;
-            }
-
-            if (Dictionary(data, kid) is { } child)
-            {
-                Walk(data, child, depth + 1, visited, files);
-            }
-        }
-    }
-
     /// <summary>The file of a name tree entry; null when the entry has no embedded file stream.</summary>
-    private static PdfEmbeddedFile? File(ReadOnlySpan<byte> data, object? key, object? value)
+    private static PdfEmbeddedFile? File(PdfRevisionView view, PdfString key, PdfObject value)
     {
-        if (Dictionary(data, value) is not { } specification || Dictionary(data, specification.GetValueOrDefault("EF")) is not { } streams)
+        if (view.Resolve(value) is not PdfDictionary specification
+            || view.Resolve(specification.Get("EF")) is not PdfDictionary streams
+            || view.Resolve(streams.Get("UF") ?? streams.Get("F")) is not PdfStream stream)
         {
             return null;
         }
 
-        if ((streams.GetValueOrDefault("UF") ?? streams.GetValueOrDefault("F")) is not Reference stream)
-        {
-            return null;
-        }
-
-        string name = Text(Resolve(data, specification.GetValueOrDefault("UF")))
-            ?? Text(Resolve(data, specification.GetValueOrDefault("F")))
-            ?? Text(Resolve(data, key))
-            ?? "";
-        return Stream(data, stream.Number, name) is { } content ? new PdfEmbeddedFile(name, content) : null;
-    }
-
-    /// <summary>The decoded content of a stream object; null when the object is not a stream.</summary>
-    private static byte[]? Stream(ReadOnlySpan<byte> data, int objectNumber, string name)
-    {
-        var (start, end) = PdfStructureParser.FindObjectBytes(data, objectNumber);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        var parser = new Parser(Encoding.Latin1.GetString(data[start..end]));
-        if (!parser.SkipObjectHeader() || parser.Value(0) is not Dictionary<string, object?> dictionary)
-        {
-            return null;
-        }
-
-        // The keyword is looked for after the dictionary: a name inside it may contain "stream" (/application#2Foctet-stream).
-        int position = PdfStructureReader.SkipWhitespace(data, start + parser.Position);
-        if (!data[position..].StartsWith("stream"u8))
-        {
-            return null;
-        }
-
-        position += "stream"u8.Length;
-        if (position < data.Length && data[position] == (byte)'\r')
-        {
-            position++;
-        }
-
-        if (position < data.Length && data[position] == (byte)'\n')
-        {
-            position++;
-        }
-
-        ReadOnlySpan<byte> raw;
-        if (Resolve(data, dictionary.GetValueOrDefault("Length")) is double length && length >= 0 && position + (long)length <= data.Length)
-        {
-            raw = data.Slice(position, (int)length);
-        }
-        else
-        {
-            int found = data[position..].IndexOf("endstream"u8);
-            if (found < 0)
-            {
-                return null;
-            }
-
-            raw = data.Slice(position, found);
-        }
-
-        if (Resolve(data, dictionary.GetValueOrDefault("DecodeParms")) is not null)
-        {
-            throw new PdfStructureException($"The embedded file '{name}' has decode parameters (/DecodeParms), which are not supported.");
-        }
-
-        byte[] content = raw.ToArray();
-        foreach (string filter in Filters(Resolve(data, dictionary.GetValueOrDefault("Filter"))))
-        {
-            content = filter switch
-            {
-                "FlateDecode" or "Fl" => Inflate(content, name),
-                "ASCII85Decode" or "A85" => PdfStructureReader.DecodeAscii85(content),
-                _ => throw new PdfStructureException($"The embedded file '{name}' uses the filter /{filter}, which is not supported."),
-            };
-        }
-
-        return content.Length > MaxFileSize ? throw TooLarge(name) : content;
-    }
-
-    private static List<string> Filters(object? filter) => filter switch
-    {
-        Name single => [single.Value],
-        List<object?> several => [.. several.OfType<Name>().Select(n => n.Value)],
-        _ => [],
-    };
-
-    private static byte[] Inflate(byte[] compressed, string name)
-    {
+        string name = (view.Resolve(specification.Get("UF")) as PdfString)?.Text
+            ?? (view.Resolve(specification.Get("F")) as PdfString)?.Text
+            ?? key.Text;
         try
         {
-            using var input = new ZLibStream(new MemoryStream(compressed), CompressionMode.Decompress);
-            using var output = new MemoryStream();
-            byte[] buffer = new byte[81920];
-            int read;
-            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                if (output.Length + read > MaxFileSize)
-                {
-                    throw TooLarge(name);
-                }
+            byte[] content = PdfStreamDecoding.Decode(stream, MaxFileSize, item => view.Resolve(item));
 
-                output.Write(buffer, 0, read);
-            }
-
-            return output.ToArray();
+            // Without a filter the data is not decoded, so not held to the limit by the filters.
+            return content.Length > MaxFileSize ? throw TooLarge(name) : new PdfEmbeddedFile(name, content);
         }
-        catch (InvalidDataException ex)
+        catch (PdfDecodedSizeLimitException)
         {
-            throw new PdfStructureException($"The embedded file '{name}' cannot be decompressed: {ex.Message}", ex);
+            throw TooLarge(name);
+        }
+        catch (PdfUnsupportedFilterException ex)
+        {
+            throw new PdfStructureException($"The embedded file '{name}' uses the filter /{ex.FilterName}, which is not supported.", ex);
+        }
+        catch (PdfFilterException ex)
+        {
+            throw new PdfStructureException($"The embedded file '{name}' cannot be decoded: {ex.Message}", ex);
         }
     }
 
     private static PdfStructureException TooLarge(string name) =>
         new($"The embedded file '{name}' is larger than {MaxFileSize / (1024 * 1024)} MB.");
-
-    /// <summary>A text string (ISO 32000-1 §7.9.2.2): UTF-16BE or UTF-8 with its byte order mark, else PDFDocEncoding (read as Latin-1).</summary>
-    private static string? Text(object? value) => value switch
-    {
-        byte[] bytes when bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF => Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2),
-        byte[] bytes when bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF => Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3),
-        byte[] bytes => Encoding.Latin1.GetString(bytes),
-        _ => null,
-    };
-
-    private static Dictionary<string, object?>? Dictionary(ReadOnlySpan<byte> data, object? value) => Resolve(data, value) as Dictionary<string, object?>;
-
-    /// <summary>The value itself, or the object an indirect reference points to (followed while it points to another).</summary>
-    private static object? Resolve(ReadOnlySpan<byte> data, object? value)
-    {
-        for (int hop = 0; value is Reference reference && hop < MaxReferenceHops; hop++)
-        {
-            value = Object(data, reference.Number);
-        }
-
-        return value is Reference ? null : value;
-    }
-
-    /// <summary>The object with this number: in the file body (its last revision), else in an object stream.</summary>
-    private static object? Object(ReadOnlySpan<byte> data, int objectNumber)
-    {
-        var (start, end) = PdfStructureParser.FindObjectBytes(data, objectNumber);
-        if (start >= 0)
-        {
-            var parser = new Parser(Encoding.Latin1.GetString(data[start..end]));
-            return parser.SkipObjectHeader() ? parser.Value(0) : null;
-        }
-
-        return PdfStructureParser.ExtractObjectFromObjStm(data, objectNumber) is { } text ? new Parser(text).Value(0) : null;
-    }
 
     private readonly record struct Reference(int Number);
 

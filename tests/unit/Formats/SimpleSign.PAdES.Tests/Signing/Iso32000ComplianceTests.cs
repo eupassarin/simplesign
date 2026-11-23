@@ -678,46 +678,43 @@ public sealed class Iso32000ComplianceTests
         text.ShouldContain("/TransformMethod /DocMDP");
     }
 
-    // ── BuildXrefStream unit tests ─────────────────────────────────────────────
+    // ── Cross-reference stream of an update (§7.5.8) ────────────────────────────
 
-    [Fact(DisplayName = "§7.5.8: BuildXrefStream includes all objects in output")]
-    public void BuildXrefStream_IncludesAllObjects()
+    private static byte[] XrefStreamUpdate(string trailerExtra = "")
     {
-        var offsets = new SortedDictionary<int, long>
+        byte[] pdf = new Tests.Pdf.Parity.PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog >>")
+            .EndRevision(Tests.Pdf.Parity.XrefStyle.Stream, new Tests.Pdf.Parity.RevisionOptions { XrefStreamNumber = 2, TrailerExtra = trailerExtra })
+            .ToArray();
+        var update = new SimpleSign.PAdES.Pdf.Writing.PdfIncrementalUpdate(SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf));
+        foreach (int number in new[] { 5, 6, 7 })
         {
-            [5] = 1000,
-            [6] = 2000,
-            [7] = 3000
-        };
+            update.Add(number, Encoding.Latin1.GetBytes($"{number} 0 obj\n<< >>\nendobj\n"));
+        }
 
-        var (bytes, xrefObjNum) = PdfSignatureWriter.BuildXrefStream(
-            offsets, xrefObjNum: 8, newTrailerSize: 9,
-            catalogObjNum: 1, prevXRef: 500, xrefStreamOffset: 4000);
+        return update.Finish(8, 1);
+    }
 
-        string text = Encoding.Latin1.GetString(bytes);
+    [Fact(DisplayName = "§7.5.8: an update's cross-reference stream lists every object, itself included")]
+    public void XrefStream_Update_ListsEveryObjectAndItself()
+    {
+        byte[] pdf = XrefStreamUpdate();
+
+        var document = SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf);
+        var section = document.Latest.Sections[0];
+        section.Kind.ShouldBe(SimpleSign.PAdES.Pdf.Model.PdfXrefSectionKind.Stream);
+        section.Entries.Keys.Order().ShouldBe([5, 6, 7, 8]);
+        string text = Encoding.Latin1.GetString(pdf);
         text.ShouldContain("/Type /XRef");
         text.ShouldContain("/Size 9");
         text.ShouldContain("/Root 1 0 R");
-        text.ShouldContain("/Prev 500");
         text.ShouldContain("/W [1 4 1]");
         text.ShouldContain("/Filter /FlateDecode");
-        text.ShouldContain("stream");
-        text.ShouldContain("endstream");
-        xrefObjNum.ShouldBe(8);
     }
 
-    [Fact(DisplayName = "§7.5.8: BuildXrefStream preserves trailer /ID")]
-    public void BuildXrefStream_PreservesTrailerId()
-    {
-        var offsets = new SortedDictionary<int, long> { [5] = 1000 };
-        string trailerId = "/ID [<abc123> <def456>]";
-
-        var (bytes, _) = PdfSignatureWriter.BuildXrefStream(
-            offsets, 6, 7, 1, 500, 2000, trailerId: trailerId);
-
-        string text = Encoding.Latin1.GetString(bytes);
-        text.ShouldContain(trailerId);
-    }
+    [Fact(DisplayName = "§7.5.8: an update's cross-reference stream keeps the trailer /ID")]
+    public void XrefStream_Update_KeepsTheId() =>
+        Encoding.Latin1.GetString(XrefStreamUpdate("/ID [<ABC123> <DEF456>]")).ShouldContain("/ID [<ABC123> <DEF456>]");
 
     // ── Cross-cutting: endobj markers ──────────────────────────────────────────
 

@@ -327,8 +327,8 @@ public sealed class DocTimeStampWithAppearanceTests
             .SignAsync();
 
         // Check xref format after signing
-        bool originalUsesXRefStreams = PdfStructureParser.UsesXRefStreams(pdf);
-        bool afterSignUsesXRefStreams = PdfStructureParser.UsesXRefStreams(signedPdf);
+        bool originalUsesXRefStreams = Tests.Pdf.ModelProbe.UsesXrefStream(pdf);
+        bool afterSignUsesXRefStreams = Tests.Pdf.ModelProbe.UsesXrefStream(signedPdf);
 
         // If original uses xref streams, all incremental updates should too
         if (originalUsesXRefStreams)
@@ -341,7 +341,7 @@ public sealed class DocTimeStampWithAppearanceTests
         byte[] result = await DocTimeStampWriter.AppendDocTimeStampAsync(
             signedPdf, "http://tsa.example.com", httpClient);
 
-        bool afterTsUsesXRefStreams = PdfStructureParser.UsesXRefStreams(result);
+        bool afterTsUsesXRefStreams = Tests.Pdf.ModelProbe.UsesXrefStream(result);
 
         // Validate xref chain: count all startxref values and verify each points to valid data
         string resultText = Encoding.Latin1.GetString(result);

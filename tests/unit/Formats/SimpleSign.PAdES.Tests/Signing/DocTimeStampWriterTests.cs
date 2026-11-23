@@ -1,4 +1,6 @@
+using System.Text;
 using Shouldly;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Signing;
 using Xunit;
 
@@ -35,6 +37,14 @@ public sealed class DocTimeStampWriterTests
 
         var ex3 = await Should.ThrowAsync<ArgumentNullException>(act);
         ex3.ParamName.ShouldBe("httpClient");
+    }
+
+    [Fact(DisplayName = "A document without a catalog is refused before the TSA is asked")]
+    public async Task AppendDocTimeStampAsync_NoCatalog_ThrowsPdfStructureException()
+    {
+        byte[] pdf = Encoding.Latin1.GetBytes("%PDF-1.7\n1 0 obj\n<< /Producer (x) >>\nendobj\ntrailer\n<< /Size 2 >>\n%%EOF\n");
+
+        await Should.ThrowAsync<PdfStructureException>(() => DocTimeStampWriter.AppendDocTimeStampAsync(pdf, "http://tsa.invalid", new HttpClient()));
     }
 
     [Fact(DisplayName = "Default reserved bytes for timestamp is 12KB")]

@@ -48,42 +48,6 @@ public sealed class DssExtractorAndHttpProviderTests
 
     // ── DssExtractor ──────────────────────────────────────────────────────
 
-    [Fact(DisplayName = "PDF without DSS returns null dictionary")]
-    public void FindDssDictionary_NoDss_ReturnsNull()
-    {
-        var data = Encoding.ASCII.GetBytes("%PDF-1.4\ntrailer <</Size 1>>\n%%EOF");
-
-        DssExtractor.FindDssDictionary(data).ShouldBeNull();
-    }
-
-    [Fact(DisplayName = "IndexOfBytes finds pattern in haystack")]
-    public void IndexOfBytes_FindsPattern()
-    {
-        ReadOnlySpan<byte> haystack = "Hello World"u8;
-        ReadOnlySpan<byte> needle = "World"u8;
-
-        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(6);
-    }
-
-    [Fact(DisplayName = "IndexOfBytes returns -1 when pattern not found")]
-    public void IndexOfBytes_NotFound_ReturnsNegative()
-    {
-        ReadOnlySpan<byte> haystack = "Hello"u8;
-        ReadOnlySpan<byte> needle = "World"u8;
-
-        DssExtractor.IndexOfBytes(haystack, needle).ShouldBe(-1);
-    }
-
-    [Fact(DisplayName = "ParseObjRefs extracts object references correctly")]
-    public void ParseObjRefs_ExtractsReferences()
-    {
-        ReadOnlySpan<byte> content = "10 0 R 20 0 R 30 0 R"u8;
-
-        var refs = DssExtractor.ParseObjRefs(content).ToList();
-
-        refs.ShouldBe([10, 20, 30]);
-    }
-
     // ── RevocationChecker ─────────────────────────────────────────────────
 
     [Fact(DisplayName = "Certificate without OCSP/CRL throws ValidationException")]

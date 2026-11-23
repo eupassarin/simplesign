@@ -94,62 +94,43 @@ public sealed class PdfADetectionAndRsaPssTests
         return -1;
     }
 
-    // ── PDF/A detection ───────────────────────────────────────────────────
+    // ── PDF/A detection: the catalog's XMP metadata, read through the model ──
+
+    /// <summary>A document whose catalog's /Metadata stream holds the XMP given (none when null).</summary>
+    private static Task<PdfALevel> DetectAsync(string? xmp)
+    {
+        var builder = new SimpleSign.PAdES.Tests.Pdf.Parity.PdfFileBuilder()
+            .Object(1, xmp is null ? "<< /Type /Catalog /Pages 2 0 R >>" : "<< /Type /Catalog /Pages 2 0 R /Metadata 4 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>");
+        if (xmp is not null)
+        {
+            builder.Stream(4, "/Type /Metadata /Subtype /XML", Encoding.UTF8.GetBytes(xmp));
+        }
+
+        return PdfStructureReader.DetectPdfALevelAsync(new MemoryStream(builder.EndRevision().ToArray()));
+    }
 
     [Fact(DisplayName = "PDF without PDF/A returns level None")]
-    public void DetectPdfALevel_NoPdfA_ReturnsNone()
-    {
-        var data = Encoding.ASCII.GetBytes("%PDF-1.4 some content");
+    public async Task DetectPdfALevel_NoPdfA_ReturnsNone() => (await DetectAsync(null)).ShouldBe(PdfALevel.None);
 
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.None);
-    }
-
-    [Fact(DisplayName = "PDF/A-1b is detected correctly")]
-    public void DetectPdfALevel_PdfA1b_DetectsCorrectly()
-    {
-        var xmp = "%PDF-1.4\n<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>";
-        var data = Encoding.ASCII.GetBytes(xmp);
-
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A1b);
-    }
-
-    [Fact(DisplayName = "PDF/A-2a is detected correctly")]
-    public void DetectPdfALevel_PdfA2a_DetectsCorrectly()
-    {
-        var xmp = "%PDF-1.4\n<pdfaid:part>2</pdfaid:part><pdfaid:conformance>A</pdfaid:conformance>";
-        var data = Encoding.ASCII.GetBytes(xmp);
-
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A2a);
-    }
-
-    [Fact(DisplayName = "PDF/A-3u is detected correctly")]
-    public void DetectPdfALevel_PdfA3u_DetectsCorrectly()
-    {
-        var xmp = "%PDF-1.4\n<pdfaid:part>3</pdfaid:part><pdfaid:conformance>U</pdfaid:conformance>";
-        var data = Encoding.ASCII.GetBytes(xmp);
-
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.A3u);
-    }
+    [Theory(DisplayName = "PDF/A part and conformance written as elements are detected")]
+    [InlineData("<pdfaid:part>1</pdfaid:part><pdfaid:conformance>B</pdfaid:conformance>", PdfALevel.A1b)]
+    [InlineData("<pdfaid:part>2</pdfaid:part><pdfaid:conformance>A</pdfaid:conformance>", PdfALevel.A2a)]
+    [InlineData("<pdfaid:part>3</pdfaid:part><pdfaid:conformance>U</pdfaid:conformance>", PdfALevel.A3u)]
+    public async Task DetectPdfALevel_ElementForm_DetectsCorrectly(string xmp, PdfALevel expected) =>
+        (await DetectAsync(xmp)).ShouldBe(expected);
 
     [Theory(DisplayName = "PDF/A id written as rdf:Description attributes (XMP shorthand) is detected")]
     [InlineData("<rdf:Description rdf:about=\"\" xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\" pdfaid:part=\"3\" pdfaid:conformance=\"B\"/>", PdfALevel.A3b)]
     [InlineData("<rdf:Description xmlns:pdfaid='http://www.aiim.org/pdfa/ns/id/' pdfaid:conformance='U' pdfaid:part='2'/>", PdfALevel.A2u)]
     [InlineData("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"\n  pdfaid:part = \"1\"\n  pdfaid:conformance = \"A\"/>", PdfALevel.A1a)]
     [InlineData("<rdf:Description pdfaid:part=\"4\"/>", PdfALevel.A4b)]
-    public void DetectPdfALevel_AttributeForm_DetectsCorrectly(string description, PdfALevel expected)
-    {
-        var data = Encoding.ASCII.GetBytes("%PDF-1.7\n" + description);
-
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(expected);
-    }
+    public async Task DetectPdfALevel_AttributeForm_DetectsCorrectly(string description, PdfALevel expected) =>
+        (await DetectAsync(description)).ShouldBe(expected);
 
     [Fact(DisplayName = "The pdfaid namespace declaration alone is not a PDF/A claim")]
-    public void DetectPdfALevel_NamespaceOnly_ReturnsNone()
-    {
-        var data = Encoding.ASCII.GetBytes("%PDF-1.7\n<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"/>");
-
-        PdfStructureReader.DetectPdfALevel(data).ShouldBe(PdfALevel.None);
-    }
+    public async Task DetectPdfALevel_NamespaceOnly_ReturnsNone() =>
+        (await DetectAsync("<rdf:Description xmlns:pdfaid=\"http://www.aiim.org/pdfa/ns/id/\"/>")).ShouldBe(PdfALevel.None);
 
     [Fact(DisplayName = "Normal PDF returns PDF/A level None via async")]
     public async Task DetectPdfALevelAsync_NormalPdf_ReturnsNone()

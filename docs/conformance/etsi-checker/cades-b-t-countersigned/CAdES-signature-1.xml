@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
-   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, HAS SUCCEEDED.</CheckSuccess>
-   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, SEEMS TO BE A CAdES SIGNATURE: it is valid and has the contentType, messageDigest and one of the signing certificate reference signed attributes.</CheckSuccess>
-   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, CONTAINS a legal combination of unsigned of signed and unsigned attributes for a CAdES BASELINE signature according to ETSI EN 319 122-1. See below for checking if their cardinalities are correct.</CheckSuccess>
-   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the COUNTER-SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic ECDSA Signer", and whose serial number is 139370088757402215646703032922773809157, COUNTER-SIGNING the signature whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 85641899249173795219718930760616274813, HAS SUCCEEDED.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 67744109412637397817256270351795771034, HAS SUCCEEDED.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 67744109412637397817256270351795771034, SEEMS TO BE A CAdES SIGNATURE: it is valid and has the contentType, messageDigest and one of the signing certificate reference signed attributes.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 67744109412637397817256270351795771034, CONTAINS a legal combination of unsigned of signed and unsigned attributes for a CAdES BASELINE signature according to ETSI EN 319 122-1. See below for checking if their cardinalities are correct.</CheckSuccess>
+   <CheckSuccess check="CheckIfIsCAdESAndBaselineEN319122_1" testedBy="Tool">The VALIDATION of the COUNTER-SIGNATURE whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic ECDSA Signer", and whose serial number is 121660264943868223807391793049902211930, COUNTER-SIGNING the signature whose certificate has been issued by "O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA" to "O=SimpleSign Tests,CN=SimpleSign Synthetic Signer", and whose serial number is 67744109412637397817256270351795771034, HAS SUCCEEDED.</CheckSuccess>
    <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
       <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
       <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
@@ -58,34 +58,34 @@
             <certificate index="1">
                <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-               <Value field="SerialNumber">139370088757402215646703032922773809157</Value>
+               <Value field="SerialNumber">121660264943868223807391793049902211930</Value>
                <Value field="Subject">CN=SimpleSign Synthetic ECDSA Signer, O=SimpleSign Tests</Value>
-               <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
-               <Value field="NotAfter">Wed Nov 17 22:17:09 UTC 2027</Value>
+               <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+               <Value field="NotAfter">Mon Nov 22 12:56:57 UTC 2027</Value>
             </certificate>
             <certificate index="2">
                <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-               <Value field="SerialNumber">7628999631337988352</Value>
+               <Value field="SerialNumber">11430520584097866626</Value>
                <Value field="Subject">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-               <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2036</Value>
+               <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+               <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2036</Value>
             </certificate>
             <certificate index="3">
                <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-               <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+               <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
                <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-               <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+               <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+               <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
             </certificate>
             <certificate index="4">
                <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-               <Value field="SerialNumber">85641899249173795219718930760616274813</Value>
+               <Value field="SerialNumber">67744109412637397817256270351795771034</Value>
                <Value field="Subject">CN=SimpleSign Synthetic Signer, O=SimpleSign Tests</Value>
-               <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-               <Value field="NotAfter">Wed Nov 17 22:16:09 UTC 2027</Value>
+               <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+               <Value field="NotAfter">Mon Nov 22 12:55:57 UTC 2027</Value>
             </certificate>
          </certificates>
          <signerInfos>
@@ -162,7 +162,7 @@
                      <attrValues>
                         <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
                         <signingTimeUTCTime index="1">
-                           <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) UTCTime. Tag value found: 23. Value found: 261118221857GMT+00:00</CheckSuccess>
+                           <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) UTCTime. Tag value found: 23. Value found: 261123125842GMT+00:00</CheckSuccess>
                         </signingTimeUTCTime>
                      </attrValues>
                   </attribute>
@@ -297,7 +297,7 @@
                                  <attrValues>
                                     <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
                                     <signingTimeUTCTime index="1">
-                                       <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) UTCTime. Tag value found: 23. Value found: 261118221859GMT+00:00</CheckSuccess>
+                                       <CheckSuccess check="CheckIsAGivenType" testedBy="Tool">This component is a(n) UTCTime. Tag value found: 23. Value found: 261123125843GMT+00:00</CheckSuccess>
                                     </signingTimeUTCTime>
                                  </attrValues>
                               </attribute>
@@ -373,14 +373,14 @@
                         <CheckSuccess check="MustNotBeEmpty" testedBy="Tool"/>
                         <signatureTimeStamp index="1">
                            <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
-                           <Value field="sid.SerialNumber">21149756606269829945436664107069721478</Value>
-                           <Value field="genTime">Mon Jan 01 00:00:00 UTC 2024</Value>
+                           <Value field="sid.SerialNumber">124892183201622030097034710631094011806</Value>
+                           <Value field="genTime">Mon Nov 23 12:58:43 UTC 2026</Value>
                            <Value field="ordering">false</Value>
                            <Value field="policy">1.2.3.4</Value>
                            <Value field="serialNumber">1</Value>
-                           <Value field="nonce">135097360746161758634476155603794380332</Value>
-                           <Trace contribution="0" contributionFrom="signature" what="MssImprintPart">9bf001adaa1edb3d796e8a4d65567b74cedafb9dc0233929928894bddd415cdb505564a5d18daf78b0193658e3d18621634582e3f7349899e5ca0d7f4a4da8e8a55643f49ccf0caf9ae087564e57f2af27d7e1b58a5a4641ccff817acaabb1e9aaa2f311c297db97e7641a7b6ec9ab6b6bdd46e2450dd313f4ef0947abb27b0a26af40d9fb54a283dc58b783f983f9902839cc00668caf97c514ba512daa2760306f8863dd9e94d4568271dd64f4d556309663f2110c8bc1ca9a91a7b84ddf9c19cb9f2ec6a1f990805c748c314dd39d3fd6ed5f799aac4919ac48ec00bebf30d5ad87c39820dad0a782db863b172650764546bb243ee80e6cb1acd07f4990a9</Trace>
-                           <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  ce5cede2e6cd6915d302a9e5fd8ee7a736a37db00d5e4d74fbbbcb3c43ca4781</CheckSuccess>
+                           <Value field="nonce">10876600327155138498472636781535498426</Value>
+                           <Trace contribution="0" contributionFrom="signature" what="MssImprintPart">6337b9bf76e92bd6737edccd0fb4b47a9353bff097f89dbd0b12905dbda9b92d48fa3ded86d2fcba981c1a3c7a3a1a6628f71ee798cc2f835919f3fadff8e6b3a159e5573826e8e45bd488a300e0d7a4cafb2b04b41871b75c3e6de94539940d9954c98212409175221d058058fef8d659e2a772883c62f2e7e46fc176d6fd5095dc6da6f399c510175a0e5e2af1d12305d446eaf916d42a1e461a8c1e00f5f38a1fe71fa2ba52950cadf5d10a56bc3da14c9c2abcad42afb436f67ccb5014f7a54ab6e4aed1a711d42a26b738e42299b0cc65cea6c58426366cd4858025e17dc1bc30f6c7b8b29a4e65d7f156b948f010b213b2c82aa71bc098afe734653141</Trace>
+                           <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  3a4f937e8259b7b8b959a93922056bb069417e7a1cc299249d4cecbe3e6a414e</CheckSuccess>
                            <CheckSuccess check="CheckSchemaForChildren" testedBy="Tool">
                               <br xmlns="http://www.w3.org/1999/xhtml">Children order and number DO MATCH specification</br>
                               <br xmlns="http://www.w3.org/1999/xhtml">Specification: contentType content</br>
@@ -436,18 +436,18 @@
                                     <certificate index="1">
                                        <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                                        <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
-                                       <Value field="SerialNumber">52790410017019294210311131642313461929</Value>
+                                       <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
                                        <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-                                       <Value field="NotBefore">Tue Nov 17 22:16:09 UTC 2026</Value>
-                                       <Value field="NotAfter">Mon Nov 17 22:16:09 UTC 2031</Value>
+                                       <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+                                       <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
                                     </certificate>
                                     <certificate index="2">
                                        <CheckSuccess check="CheckIfX509Certificate" testedBy="Tool"/>
                                        <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
-                                       <Value field="SerialNumber">21149756606269829945436664107069721478</Value>
+                                       <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
                                        <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
-                                       <Value field="NotBefore">Tue Nov 17 22:17:09 UTC 2026</Value>
-                                       <Value field="NotAfter">Fri Nov 17 22:17:09 UTC 2028</Value>
+                                       <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+                                       <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
                                     </certificate>
                                  </certificates>
                                  <signerInfos>

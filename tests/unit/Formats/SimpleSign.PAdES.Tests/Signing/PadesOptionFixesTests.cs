@@ -141,18 +141,6 @@ public sealed class PadesOptionFixesTests : IDisposable
         ex.Message.ShouldContain("no visible rectangle");
     }
 
-    [Theory(DisplayName = "ReadRectSize reads a widget's width and height")]
-    [InlineData("<< /Rect [100 100 300 160] >>", 200f, 60f)]
-    [InlineData("<< /Rect [300.5 160 100.5 100] >>", 200f, 60f)]
-    public void ReadRectSize_ReadsSize(string dict, float width, float height)
-    {
-        var size = PdfSignatureWriter.ReadRectSize(dict);
-
-        size.ShouldNotBeNull();
-        size.Value.Width.ShouldBe(width, 0.01f);
-        size.Value.Height.ShouldBe(height, 0.01f);
-    }
-
     // ── Archive TSA credentials ──────────────────────────────────────────
 
     [Fact(DisplayName = "B-LTA without an archive endpoint sends the signature TSA's credentials twice")]
@@ -273,14 +261,6 @@ public sealed class PadesOptionFixesTests : IDisposable
     }
 
     // ── DSS key parsing ──────────────────────────────────────────────────
-
-    [Fact(DisplayName = "TopLevelKeys skips nested dictionaries, arrays, strings and references")]
-    public void TopLevelKeys_ReadsOnlyTopLevelKeys()
-    {
-        byte[] dict = "<< /Type /DSS /VRI << /ABC 5 0 R >> /Certs [1 0 R 2 0 R] /Note (a /Fake (nested) key) /Ref 7 0 R /Hex <2F41> /PBAD_LpaArtifacts [9 0 R] >>"u8.ToArray();
-
-        DssExtractor.TopLevelKeys(dict).ShouldBe(["Type", "VRI", "Certs", "Note", "Ref", "Hex", "PBAD_LpaArtifacts"]);
-    }
 
     // ── Deferred resume ──────────────────────────────────────────────────
 
