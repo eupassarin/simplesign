@@ -82,6 +82,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The document timestamp (B-LTA, `DocTimeStampWriter`) is written through the PDF object model** (ADR 0032): the
+  catalog, the AcroForm and the first page are the objects the cross-reference lists, so the update no longer:
+  - rewrites an older copy of the page, or a stray one, left in the file, dropping the `/Annots` the current page has
+    (the widgets of the earlier signatures);
+  - loses the existing fields and AcroForm entries when the catalog is in an object stream, or when an inline
+    AcroForm's `/Fields` is a reference;
+  - writes the value of `/Type /AcroForm` as a key of its own in the AcroForm it rebuilds;
+  - ends the catalog it writes at `endobj` with the next object, or `xref`, straight after;
+  - takes the first `/Type /Page` of the file for the first page, instead of the page tree's first page;
+  - turns the page's CRLF line ends into LF.
+
+  A document without a catalog is refused with `PdfStructureException` before the TSA is asked. Elsewhere the update
+  is the same, byte for byte: 58 of the 110 documents of the golden test.
 - **Certifying into an existing signature field of a document whose AcroForm is inline kept the form**: the catalog
   was rewritten with a reference to an AcroForm object that was never written, so the document lost its form (viewers
   showed no field, and the field's name was lost). The catalog now keeps its inline AcroForm, without a stale `/Perms`.
