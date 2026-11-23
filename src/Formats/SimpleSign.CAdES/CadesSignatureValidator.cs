@@ -374,7 +374,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         for (int i = 0; i < set.Signers.Count; i++)
         {
             var signer = set.Signers[i];
-            var result = ValidateSigner(cmsBytes, signer, content, (data, errors) => content is null ? DataNotGiven(errors) : VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: i == 0);
+            var result = ValidateSigner(cmsBytes, signer, content, (data, errors) => content is null ? DataNotGiven(errors) : VerifyContentHash(content, data, errors), trustAnchors, isFirstSigner: i == 0, signerIndex: i);
             signers.Add(new CadesSignerValidationResult
             {
                 Index = i,
@@ -480,7 +480,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         Func<CmsSignedData, List<string>, bool> verifyIntegrity,
         IEnumerable<X509Certificate2>? trustAnchors,
         bool isFirstSigner,
-        bool isCounterSignature = false)
+        bool isCounterSignature = false,
+        int signerIndex = 0)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -592,7 +593,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             }
         }
 
-        // 8. Archive timestamp validation (covers the first signer of the SignedData)
+        // 8. Archive timestamp validation: a v2 covers the first signer of the SignedData, a v3 the SignerInfo it is in
         bool? archiveTsValid = null;
         byte[]? archiveToken = null;
         bool archiveV3 = false;
@@ -612,15 +613,17 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
         else if (cmsData.ArchiveTimestampToken is not null)
         {
-            if (cmsBytes is not null && content is not null && isFirstSigner)
+            bool hasArchiveV3 = cmsData.UnsignedAttributes?.ContainsKey(Oids.ArchiveTimeStampV3) == true;
+            if (cmsBytes is not null && content is not null && !isCounterSignature && hasArchiveV3)
             {
-                archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, warnings);
+                archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, signerIndex, warnings);
                 archiveToken = cmsData.ArchiveTimestampToken;
                 archiveV3 = true;
             }
             else
             {
-                warnings.Add("The archive timestamp was not validated (it needs the signed content and is checked for the first signer only).");
+                warnings.Add("The archive timestamp was not validated (it needs the signed content; an archive-time-stamp v2 is checked " +
+                    "for the first signer only, and none is checked on a countersignature).");
             }
         }
 
@@ -1025,7 +1028,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
     }
 
     private static bool ValidateArchiveTimestamp(
-        byte[] cmsBytes, byte[] originalData, CmsSignedData cmsData, List<string> warnings)
+        byte[] cmsBytes, byte[] originalData, CmsSignedData cmsData, int signerIndex, List<string> warnings)
     {
         byte[]? archiveToken = cmsData.ArchiveTimestampToken;
         if (archiveToken is null)
@@ -1036,7 +1039,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
 
         try
         {
-            return CadesArchiveTimestampV3.Validate(cmsBytes, originalData, warnings);
+            return CadesArchiveTimestampV3.Validate(cmsBytes, originalData, warnings, signerIndex);
         }
         // S2221: intentional -- validation pipeline converts exceptions to error messages
         catch (Exception ex)
