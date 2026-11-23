@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The revision comparison, the signature fields, `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
     the DocMDP level, encryption and PDF/A detection now read the document through the model
     (the scanning code they used is kept for the parity checks until it is removed).
+  - Writing, in `SimpleSign.PAdES.Pdf.Writing` (no writer uses it yet): a serializer that lays objects out as the
+    writers' templates do, a patch that changes some entries of an existing dictionary and keeps every other byte of
+    it (CRLF included, which the writers' text edits turned into LF), and an incremental update that appends objects
+    and writes the cross-reference table or stream with the trailer the writers write. Golden tests check each, byte
+    for byte, against the code it will replace, the incremental update on every committed PDF and generated one.
   - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
     difference is catalogued with its reason. The current reader loses tables with white-space before `xref` or
     `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists; it does not see
