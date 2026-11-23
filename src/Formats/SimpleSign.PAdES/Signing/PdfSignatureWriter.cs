@@ -6,6 +6,9 @@ using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Constants;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Pdf.Exceptions;
+using SimpleSign.PAdES.Pdf.Model;
+using SimpleSign.PAdES.Pdf.Writing;
 
 namespace SimpleSign.PAdES.Signing;
 
@@ -14,7 +17,7 @@ namespace SimpleSign.PAdES.Signing;
 /// cross-reference table, and trailer to an existing PDF without modifying the original bytes).
 /// Delegates PDF parsing to <see cref="PdfStructureParser"/> and visual rendering to <see cref="SignatureAppearanceRenderer"/>.
 /// </summary>
-public sealed class PdfSignatureWriter
+public sealed partial class PdfSignatureWriter
 {
     /// <summary>
     /// Default number of bytes reserved for the CMS signature hex contents (16 KB).
@@ -61,7 +64,7 @@ public sealed class PdfSignatureWriter
                 throw new ArgumentException("Document information entries are not supported when signing an existing field.", nameof(documentInfo));
             }
 
-            return await PrepareExistingFieldAsync(outputStream, inputPdf, inputMem, options, pdfALevel, cancellationToken, signingTime).ConfigureAwait(false);
+            return await PrepareExistingFieldAsync(outputStream, inputMem, options, pdfALevel, signingTime, cancellationToken).ConfigureAwait(false);
         }
 
         // Step 2: Determine the next available object number.
@@ -538,138 +541,113 @@ public sealed class PdfSignatureWriter
 
     // ── Private: I/O helpers ─────────────────────────────────────────────────
 
+    /// <summary>
+    /// Signs an existing empty signature field (ADR 0032): the field is looked for in the AcroForm's field tree (by its
+    /// fully qualified name, else its partial name), wherever it is written (an object stream included, <c>/FT</c>
+    /// inherited or written without a space). The update holds the signature dictionary, the field with its <c>/V</c>
+    /// (and, for a visible signature, its widget's <c>/AP</c>), the appearance, and, when certifying, the catalog
+    /// without a stale <c>/Perms</c>; each existing object keeps every byte but those entries.
+    /// </summary>
     private static async Task<PdfSignaturePrepareResult> PrepareExistingFieldAsync(
-        Stream outputStream, Stream inputPdf, Memory<byte> inputMem, SignatureFieldOptions options, PdfALevel? pdfALevel, CancellationToken cancellationToken, DateTimeOffset? signingTime = null)
+        Stream outputStream, Memory<byte> inputMem, SignatureFieldOptions options, PdfALevel? pdfALevel, DateTimeOffset? signingTime, CancellationToken cancellationToken)
     {
-        int fieldObjNum = PdfStructureParser.FindEmptySignatureField(inputMem.Span, options.ExistingFieldName!);
-        if (fieldObjNum < 0)
+        var document = PdfDocument.Open(inputMem);
+        var view = document.View();
+        var field = FindEmptySignatureField(view, options.ExistingFieldName!);
+        if (document.RootId is not { } rootId)
         {
-            throw new InvalidOperationException(
-                $"Signature field '{options.ExistingFieldName}' not found in the PDF. " +
-                "Ensure the field exists with /FT /Sig and has an empty /V value.");
+            throw new PdfStructureException("The document has no catalog: its field cannot be signed.");
         }
 
-        int nextObjNum = PdfStructureParser.DetermineNextObjectNumber(inputMem.Span);
+        int fieldObjNum = field.Id!.Value.Number;
+        int nextObjNum = view.NextObjectNumber;
         int sigObjNum = nextObjNum;
-        int contentsHexLength = options.ContentsReservedBytes * 2;
-        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
-
-        // Build signature dictionary
-        string sigDictText = BuildSignatureDictionary(sigObjNum, options, contentsHexLength, sigNow);
-        byte[] sigDictBytes = Encoding.Latin1.GetBytes(sigDictText);
-
-        // Build updated field object with /V pointing to the new sig dict
-        var (fObjStart, fObjEnd) = PdfStructureParser.FindObjectBytes(inputMem.Span, fieldObjNum);
-        string fieldText = Encoding.Latin1.GetString(inputMem.Span.Slice(fObjStart, fObjEnd - fObjStart));
-        string updatedField;
-        int vKeyPos = PdfStructureParser.FindTopLevelKey(fieldText, "/V");
-        if (vKeyPos >= 0)
-        {
-            // Replace the existing /V value (reference, name, null, or empty string).
-            int vEnd = FindValueEnd(fieldText, vKeyPos);
-            updatedField = string.Concat(fieldText.AsSpan(0, vKeyPos), $"/V {sigObjNum} 0 R", fieldText.AsSpan(vEnd));
-        }
-        else
-        {
-            // Insert /V before the closing >>
-            updatedField = PdfStructureParser.InsertIntoDict(fieldText, $"   /V {sigObjNum} 0 R\n");
-        }
-        // A visible appearance is drawn into the field's own rectangle (merged field/widget).
         int appObjNum = nextObjNum + 2;
         int imageObjNum = appObjNum + 1;
         int fontFileObjNum = appObjNum + 2;
         int fontDescriptorObjNum = appObjNum + 3;
         int softMaskObjNum = appObjNum + 4;
+        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
+
+        var update = new PdfIncrementalUpdate(document);
+        var (_, values) = update.Add(
+            sigObjNum, SignatureDictionary(options, options.ContentsReservedBytes, sigNow),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["ByteRange"] = ByteRangePlaceholder });
+
+        // The field with its /V; a visible appearance is drawn into its widget's rectangle.
+        var fieldPatch = Patch(document, fieldObjNum).Set("V", $"{sigObjNum} 0 R");
+        PdfDictionaryPatch? widgetPatch = null;
         float appWidth = 0f, appHeight = 0f;
         if (options.Appearance is not null)
         {
-            (appWidth, appHeight) = ReadRectSize(fieldText)
+            var widgetId = field.Widgets.FirstOrDefault(w => w is not null) ?? field.Id;
+            var widget = widgetId == field.Id ? field.Dictionary : document.GetObject(widgetId!.Value)?.Value as PdfDictionary;
+            (appWidth, appHeight) = RectSize(document, widget)
                 ?? throw new ArgumentException(
                     $"Signature field '{options.ExistingFieldName}' has no visible rectangle, so the appearance cannot be drawn. Sign it without an appearance.");
-            updatedField = SetTopLevelValue(updatedField, "/AP", $"<< /N {appObjNum} 0 R >>");
+            string appearance = $"<< /N {appObjNum} 0 R >>";
+            if (widgetId == field.Id)
+            {
+                fieldPatch.Set("AP", appearance);
+            }
+            else
+            {
+                widgetPatch = Patch(document, widgetId!.Value.Number).Set("AP", appearance);
+            }
         }
 
-        // The next object's number must start a line (ISO 32000-1 §7.3.10): the field ends at its endobj.
-        if (!updatedField.EndsWith('\n'))
+        update.Add(fieldObjNum, WithFinalLineFeed(fieldPatch.ToBytes()));
+        if (widgetPatch is not null)
         {
-            updatedField += "\n";
+            update.Add(widgetPatch.Id.Number, WithFinalLineFeed(widgetPatch.ToBytes()));
         }
-
-        byte[] updatedFieldBytes = Encoding.Latin1.GetBytes(updatedField);
-
-        // Write objects
-        long sigObjOffset = outputStream.Position;
-        await outputStream.WriteAsync(sigDictBytes, cancellationToken).ConfigureAwait(false);
-        long fieldObjOffset = outputStream.Position;
-        await outputStream.WriteAsync(updatedFieldBytes, cancellationToken).ConfigureAwait(false);
-
-        // Build xref and trailer
-        var objectOffsets = new SortedDictionary<int, long>
-        {
-            [sigObjNum] = sigObjOffset,
-            [fieldObjNum] = fieldObjOffset
-        };
 
         if (options.Appearance is not null)
         {
-            objectOffsets[fontFileObjNum] = outputStream.Position;
-            await outputStream.WriteAsync(PdfFontWriter.BuildFontFileObject(fontFileObjNum), cancellationToken).ConfigureAwait(false);
-            objectOffsets[fontDescriptorObjNum] = outputStream.Position;
-            await outputStream.WriteAsync(PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum), cancellationToken).ConfigureAwait(false);
+            update.Add(fontFileObjNum, PdfFontWriter.BuildFontFileObject(fontFileObjNum));
+            update.Add(fontDescriptorObjNum, PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum));
             bool hasImage = options.Appearance.HasBackgroundImage();
             var colorProfiles = AppearanceColorProfiles.For(pdfALevel, appObjNum);
             byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
                 appObjNum, options, sigNow, appWidth, appHeight,
                 hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0, colorProfiles);
-            long appObjOffset = outputStream.Position;
-            objectOffsets[appObjNum] = appObjOffset;
-            await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
+            long appObjOffset = update.Add(appObjNum, appearanceBytes);
             foreach (var (appendedObjNum, appendedOffset) in FindAppendedObjects(appearanceBytes, appObjOffset, imageObjNum, softMaskObjNum, colorProfiles))
             {
-                objectOffsets[appendedObjNum] = appendedOffset;
+                update.Locate(appendedObjNum, appendedOffset);
             }
         }
 
-        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(inputMem.Span);
-
-        // If DocMDP, also update the catalog (a stale /Perms goes). The field is already in the form: the AcroForm
-        // stays as it is, inline or its own object (writing a reference to a new AcroForm object here, which was
-        // never written, lost the form of a document whose AcroForm is inline).
-        if (options.CertificationLevel is not null)
+        // Certifying: the catalog without a stale /Perms. The field is already in the form, so the AcroForm stays as
+        // it is, inline or its own object.
+        int catalogObjNum = rootId.Number;
+        if (options.CertificationLevel is not null && document.GetObject(rootId) is { Value: PdfDictionary catalog })
         {
-            int existingAcroFormObjNum = PdfStructureParser.FindAcroFormObjNum(inputMem.Span, catalogObjNum);
-            byte[]? catalogBytes = existingAcroFormObjNum > 0
-                ? BuildCatalogDictionary(catalogObjNum, inputMem.Span, existingAcroFormObjNum, options.CertificationLevel)
-                : BuildCatalogWithoutPerms(catalogObjNum, inputMem.Span);
-            if (catalogBytes is not null)
+            var patch = Patch(document, catalogObjNum).Remove(PdfKeys.Perms[1..]);
+            if (catalog.Get(PdfName.AcroForm) is PdfReference acroForm)
             {
-                long catalogObjOffset = outputStream.Position;
-                await outputStream.WriteAsync(catalogBytes, cancellationToken).ConfigureAwait(false);
-                objectOffsets[catalogObjNum] = catalogObjOffset;
+                patch.Remove(PdfName.AcroForm.Value).Set(PdfName.AcroForm.Value, $"{acroForm.Id.Number} 0 R");
             }
+
+            update.Add(catalogObjNum, WithFinalLineFeed(patch.ToBytes()));
         }
 
-        int newTrailerSize = Math.Max(sigObjNum + 1, objectOffsets.Keys.Max() + 1);
-        long prevXRef = await PdfStructureParser.FindPrevXRefAsync(inputPdf, cancellationToken).ConfigureAwait(false);
-        string? trailerId = PdfStructureParser.FindTrailerId(inputMem.Span);
-        string? trailerInfo = PdfStructureParser.FindTrailerInfo(inputMem.Span);
-        long xrefOffset = outputStream.Position;
+        byte[] updated = update.Finish(Math.Max(sigObjNum + 1, update.Offsets.Keys.Max() + 1), catalogObjNum);
 
-        bool useXRefStream = PdfStructureParser.UsesXRefStreams(inputMem.Span);
-        if (useXRefStream)
+        // The byte range: everything but the /Contents string, delimiters included.
+        var (contentsStart, contentsLength) = values["Contents"];
+        var byteRange = new PdfByteRange
         {
-            int xrefObjNum = objectOffsets.Keys.Max() + 1;
-            newTrailerSize = Math.Max(newTrailerSize, xrefObjNum + 1);
-            var (xrefBytes, _) = BuildXrefStream(objectOffsets, xrefObjNum, newTrailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            await outputStream.WriteAsync(xrefBytes, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            byte[] xrefBytes = BuildXrefTableAndTrailer(objectOffsets, newTrailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            await outputStream.WriteAsync(xrefBytes, cancellationToken).ConfigureAwait(false);
-        }
+            Offset1 = 0L,
+            Length1 = contentsStart,
+            Offset2 = contentsStart + contentsLength,
+            Length2 = updated.Length - (contentsStart + contentsLength),
+        };
+        Encoding.Latin1.GetBytes($"[0 {byteRange.Length1} {byteRange.Offset2} {byteRange.Length2}]".PadRight(ByteRangePlaceholder.Length))
+            .CopyTo(updated, values["ByteRange"].Start);
 
-        PdfByteRange byteRange = await BackfillByteRangeAsync(outputStream, sigDictText, sigObjOffset, contentsHexLength, cancellationToken).ConfigureAwait(false);
+        // The original is in the output already (and its final line feed): what follows it is written.
+        await outputStream.WriteAsync(updated.AsMemory((int)outputStream.Position), cancellationToken).ConfigureAwait(false);
 
         return new PdfSignaturePrepareResult
         {
@@ -678,6 +656,98 @@ public sealed class PdfSignatureWriter
             ContentsReservedBytes = options.ContentsReservedBytes,
             SigDictObjectNumber = sigObjNum
         };
+    }
+
+    private const string ByteRangePlaceholder = "[0000000000 0000000000 0000000000 0000000000]";
+
+    /// <summary>
+    /// The empty signature field to sign: by fully qualified name, else by partial name. A field whose own <c>/V</c>
+    /// is a signature dictionary is signed already.
+    /// </summary>
+    private static PdfField FindEmptySignatureField(PdfRevisionView view, string name)
+    {
+        var candidates = view.Fields.Where(f => f.IsSignature && f.Id is not null).ToList();
+        var field = candidates.FirstOrDefault(f => f.FullName == name) ?? candidates.FirstOrDefault(f => f.PartialName == name)
+            ?? throw new InvalidOperationException(
+                $"Signature field '{name}' not found in the PDF. Ensure the field exists with /FT /Sig and has an empty /V value.");
+        if (field.Dictionary.Get(PdfName.V) is PdfReference or PdfDictionary)
+        {
+            throw new InvalidOperationException($"Signature field '{name}' is already signed (has /V value).");
+        }
+
+        return field;
+    }
+
+    /// <summary>The patch of an existing object, its own header kept (an object of an object stream written as one of its own).</summary>
+    private static PdfDictionaryPatch Patch(PdfDocument document, int number) =>
+        new(PdfObjectSource.Of(document, number, document.GetObject(number)!, keepHeader: true).ObjectBytes);
+
+    private static byte[] WithFinalLineFeed(byte[] bytes) =>
+        bytes.Length > 0 && bytes[^1] == (byte)'\n' ? bytes : [.. bytes, (byte)'\n'];
+
+    /// <summary>Width and height of a widget's <c>/Rect</c>, or null when absent or empty.</summary>
+    private static (float Width, float Height)? RectSize(PdfDocument document, PdfDictionary? widget)
+    {
+        if (document.Resolve(widget?.Get("Rect")) is not PdfArray { Count: 4 } rect)
+        {
+            return null;
+        }
+
+        var numbers = rect.Select(v => document.Resolve(v) switch
+        {
+            PdfInteger i => i.Value,
+            PdfReal r => (float)r.Value,
+            _ => float.NaN,
+        }).ToArray();
+        if (numbers.Any(float.IsNaN))
+        {
+            return null;
+        }
+
+        float width = Math.Abs(numbers[2] - numbers[0]);
+        float height = Math.Abs(numbers[3] - numbers[1]);
+        return width > 0 && height > 0 ? (width, height) : null;
+    }
+
+    /// <summary>
+    /// The signature dictionary (ISO 32000-1 §12.8.1, Table 252) with its placeholders: <c>/ByteRange</c> (written as
+    /// <see cref="ByteRangePlaceholder"/>) and <c>/Contents</c> of the reserved size, zeros.
+    /// </summary>
+    internal static PdfDictionary SignatureDictionary(SignatureFieldOptions options, int contentsReservedBytes, DateTime signingTime)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        var (filter, subFilter) = options.SubFilter switch
+        {
+            PdfSignatureSubFilter.EtsiCadesDetached => ("Adobe.PPKLite", "ETSI.CAdES.detached"),
+            PdfSignatureSubFilter.PbadPades => ("PBAD_PAdES", "PBAD.PAdES"),
+            _ => ("Adobe.PPKLite", "adbe.pkcs7.detached"),
+        };
+        var entries = new List<PdfDictionaryEntry>
+        {
+            new(PdfName.Type, PdfName.Sig),
+            new(PdfName.Filter, PdfName.Of(filter)),
+            new(PdfName.Of("SubFilter"), PdfName.Of(subFilter)),
+            new(PdfName.ByteRange, PdfNull.Instance),
+            new(PdfName.Contents, new PdfString(new byte[contentsReservedBytes], PdfStringForm.Hexadecimal)),
+        };
+        foreach (var (key, value) in new[] { ("Name", options.SignerName), ("Reason", options.Reason), ("Location", options.Location), ("ContactInfo", options.ContactInfo) })
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                entries.Add(new(PdfName.Of(key), PdfObjectSerializer.TextString(value)));
+            }
+        }
+
+        entries.Add(new(PdfName.Of("M"), PdfObjectSerializer.TextString($"D:{signingTime:yyyyMMddHHmmss}+00'00'")));
+        if (options.CertificationLevel is { } level)
+        {
+            // DocMDP: a certification signature with its transform method.
+            var parameters = new PdfDictionary(("Type", PdfName.Of("TransformParams")), ("P", new PdfInteger((int)level)), ("V", PdfName.Of("1.2")));
+            var reference = new PdfDictionary(("Type", PdfName.Of("SigRef")), ("TransformMethod", PdfName.Of("DocMDP")), ("TransformParams", parameters));
+            entries.Add(new(PdfName.Of("Reference"), new PdfArray([reference])));
+        }
+
+        return new PdfDictionary(entries);
     }
 
     /// <summary>Width and height of a dictionary's top-level /Rect, or null when absent or empty.</summary>
@@ -721,7 +791,7 @@ public sealed class PdfSignatureWriter
         return string.Concat(dictText.AsSpan(0, pos), $"{key} {value}", dictText.AsSpan(end));
     }
 
-    private static async Task<(long OriginalPdfLength, Memory<byte> InputMemory)> CopyAndLoadPdfAsync(Stream inputPdf, Stream outputStream, CancellationToken cancellationToken)
+    internal static async Task<(long OriginalPdfLength, Memory<byte> InputMemory)> CopyAndLoadPdfAsync(Stream inputPdf, Stream outputStream, CancellationToken cancellationToken)
     {
         inputPdf.Seek(0L, SeekOrigin.Begin);
         await inputPdf.CopyToAsync(outputStream, cancellationToken).ConfigureAwait(false);

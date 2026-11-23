@@ -82,6 +82,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Signing an existing signature field finds it in the field tree** (`ExistingFieldName`, ADR 0032): the field is
+  looked for by its fully qualified name (`Parent.Child`), else its `/T`, through the PDF object model, so a field
+  written `/FT/Sig` (no space), one inside an object stream, or one that inherits `/FT` from its parent is found
+  (each was "not found"). A visible signature of a field whose widget is a kid of its own is drawn on the widget's
+  rectangle (it was refused for want of one). The field keeps its CRLF line ends. Elsewhere the update is the same,
+  byte for byte: 29 of the 32 cases of the golden test the legacy writer could sign; the 3 others differ by the
+  line ends only.
 - **The DSS of B-LT and B-LTA (`LtvEmbedder`) is written through the PDF object model** (ADR 0032): the signatures,
   the existing DSS and the catalog are the objects the cross-reference lists, so the update no longer:
   - leaves out the VRI of a signature whose `/Contents<` is written without a space, is in an object stream, or is

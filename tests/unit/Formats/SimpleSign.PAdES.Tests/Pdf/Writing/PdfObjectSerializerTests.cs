@@ -34,42 +34,6 @@ public sealed class PdfObjectSerializerTests
             .Invoke(null, [options, p, level])!;
     }
 
-    /// <summary>The signature dictionary the signer writes, built with the model.</summary>
-    private static PdfDictionary SignatureDictionary(SignatureFieldOptions options, int hexLength)
-    {
-        var (filter, subFilter) = options.SubFilter switch
-        {
-            PdfSignatureSubFilter.EtsiCadesDetached => ("Adobe.PPKLite", "ETSI.CAdES.detached"),
-            PdfSignatureSubFilter.PbadPades => ("PBAD_PAdES", "PBAD.PAdES"),
-            _ => ("Adobe.PPKLite", "adbe.pkcs7.detached"),
-        };
-        var entries = new List<PdfDictionaryEntry>
-        {
-            new(PdfName.Type, PdfName.Sig),
-            new(PdfName.Filter, PdfName.Of(filter)),
-            new(PdfName.Of("SubFilter"), PdfName.Of(subFilter)),
-            new(PdfName.ByteRange, PdfNull.Instance),
-            new(PdfName.Contents, new PdfString(new byte[hexLength / 2], PdfStringForm.Hexadecimal)),
-        };
-        foreach (var (key, value) in new[] { ("Name", options.SignerName), ("Reason", options.Reason), ("Location", options.Location), ("ContactInfo", options.ContactInfo) })
-        {
-            if (!string.IsNullOrEmpty(value))
-            {
-                entries.Add(new(PdfName.Of(key), PdfObjectSerializer.TextString(value)));
-            }
-        }
-
-        entries.Add(new(PdfName.Of("M"), PdfObjectSerializer.TextString($"D:{s_time:yyyyMMddHHmmss}+00'00'")));
-        if (options.CertificationLevel is { } level)
-        {
-            var parameters = new PdfDictionary(("Type", PdfName.Of("TransformParams")), ("P", new PdfInteger((int)level)), ("V", PdfName.Of("1.2")));
-            var reference = new PdfDictionary(("Type", PdfName.Of("SigRef")), ("TransformMethod", PdfName.Of("DocMDP")), ("TransformParams", parameters));
-            entries.Add(new(PdfName.Of("Reference"), new PdfArray([reference])));
-        }
-
-        return new PdfDictionary(entries);
-    }
-
     public static TheoryData<SignatureFieldOptions> SignatureOptions()
     {
         var data = new TheoryData<SignatureFieldOptions>();
@@ -88,7 +52,7 @@ public sealed class PdfObjectSerializerTests
         const int hexLength = 64;
         string legacy = LegacySignatureDictionary(12, options, hexLength);
 
-        var serialized = PdfObjectSerializer.Write(12, SignatureDictionary(options, hexLength), raw: new Dictionary<string, string> { ["ByteRange"] = ByteRangePlaceholder });
+        var serialized = PdfObjectSerializer.Write(12, PdfSignatureWriter.SignatureDictionary(options, hexLength / 2, s_time), raw: new Dictionary<string, string> { ["ByteRange"] = ByteRangePlaceholder });
 
         Text(serialized).ShouldBe(legacy);
         var (start, length) = serialized.ValueRanges["ByteRange"];

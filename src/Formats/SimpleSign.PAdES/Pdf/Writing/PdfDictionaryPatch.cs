@@ -142,7 +142,8 @@ internal sealed class PdfDictionaryPatch
     public byte[] ToBytes()
     {
         var result = new StringBuilder(Encoding.Latin1.GetString(_object));
-        foreach (var (start, end, text) in _edits.OrderByDescending(e => e.Start).ThenByDescending(e => e.End))
+        // From the end back, so each edit's offsets still hold; edits at one place keep the order they were made in.
+        foreach (var (start, end, text) in _edits.Select((e, i) => (e, i)).OrderByDescending(x => x.e.Start).ThenByDescending(x => x.e.End).ThenByDescending(x => x.i).Select(x => x.e))
         {
             result.Remove(start, end - start).Insert(start, text);
         }

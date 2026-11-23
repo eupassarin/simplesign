@@ -96,6 +96,16 @@ internal sealed class PdfIncrementalUpdate
         return offset;
     }
 
+    /// <summary>Records an object written inside bytes already added (an appearance's image after its form, say).</summary>
+    /// <param name="number">Its number.</param>
+    /// <param name="offset">Where it starts.</param>
+    public void Locate(int number, long offset)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(offset, OriginalLength);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(offset, Position);
+        _offsets[number] = offset;
+    }
+
     /// <summary>
     /// Writes the cross-reference section and the trailer, and returns the updated document's bytes.
     /// </summary>
