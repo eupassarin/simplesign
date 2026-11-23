@@ -141,6 +141,7 @@ public static partial class PdfSignatureInspector
             HasSigningCertificateV2 = cms.SigningCertificateHash is not null,
             CommitmentTypeOid = cms.CommitmentTypeOid,
             SignaturePolicyOid = cms.SignaturePolicyOid,
+            ClaimedRoles = Core.Validation.Policy.SignedAttributeFacts.FromCms(cms.SignedAttrs)?.ClaimedRoles ?? [],
             ManifestJson = cms.ManifestJson,
             CmsRawData = field.ContentsBytes
         };

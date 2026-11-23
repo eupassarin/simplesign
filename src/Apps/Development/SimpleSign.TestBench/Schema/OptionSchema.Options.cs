@@ -335,6 +335,8 @@ public static partial class OptionSchema
         O("pades.metadata.policyOid", "attributes", s_pades, "text", "metadata.policyOid", "Policy OID", "Adds a signature-policy-identifier with this OID.",
             standards: R("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier"), api: "SignatureMetadata.PolicyOid", stateKey: "metadata.policy",
             when: When("useSignerDetails", "true")),
+        O("pades.signerRoles", "attributes", s_pades, "lines", "signerRoles", "Signer roles", "The roles the signer claims, one per line (signer-attributes-v2, claimedAttributes).",
+            standards: R("ETSI EN 319 122-1|§5.2.6 signer-attributes-v2"), api: "WithSignerRoles(IReadOnlyList<string>)", stateKey: "roles"),
 
         O("xades.signingCertificateV1", "attributes", s_xades, "toggle", "signingCertificateV1", "SigningCertificate (XAdES 1.3.2)", "Use the older SigningCertificate property instead of SigningCertificateV2.",
             standards: R("ETSI EN 319 132-1|§5.2.2 SigningCertificateV2", "ETSI TS 101 903|§7.2.2 SigningCertificate"), api: "WithSigningCertificateForm(XadesSigningCertificateForm.V1)", stateKey: "signingCertificate"),

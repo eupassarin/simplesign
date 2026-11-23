@@ -24,4 +24,11 @@ public interface ICountryExtension
     /// package's). Default: none.
     /// </summary>
     IReadOnlyList<ISignatureQualifier> SignatureQualifiers => [];
+
+    /// <summary>
+    /// The readers of the identifiers this region's certificates carry (the CPF and CNPJ of the Brazilian packages),
+    /// to check that a certificate is that of an expected signer. Default: none (<see cref="DefaultSignerIdentityReader"/>
+    /// reads the identifiers of any certificate).
+    /// </summary>
+    IReadOnlyList<ISignerIdentityReader> SignerIdentityReaders => [];
 }

@@ -32,6 +32,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ask it; the anchor nearest to the signer decides; a chain is not refused when another provider of the same profile
   gives the anchor without conditions (`WithTrustFrom` stays a union). `ValidationOptions.ConstrainedTrustAnchors` and
   `TrustProfile.ConstrainedTrustAnchors` carry them. The chain of a time-stamp's TSA is not asked about.
+- **Claimed signer roles in PAdES**: `PadesSignerBuilder.WithSignerRole` / `WithSignerRoles` and the same on
+  `DeferredSignerBuilder` write the roles in signer-attributes-v2 (ETSI EN 319 122-1 §5.2.6.1, claimedAttributes), as
+  CAdES already did. `SignatureValidationResult.ClaimedRoles` and the inspector's `SignatureFieldInfo.ClaimedRoles` read
+  them back. Adding a role to an ICP-Brasil PBAD signature (AD-RB to AD-RA) keeps it valid under SimpleSign's policy
+  checks.
+- **`CmsAttribute.SignerAttributesV2`** (`SimpleSign.Core`): the signer-attributes-v2 encoder (claimed roles,
+  attribute certificates, signed assertions), public; CAdES now uses it (same bytes as before).
+- **`ISignerIdentityReader`** (`SimpleSign.Core`): reads the identifiers of a type (`SignerIdentifierTypes`: CPF, CNPJ, RESPONSIBLE-CPF,
+  NATURAL-PERSON-ID, LEGAL-PERSON-ID, EMAIL, SERIALNUMBER, ORGANIZATIONIDENTIFIER, CERT-SHA256) from a certificate, to check it is that of an expected signer.
+  `DefaultSignerIdentityReader` reads the email (SubjectAltName rfc822Name, subject E=), the subject serialNumber and
+  organizationIdentifier, the identifiers of a natural and a legal person in the form of ETSI EN 319 412-1 §5.1.3/§5.1.4
+  (`NATURAL-PERSON-ID` such as `PNOBE-85010112345`, `LEGAL-PERSON-ID` such as `VATBE-0123456789`: European qualified
+  certificates and others that follow the standard) and the SHA-256 of the certificate;
+  `ICountryExtension.SignerIdentityReaders` (default: none) gives a framework's.
+  `TrustProfile.SignerIdentityReaders` carries them (from `FromExtension`; `WithTrustFrom` adds the others').
+  `BrazilSignerIdentityReader` (`SimpleSign.Brazil`) reads the CPF (2.16.76.1.3.1) and CNPJ (2.16.76.1.3.3) of
+  ICP-Brasil and Gov.br certificates, and the CPF of the person responsible for an e-CNPJ (2.16.76.1.3.4) as
+  `RESPONSIBLE-CPF`, a type of its own; `IcpBrasilExtension` and `GovBrExtension` return it.
+- **`SigningErrorReason` values for the PDF signature envelope** (29–36): `EnvelopeFieldNotFound`,
+  `EnvelopeFieldAlreadySigned`, `UnexpectedSigner`, `NotYourTurn`, `TimestampRequired`, `SeedValueViolated`,
+  `LevelNotMet`, `EnvelopeTampered`. Nothing raises them yet.
 - **`PdfEmbeddedFiles.Read`** (`SimpleSign.PAdES`): the files embedded in a PDF (the catalog's `/Names /EmbeddedFiles`
   name tree), decoded. A file larger than 64 MB decoded, more than 1024 files, an unsupported filter or an encrypted
   document is refused.

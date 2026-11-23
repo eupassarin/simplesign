@@ -92,6 +92,9 @@ public sealed class IcpBrasilExtension : ICountryExtension
 
     /// <inheritdoc />
     public IReadOnlyList<IChainValidationProvider> ChainValidationProviders => _chainValidators.Value;
+
+    /// <summary>The CPF and CNPJ of ICP-Brasil certificates (<see cref="BrazilSignerIdentityReader"/>).</summary>
+    public IReadOnlyList<ISignerIdentityReader> SignerIdentityReaders { get; } = [BrazilSignerIdentityReader.Instance];
 }
 
 // ─── Trust anchor providers ──────────────────────────────────────────────────

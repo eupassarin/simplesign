@@ -3,7 +3,10 @@ using System.Security.Cryptography.X509Certificates;
 using Shouldly;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
+using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.Inspection;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Validation;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -38,6 +41,53 @@ public sealed class PadesSignerBuilderTests : IDisposable
         var result = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert).SignWithDetailsAsync();
 
         result.Warnings.ShouldNotContain(w => w.Code == SigningWarningCode.SubFilterNotBaseline);
+    }
+
+    [Fact]
+    public async Task WithSignerRoles_RolesAreSignedAndReadBackByTheValidatorAndTheInspector()
+    {
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert)
+            .WithSignerRoles(["Diretor", " ", " Testemunha "])
+            .SignAsync();
+
+        using var stream = new MemoryStream(signed);
+        var results = await new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustedRoots = [_cert] })
+            .ValidateAsync(stream);
+        var result = results.ShouldHaveSingleItem();
+        result.IsSignatureValid.ShouldBeTrue(string.Join("; ", result.Errors));
+        result.ClaimedRoles.ShouldBe(["Diretor", "Testemunha"]);
+        stream.Position = 0;
+        var inspection = await PdfSignatureInspector.InspectAsync(stream);
+        inspection.Signatures.ShouldHaveSingleItem().ClaimedRoles.ShouldBe(["Diretor", "Testemunha"]);
+    }
+
+    [Fact]
+    public async Task WithSignerRole_ReplacesTheRolesSetBefore_AndWritesOneSignerAttributesV2()
+    {
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert)
+            .WithSignerRoles(["Diretor"])
+            .WithSignerRole("Sócia")
+            .SignAsync();
+
+        using var stream = new MemoryStream(signed);
+        var signature = (await PdfSignatureInspector.InspectAsync(stream)).Signatures.ShouldHaveSingleItem();
+        signature.ClaimedRoles.ShouldBe(["Sócia"]);
+        var attribute = CmsAttribute.SignerAttributesV2(["Sócia"]);
+        CmsParser.Parse(signature.CmsRawData.ToArray()).SignedAttrs.ShouldNotBeNull()
+            .AsSpan().IndexOf(attribute.DerValue).ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task SignAsync_WithoutRoles_ClaimsNone()
+    {
+        byte[] signed = await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithCertificate(_cert).SignAsync();
+
+        using var stream = new MemoryStream(signed);
+        (await PdfSignatureInspector.InspectAsync(stream)).Signatures.ShouldHaveSingleItem().ClaimedRoles.ShouldBeEmpty();
+        stream.Position = 0;
+        var results = await new PdfSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustedRoots = [_cert] })
+            .ValidateAsync(stream);
+        results.ShouldHaveSingleItem().ClaimedRoles.ShouldBeEmpty();
     }
 
     private static X509Certificate2 CreateRsaCert()

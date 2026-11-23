@@ -35,6 +35,30 @@ public sealed class TrustProfileTests : IDisposable
     }
 
     [Fact]
+    public void FromExtension_TakesTheExtensionsSignerIdentityReaders()
+    {
+        var reader = new FixedReader();
+
+        var profile = TrustProfile.FromExtension("x", "X", null, ValidationPolicy.Default, new ExtensionWithReader(reader));
+
+        profile.SignerIdentityReaders.ShouldBe([reader]);
+    }
+
+    [Fact]
+    public void WithTrustFrom_AddsTheOthersSignerIdentityReadersOnce()
+    {
+        var shared = new FixedReader();
+        var other = new FixedReader();
+        var main = Profile("main", _pki) with { SignerIdentityReaders = [shared] };
+
+        var combined = main.WithTrustFrom(
+            Profile("a", _other) with { SignerIdentityReaders = [shared, other] },
+            Profile("b", _other));
+
+        combined.SignerIdentityReaders.ShouldBe([shared, other]);
+    }
+
+    [Fact]
     public void RequireSigningPolicy_ProfileThatDoesNotSign_Throws()
     {
         var validationOnly = Profile("gov-br", _pki);
@@ -109,5 +133,25 @@ public sealed class TrustProfileTests : IDisposable
         var options = new ValidationOptions();
 
         options.WithProfileApplied().ShouldBeSameAs(options);
+    }
+
+    private sealed class FixedReader : ISignerIdentityReader
+    {
+        public IReadOnlyCollection<string> IdentifierTypes => ["X"];
+
+        public IReadOnlyList<string> Read(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, string identifierType) => [];
+    }
+
+    private sealed class ExtensionWithReader(ISignerIdentityReader reader) : ICountryExtension
+    {
+        public string RegionCode => "XX";
+
+        public string DisplayName => "X";
+
+        public IReadOnlyList<ITrustAnchorProvider> TrustAnchorProviders => [];
+
+        public IReadOnlyList<IChainValidationProvider> ChainValidationProviders => [];
+
+        public IReadOnlyList<ISignerIdentityReader> SignerIdentityReaders => [reader];
     }
 }

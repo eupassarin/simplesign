@@ -682,6 +682,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             SignerCertificate = cmsData.SignerCertificate,
             EmbeddedCertificates = cmsData.Certificates,
             SignerName = cmsData.SignerCertificate?.GetNameInfo(X509NameType.SimpleName, forIssuer: false),
+            ClaimedRoles = SignedAttributeFacts.FromCms(cmsData.SignedAttrs)?.ClaimedRoles ?? [],
             SubFilter = field.SubFilter,
             DigestAlgorithmOid = cmsData.DigestAlgorithmOid,
             Errors = errors.AsReadOnly(),

@@ -48,6 +48,13 @@ public sealed class SignatureValidationResult
     /// <summary>Human-readable signer name (CN from the certificate).</summary>
     public string? SignerName { get; init; }
 
+    /// <summary>
+    /// The roles the signer claims in the signed attributes (signer-attributes-v2 or signer-attributes,
+    /// ETSI EN 319 122-1 §5.2.6.1, claimedAttributes), as text and in the order written. Claimed, not certified:
+    /// the signer wrote them and nobody vouched for them. Empty when the signature claims none.
+    /// </summary>
+    public IReadOnlyList<string> ClaimedRoles { get; init; } = [];
+
     /// <summary>SubFilter of the signature field (e.g., "adbe.pkcs7.detached", "ETSI.CAdES.detached").</summary>
     public string? SubFilter { get; init; }
 

@@ -348,6 +348,9 @@ public sealed record SigningOptions
 
     public IReadOnlyList<DocumentInfoEntry> DocumentInfo { get; init; } = [];
 
+    /// <summary>The roles the signer claims (signer-attributes-v2), one per entry; empty: none.</summary>
+    public IReadOnlyList<string> SignerRoles { get; init; } = [];
+
     public string? OperationId { get; init; }
 
     // 7. Mode
