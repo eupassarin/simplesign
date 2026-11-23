@@ -1,7 +1,7 @@
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Shouldly;
+using SimpleSign.TestHelpers;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Parity;
 
@@ -106,5 +106,10 @@ internal static class Snapshot
     public static string OneLine(string text) =>
         new StringBuilder(text).Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t").ToString();
 
-    private static string Folder([CallerFilePath] string here = "") => Path.Combine(Path.GetDirectoryName(here)!, "Snapshots");
+    /// <summary>
+    /// The snapshots' folder, found from the repository root (as the fixtures are): a CI build is deterministic and maps
+    /// the source paths, so the compile-time path of this file is not one on disk there.
+    /// </summary>
+    private static string Folder() =>
+        RepositoryPaths.Get("tests", "unit", "Formats", "SimpleSign.PAdES.Tests", "Pdf", "Parity", "Snapshots");
 }
