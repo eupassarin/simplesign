@@ -1,17 +1,17 @@
-using System.Reflection;
 using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Model;
 using SimpleSign.PAdES.Pdf.Writing;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Tests.Pdf.Parity;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Writing;
 
 /// <summary>
-/// The serializer writes objects byte for byte as the writers' templates do (ADR 0032): each golden test builds the
-/// object with the model and compares it with the template's output for the same inputs.
+/// The serializer writes objects byte for byte as the writers' templates did (ADR 0032): the signature dictionary and
+/// the field were checked against those templates for the same inputs, and are now snapshots.
 /// </summary>
 [Trait("Category", "Unit")]
 public sealed class PdfObjectSerializerTests
@@ -22,17 +22,9 @@ public sealed class PdfObjectSerializerTests
 
     private static string Text(PdfSerializedObject serialized) => Encoding.Latin1.GetString(serialized.Bytes);
 
-    private static string LegacySignatureDictionary(int number, SignatureFieldOptions options, int hexLength) =>
-        (string)typeof(PdfSignatureWriter).GetMethod("BuildSignatureDictionary", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [number, options, hexLength, s_time])!;
-
-    private static string LegacyFieldAnnotation(SignatureFieldOptions options, string name, int field, int sig, int app, float x, float y, float w, float h, int page, PdfALevel? level)
-    {
-        var parameters = typeof(PdfSignatureWriter).GetNestedType("FieldAnnotationParams", BindingFlags.NonPublic)!;
-        object p = Activator.CreateInstance(parameters, [name, field, sig, app, x, y, w, h, page])!;
-        return (string)typeof(PdfSignatureWriter).GetMethod("BuildFieldAnnotation", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, [options, p, level])!;
-    }
+    /// <summary>The serialized object is its snapshot: it was the writers' template's output, byte for byte, when they were replaced.</summary>
+    private static void Match(string key, string text) =>
+        Snapshot.MatchKey("writing/serializer.txt", Snapshot.OneLine(key), Snapshot.OneLine(text));
 
     public static TheoryData<SignatureFieldOptions> SignatureOptions()
     {
@@ -47,14 +39,13 @@ public sealed class PdfObjectSerializerTests
 
     [Theory]
     [MemberData(nameof(SignatureOptions))]
-    public void Write_SignatureDictionary_IsTheSignerTemplateByteForByte(SignatureFieldOptions options)
+    public void Write_SignatureDictionary_IsItsSnapshot(SignatureFieldOptions options)
     {
         const int hexLength = 64;
-        string legacy = LegacySignatureDictionary(12, options, hexLength);
 
         var serialized = PdfObjectSerializer.Write(12, PdfSignatureWriter.SignatureDictionary(options, hexLength / 2, s_time), raw: new Dictionary<string, string> { ["ByteRange"] = ByteRangePlaceholder });
 
-        Text(serialized).ShouldBe(legacy);
+        Match($"signature/{options.SubFilter}/{options.SignerName}/{options.Reason}/{options.Location}/{options.ContactInfo}/{options.CertificationLevel}", Text(serialized));
         var (start, length) = serialized.ValueRanges["ByteRange"];
         Text(serialized).Substring(start, length).ShouldBe(ByteRangePlaceholder);
         var contents = serialized.ValueRanges["Contents"];
@@ -66,15 +57,13 @@ public sealed class PdfObjectSerializerTests
     [InlineData(false, 0, null)]
     [InlineData(true, 3, PdfALevel.A1b)]
     [InlineData(false, 3, PdfALevel.A2b)]
-    public void Write_FieldAnnotation_IsTheSignerTemplateByteForByte(bool appearance, int page, PdfALevel? level)
+    public void Write_FieldAnnotation_IsItsSnapshot(bool appearance, int page, PdfALevel? level)
     {
-        var options = new SignatureFieldOptions { Appearance = appearance ? new SignatureAppearance() : null };
-        string legacy = LegacyFieldAnnotation(options, "Assinatura do Contratante", 14, 12, 15, 72.5f, 300f, 220.25f, 70f, page, level);
 
         var field = PdfSignatureWriter.FieldAnnotation(
             "Assinatura do Contratante", 12, page, level, appearance ? (72.5f, 300f, 220.25f, 70f, 15) : null);
 
-        Text(PdfObjectSerializer.Write(14, field)).ShouldBe(legacy);
+        Match($"field/{appearance}/{page}/{level}", Text(PdfObjectSerializer.Write(14, field)));
     }
 
     [Theory]

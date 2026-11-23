@@ -1,12 +1,11 @@
-using System.Text;
-using System.Text.RegularExpressions;
+
 using Microsoft.Extensions.Logging;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Inspection;
-using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Model;
-using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Validation;
 
 namespace SimpleSign.PAdES.Inspection;
 
@@ -159,66 +158,4 @@ public static partial class PdfSignatureInspector
         }
     }
 
-    /// <summary>The DSS summary as the scanning code read it before the object model (ADR 0032), for the parity checks.</summary>
-    internal static DssInfo? ExtractDssInfoLegacy(ReadOnlySpan<byte> data)
-    {
-        try
-        {
-            var dssDictSlice = DssExtractor.FindDssDictionary(data);
-            if (dssDictSlice is null)
-            {
-                return null;
-            }
-
-            var dssSpan = dssDictSlice.Value.Span;
-            int crlCount = CountArrayEntries(dssSpan, "/CRLs ["u8);
-            int ocspCount = CountArrayEntries(dssSpan, "/OCSPs ["u8);
-            int certCount = CountArrayEntries(dssSpan, "/Certs ["u8);
-            bool hasVri = DssExtractor.IndexOfBytes(dssSpan, "/VRI "u8) >= 0
-                       || DssExtractor.IndexOfBytes(dssSpan, "/VRI<<"u8) >= 0;
-
-            // Validate VRI structure per ISO 32000-2 §12.8.4.4
-            var vriResult = hasVri
-                ? VriValidator.Validate(dssSpan)
-                : null;
-
-            return new DssInfo
-            {
-                CrlCount = crlCount,
-                OcspResponseCount = ocspCount,
-                CertificateCount = certCount,
-                HasVri = hasVri,
-                VriEntryCount = vriResult?.EntryCount ?? 0,
-                VriHasTimestamps = vriResult?.AllHaveTimestamps ?? false,
-                VriWarnings = vriResult?.Warnings ?? []
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static int CountArrayEntries(ReadOnlySpan<byte> dssDictSlice, ReadOnlySpan<byte> arrayKey)
-    {
-        int idx = DssExtractor.IndexOfBytes(dssDictSlice, arrayKey);
-        if (idx < 0)
-        {
-            return 0;
-        }
-
-        int arrayStart = idx + arrayKey.Length;
-        int arrayEnd = DssExtractor.IndexOfBytesFrom(dssDictSlice, "]"u8, arrayStart);
-        if (arrayEnd <= arrayStart)
-        {
-            return 0;
-        }
-
-        var arraySlice = dssDictSlice[arrayStart..arrayEnd];
-        var text = Encoding.ASCII.GetString(arraySlice.ToArray());
-        return ObjRefRegex().Count(text);
-    }
-
-    [GeneratedRegex(@"(\d+)\s+0\s+R")]
-    private static partial Regex ObjRefRegex();
 }

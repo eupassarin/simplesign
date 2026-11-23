@@ -13,6 +13,13 @@ internal static class WriterCorpus
     /// <summary>The documents, by name: <c>fixture:</c>, <c>generated:</c>, <c>signed:</c>, or a variant's name.</summary>
     public static IReadOnlyDictionary<string, Func<Task<byte[]>>> Documents { get; } = BuildCorpus();
 
+    /// <summary>
+    /// Whether a document is the same bytes on every run, so what a writer makes of it can be snapshotted: those signed
+    /// in the test (a new key, the time of the run) are not.
+    /// </summary>
+    /// <param name="name">The document's name.</param>
+    public static bool IsDeterministic(string name) => !name.StartsWith("signed:", StringComparison.Ordinal) && !name.StartsWith("dss:", StringComparison.Ordinal);
+
     /// <summary>Names as theory data.</summary>
     /// <param name="names">The names.</param>
     public static TheoryData<string> Names(IEnumerable<string> names)

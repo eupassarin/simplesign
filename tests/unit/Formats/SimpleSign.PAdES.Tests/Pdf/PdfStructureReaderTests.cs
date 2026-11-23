@@ -320,36 +320,6 @@ public sealed class PdfStructureReaderTests
 
     // ── Hostile structure (found by the mutation fuzzer) ────────────────────
 
-    [Fact]
-    public void FindByteRangeDictionaries_ReturnsInnermostEnclosingDictionary()
-    {
-        byte[] pdf = Encoding.Latin1.GetBytes(
-            "1 0 obj\n<< /Type /Sig /Prop_Build << /App << /Name /X >> >> /ByteRange [0 1 2 3] /Contents <00> >>\nendobj\n" +
-            "2 0 obj\n<< /Length 30 >>\nstream\n<< /ByteRange [9 9 9 9] >>\nendstream\nendobj\n" +
-            "% << /ByteRange in a comment\n" +
-            "3 0 obj\n<< /T (/ByteRange in a string) >>\nendobj\n");
-
-        var markers = PdfStructureReader.FindByteRangeDictionaries(pdf);
-
-        markers.Count.ShouldBe(1);
-        string text = Encoding.Latin1.GetString(pdf);
-        markers[0].DictStart.ShouldBe(text.IndexOf("<< /Type /Sig", StringComparison.Ordinal));
-        text.Substring(markers[0].DictEnd, 3).ShouldBe(">>\n");
-        text[markers[0].DictStart..(markers[0].DictEnd + 2)].ShouldEndWith("/Contents <00> >>");
-    }
-
-    [Fact]
-    public void FindByteRangeDictionaries_UnclosedDictionary_HasNoEnd()
-    {
-        byte[] pdf = Encoding.Latin1.GetBytes("1 0 obj\n<< /ByteRange [0 1 2 3]\nendobj\n2 0 obj\n<< /ByteRange [4 5 6 7] >>\nendobj\n");
-
-        var markers = PdfStructureReader.FindByteRangeDictionaries(pdf);
-
-        markers.Count.ShouldBe(2);
-        markers[0].DictEnd.ShouldBe(-1);
-        markers[1].DictEnd.ShouldBeGreaterThan(markers[1].DictStart);
-    }
-
     [Theory]
     [InlineData("<< /ByteRange [0 1 2 3] ")]
     [InlineData("<< ")]
@@ -375,7 +345,22 @@ public sealed class PdfStructureReaderTests
 
         watch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
+
+    [Fact]
+    public void IsLinearized_WithLinearizedDict_ReturnsTrue() =>
+        PdfStructureReader.IsLinearized("%PDF-1.7\n1 0 obj\n<< /Linearized 1 /L 12345 /O 5 /E 1000 /N 1 /T 12000 /H [100 200] >>\nendobj\n"u8).ShouldBeTrue();
+
+    [Fact]
+    public void IsLinearized_NormalPdf_ReturnsFalse() =>
+        PdfStructureReader.IsLinearized("%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"u8).ShouldBeFalse();
+
+    [Theory]
+    [InlineData(300, true)]
+    [InlineData(100, false)]
+    public void CoversEntireFile_ByteRangeOf500ByteFile_TrueOnlyToTheEnd(long length2, bool covers) =>
+        new PdfByteRange { Offset1 = 0, Length1 = 100, Offset2 = 200, Length2 = length2 }.CoversEntireFile(500).ShouldBe(covers);
 }
+
 internal sealed class NonSeekableStream(byte[] data) : Stream
 {
     private readonly MemoryStream _inner = new(data);

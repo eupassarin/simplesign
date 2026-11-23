@@ -19,7 +19,6 @@ internal readonly record struct PdfTextMatch(int Page, float X, float Y);
 internal static partial class PdfTextLocator
 {
     private const int MaxFormDepth = 8;
-    private const int MaxPageDepth = 64;
     private const int MaxOperators = 5_000_000;
     private const int MaxGlyphs = 2_000_000;
 

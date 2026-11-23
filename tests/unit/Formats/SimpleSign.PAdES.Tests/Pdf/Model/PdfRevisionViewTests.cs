@@ -272,4 +272,67 @@ public sealed class PdfRevisionViewTests
 
         view.Dss.ShouldNotBeNull().Get("Certs").ShouldBeOfType<PdfArray>().Count.ShouldBe(1);
     }
+
+    // ── Array layouts the scanning reader handled, read through the model (ported with ADR 0032) ─────────────────
+
+    [Theory]
+    [InlineData("/Kids[3 0 R 4 0 R 5 0 R]")]
+    [InlineData("/Kids [ 3 0 R 4 0 R 5 0 R ]")]
+    [InlineData("/Kids[\n3 0 R\n4 0 R\n5 0 R\n]")]
+    [InlineData("/Kids[3 0 R% comment\n4 0 R 5 0 R]")]
+    [InlineData("/Kids[3 0 R\t4 0 R\r\n5 0 R]")]
+    [InlineData("/Kids[3\n0\nR\n4\n0\nR\n5\n0\nR]")]
+    public void Pages_KidsInAnyLayout_InOrder(string kids)
+    {
+        var builder = new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, $"<< /Type /Pages {kids} /Count 3 >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R >>")
+            .Object(4, "<< /Type /Page /Parent 2 0 R >>")
+            .Object(5, "<< /Type /Page /Parent 2 0 R >>")
+            .EndRevision();
+
+        Latest(builder).Pages.Select(p => p.Id!.Value.Number).ShouldBe([3, 4, 5]);
+    }
+
+    [Theory]
+    [InlineData("/Fields [10 0 R 11 0 R 12 0 R]", new[] { 10, 11, 12 })]
+    [InlineData("/Fields [10 0 R\n11 0 R\n12 0 R]", new[] { 10, 11, 12 })]
+    [InlineData("/Fields [10 0 R\r\n11 0 R\r\n12 0 R]", new[] { 10, 11, 12 })]
+    [InlineData("/Fields [10 0 R\t11 0 R\t12 0 R]", new[] { 10, 11, 12 })]
+    [InlineData("/Fields [10 0 R \n 11 0 R\r\n\t12 0 R]", new[] { 10, 11, 12 })]
+    [InlineData("/Fields[10 0 R 11 0 R]", new[] { 10, 11 })]
+    [InlineData("/Fields [10 0 R % ]\n11 0 R]", new[] { 10, 11 })]
+    [InlineData("/Fields []", new int[0])]
+    [InlineData("/Fields 20 0 R", new[] { 10, 11 })]
+    public void RootFields_FieldsInAnyLayout_InOrder(string fields, int[] expected)
+    {
+        var builder = new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Object(4, $"<< {fields} >>")
+            .Object(10, "<< /FT /Sig /T (A) >>")
+            .Object(11, "<< /FT /Sig /T (B) >>")
+            .Object(12, "<< /FT /Tx /T (C) >>")
+            .Object(20, "[10 0 R 11 0 R]")
+            .EndRevision();
+
+        Latest(builder).RootFields.Select(f => f.Id!.Value.Number).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void RootFields_ManyOnTheirOwnLines_AllInOrder()
+    {
+        var builder = new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm 4 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Object(4, $"<< /Fields [{string.Join("\n", Enumerable.Range(10, 22).Select(i => $"{i} 0 R"))}] >>");
+        foreach (int i in Enumerable.Range(10, 22))
+        {
+            builder.Object(i, $"<< /FT /Sig /T (S{i}) >>");
+        }
+
+        Latest(builder.EndRevision()).RootFields.Select(f => f.Id!.Value.Number).ShouldBe(Enumerable.Range(10, 22));
+    }
 }
+

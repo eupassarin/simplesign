@@ -1,6 +1,9 @@
 # ADR 0032: A PDF Object Model for Reading and Incremental Writing
 
-**Status:** Proposed. Becomes Accepted when the last step of the migration below removes the scanning code.
+**Status:** Accepted (2026-11-23). The migration's last step removed the scanning code, the legacy writers and their
+`AppContext` switch. It was taken at the maintainer's decision before three of the conditions of point 7 held: the
+weekly external corpus green twice, a preview release with the new writers, and the Interop, VeraPdf and EtsiChecker
+categories run on the last writer step. Those runs are still owed, now on the model alone.
 
 **Context:**
 ADR 0005 chose to write our own PDF code, and that stays. How that code works is what this ADR changes. `SimpleSign.PAdES`
@@ -108,8 +111,31 @@ has no object model: it reads a PDF by scanning raw bytes for literal tokens and
 - **Less code and memory.** One implementation of each operation; no whole-file strings.
 - **Some changes of behaviour are intended.** Each is listed in the harness and in the changelog of the release that
   removes the old code.
-- **Two implementations live side by side during the migration.** Tests that assert internal heuristics of the
-  scanning code are ported or removed in the last step.
+- **Two implementations lived side by side during the migration.** In the last step, tests of the scanning code's
+  heuristics were ported to the model where the behaviour remains (array layouts, dictionary edits next to strings
+  and comments, PDF/A spacing, VRI checks, PDF/A detection) and removed where only the removed function had it.
+
+**Outcome:**
+
+- **The parity checks became snapshots.** Before the old code was removed, the model's reading was compared with the
+  scanning reader's on the corpus, and each writer's output with the legacy writer's, byte for byte, with every
+  difference explained by a rule found from the document. What the model reads and writes on that corpus is now a
+  set of golden snapshots (`tests/.../Pdf/Parity/Snapshots`): the facts per document, and the SHA-256 of each update
+  (per framework where zlib, which changed in .NET 9, compresses at run time). A change fails until it is looked at
+  and the snapshots written again (`SIMPLESIGN_UPDATE_SNAPSHOTS=1`).
+- **Intended differences, as catalogued then.**
+  - Reading: lookup through the cross-reference; tables with white-space before `xref` or `trailer`, a lone CR or a
+    blank line before `trailer`; the objects only a hybrid file's `/XRefStm` lists; generation numbers; nested page
+    trees; fields and DSS in object streams; DSS arrays as references or without a space; `/VRI` as a reference;
+    PDF/A from the catalog's metadata only; encryption from the trailer; field names and text decoded (UTF-16,
+    PDFDocEncoding); changes after a signature compared semantically.
+  - Writing (each a defect of the legacy writers): the last `N 0 obj` of the file rewritten instead of the object the
+    cross-reference lists; a catalog in an object stream not found (the AcroForm's fields lost, or the catalog replaced
+    by `/Type` and `/DSS`); the value of `/Type /AcroForm` written as a key; the catalog ended at `endobj` with the
+    next object straight after; the first `/Type /Page` of the file taken for the first page, page N missed in a
+    nested tree; a default field name another field had; `/AP` to an appearance never written; visible signatures
+    counted in every copy; no VRI for a signature written `/Contents<`, in an object stream, or short; the rest of
+    `/DSS`'s line removed with it; CRLF turned into LF.
 
 **Alternatives considered:**
 
@@ -119,7 +145,8 @@ has no object model: it reads a PDF by scanning raw bytes for literal tokens and
 - *A public object model.* Too large an API to document and keep stable; it can be considered later through narrow,
   read-only views.
 - *Rewriting everything at once.* Nothing could be shown to behave the same.
-- *A runtime switch for every step.* Only the writers get one (an `AppContext` switch), for one preview release.
+- *A runtime switch for every step.* Only the writers got one (`SimpleSign.PAdES.UseLegacyPdfWriter`), from the
+  last writer step; it went with the old code it switched back to.
 
 **Follow-ups:**
 

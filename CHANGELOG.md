@@ -38,32 +38,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A PDF object model, first steps (ADR 0032, proposed)**, internal: `SimpleSign.PAdES.Pdf.Model`, which the library
-  will move to step by step, with parity checked against the current code, before the signature envelope is built on
-  it. Nothing uses it yet.
-  - Objects, lexer and parser: arrays and dictionaries read without recursion, where each object came from kept, and
-    every repair recorded.
+- **The PDF code is an object model** (ADR 0032, accepted), internal: `SimpleSign.PAdES.Pdf.Model` reads a PDF through
+  its cross-reference (objects, filters, revisions, the views of a revision), and `SimpleSign.PAdES.Pdf.Writing` writes
+  incremental updates. Every reader and writer now uses it, and the scanning code they used is removed (some 7,000
+  lines, `PdfStructureParser` among them); the public API keeps its shape. The intended changes of behaviour are
+  listed under Fixed, and in the ADR with each difference that was explained before the old code went.
   - Stream filters: FlateDecode with the 50 MB limit, ASCII85Decode, ASCIIHexDecode, the PNG predictors (Average and
     Paeth too) and TIFF predictor 2; LZWDecode and RunLengthDecode are refused as unsupported.
   - Cross-reference and revisions: tables, streams and hybrid files (`/XRefStm`), object streams within a budget, a
     linearized file's two sections as one revision, objects found through the cross-reference by revision, and the
-    cross-reference rebuilt from the object headers when it cannot be read.
-  - Revision views: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree
-    (fully qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries (orphans
-    included) and the certification signature (with or without `/Perms`).
-  - The revision comparison, the signature fields, `PdfEmbeddedFiles.Read`, the text anchors of a signature appearance, the DSS (validation, LTV merge, inspection),
-    the DocMDP level, encryption and PDF/A detection now read the document through the model
-    (the scanning code they used is kept for the parity checks until it is removed).
-  - Writing, in `SimpleSign.PAdES.Pdf.Writing` (no writer uses it yet): a serializer that lays objects out as the
-    writers' templates do, a patch that changes some entries of an existing dictionary and keeps every other byte of
-    it (CRLF included, which the writers' text edits turned into LF), and an incremental update that appends objects
-    and writes the cross-reference table or stream with the trailer the writers write. Golden tests check each, byte
-    for byte, against the code it will replace, the incremental update on every committed PDF and generated one.
-  - A parity harness compares it with the current reader on every committed PDF and on generated ones; each intended
-    difference is catalogued with its reason. The current reader loses tables with white-space before `xref` or
-    `trailer`, lines ending with a lone CR, and the objects only a hybrid file's `/XRefStm` lists; it does not see
-    fields inside object streams, DSS arrays written as references or without a space (`/Certs[`), nor an indirect
-    `/VRI`; it reads `/Name` from a nested `/Prop_Build`; and it looks for pages in the root's `/Kids` only.
+    cross-reference rebuilt from the object headers when it cannot be read. Objects in an object stream must be listed
+    by a cross-reference stream (a table cannot list them): an object stream behind a table alone is not read.
+  - Reading: the whole page tree with inherited attributes, the AcroForm (inline or not) and its field tree (fully
+    qualified names, `/Lock`, `/SV`, widgets), name trees, the DSS, the signature dictionaries, the certification
+    signature. The current reader lost tables with white-space before `xref` or `trailer`, lines ending with a lone CR,
+    and the objects only a hybrid file's `/XRefStm` lists; it did not see fields inside object streams, DSS arrays
+    written as references or without a space (`/Certs[`), nor an indirect `/VRI`; it read `/Name` from a nested
+    `/Prop_Build`; and it looked for pages in the root's `/Kids` only.
+  - Writing: a serializer, a patch that changes some entries of a dictionary and keeps every other byte (CRLF
+    included), and the incremental update; the appearance renderer gives its objects one by one.
 - **A PDF signature that declares an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RC, AD-RA) and breaks it is no
   longer valid**: INDETERMINATE (SIG_CONSTRAINTS_FAILURE), through the new `SignatureConstraints/PolicyRules`
   constraint, instead of TOTAL-PASSED with the broken rules among the warnings. That covers a wrong `sigPolicyHash`, a
@@ -97,9 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The appearance renderer gives its objects one by one instead of bytes searched for `endobj`. Elsewhere the update
   is the same, byte for byte: 415 of the 660 cases of the golden test (every document of the writers' corpus,
   invisible, named, visible, certifying, with document information).
-- **`SimpleSign.PAdES.UseLegacyPdfWriter`** (preview): an `AppContext` switch that takes the signer, the document
-  timestamp writer and the LTV embedder back to the writers before the object model, should one of them write
-  something a viewer refuses. It goes with the old code in the next release.
 - **Signing an existing signature field finds it in the field tree** (`ExistingFieldName`, ADR 0032): the field is
   looked for by its fully qualified name (`Parent.Child`), else its `/T`, through the PDF object model, so a field
   written `/FT/Sig` (no space), one inside an object stream, or one that inherits `/FT` from its parent is found
@@ -177,6 +167,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declares an ICP-Brasil signature policy (AD-RB…) and lacks the attribute still shows that policy as `Invalid`.
 
 ### Tests
+
+- **Golden snapshots of the PDF object model** (ADR 0032): what it reads from each document of the corpus (committed
+  and generated) and what each writer writes (SHA-256 of the update, per framework) are snapshots, taken when they had
+  been checked against the code they replaced; `SIMPLESIGN_UPDATE_SNAPSHOTS=1` rewrites them. They replace the parity
+  harness and the golden tests against the legacy writers.
 
 - **The ETSI conformance corpus has several signatures in one file, and each sample is validated by SimpleSign
   first.** Eight more samples (40 in all): a PDF with three signatures, a certified PDF signed again, two PDF

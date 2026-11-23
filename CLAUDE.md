@@ -62,7 +62,9 @@ src/
 ├── Core/
 │   └── SimpleSign.Core/        Crypto primitives: CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), hashing, signing/validation policies, trust store
 ├── Formats/
-│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/ = PDF parser (PdfEmbeddedFiles reads attachments)
+│   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/Model = PDF object model (ADR 0032:
+│   │                           objects, filters, cross-reference, revisions and their views), Pdf/Writing = incremental updates
+│   │                           (serializer, dictionary patch, cross-reference); PdfEmbeddedFiles reads attachments
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 │   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
 │   └── SimpleSign/             Meta-package
@@ -214,6 +216,10 @@ var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Loc
 - Test helpers in `tests/shared/SimpleSign.TestHelpers`
 - Test cert generation: use helpers, don't commit real certificates
 - Name format: `MethodName_Condition_ExpectedResult`
+- What the PDF object model reads and writes on the corpus is snapshotted (`tests/unit/Formats/SimpleSign.PAdES.Tests/Pdf/Parity/Snapshots`,
+  ADR 0032): a change to reading or writing fails those tests until it is looked at; then rewrite them with
+  `SIMPLESIGN_UPDATE_SNAPSHOTS=1 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests` (on net8.0 and net10.0: the
+  writers' snapshots are per framework)
 - Each test class maps to one production class
 
 ## When Making Changes
@@ -229,7 +235,7 @@ var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Loc
 
 ```
 SimpleSign.PAdES (most users install this)
-  └── depends on SimpleSign.Core (the PDF parser is part of it, namespace SimpleSign.PAdES.Pdf)
+  └── depends on SimpleSign.Core (the PDF object model is part of it, namespaces SimpleSign.PAdES.Pdf.Model and .Writing)
 
 SimpleSign.Brazil (shared Brazilian building blocks)
   └── depends on SimpleSign.PAdES + SimpleSign.CAdES — public API only, no InternalsVisibleTo from them

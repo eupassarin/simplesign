@@ -10,7 +10,6 @@ using SimpleSign.Core.Http;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Validation;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -308,7 +307,7 @@ public sealed class LtvEmbedderTests
 
         byte[] bytes = await ltvEmbedder.EmbedLtvDataAsync(pdf, [cert]);
 
-        var (start, end) = PdfStructureParser.FindObjectBytes(bytes, 1);
+        var (start, end) = Tests.Pdf.ModelProbe.ObjectRange(bytes, 1);
         start.ShouldBeGreaterThan(pdf.Length, "the DSS update must write a new revision of the catalog");
         string catalog = Encoding.Latin1.GetString(bytes, start, end - start);
         catalog.ShouldContain("/Type /Catalog");
@@ -370,7 +369,7 @@ public sealed class LtvEmbedderTests
             .SignAsync();
 
         // Verify the signed PDF uses xref streams (since original does)
-        bool usesXRefStreams = PdfStructureParser.UsesXRefStreams(signedPdf);
+        bool usesXRefStreams = Tests.Pdf.ModelProbe.UsesXrefStream(signedPdf);
         usesXRefStreams.ShouldBeTrue("signed PDF should preserve xref stream format");
 
         // Embed LTV with a CRL server that returns valid-looking data
@@ -382,7 +381,7 @@ public sealed class LtvEmbedderTests
         // If LTV data was embedded, check xref format is preserved
         if (!ReferenceEquals(ltvPdf, signedPdf))
         {
-            bool ltvUsesXRefStreams = PdfStructureParser.UsesXRefStreams(ltvPdf);
+            bool ltvUsesXRefStreams = Tests.Pdf.ModelProbe.UsesXrefStream(ltvPdf);
             ltvUsesXRefStreams.ShouldBeTrue(
                 "LtvEmbedder must preserve xref stream format when the signed PDF uses xref streams");
         }
@@ -551,7 +550,7 @@ public sealed class LtvEmbedderTests
 
     private static byte[] ExtractVriTimestamp(byte[] pdf, int vriObjNum)
     {
-        var (vriStart, vriEnd) = PdfStructureParser.FindObjectBytes(pdf, vriObjNum);
+        var (vriStart, vriEnd) = Tests.Pdf.ModelProbe.ObjectRange(pdf, vriObjNum);
         vriStart.ShouldBeGreaterThanOrEqualTo(0);
         string vriText = Encoding.Latin1.GetString(pdf.AsSpan(vriStart, vriEnd - vriStart));
         int tsPosition = vriText.IndexOf("/TS ", StringComparison.Ordinal);
@@ -566,7 +565,7 @@ public sealed class LtvEmbedderTests
         }
         tsObjNum.ShouldBeGreaterThan(0);
 
-        var (tsStart, tsEnd) = PdfStructureParser.FindObjectBytes(pdf, tsObjNum);
+        var (tsStart, tsEnd) = Tests.Pdf.ModelProbe.ObjectRange(pdf, tsObjNum);
         tsStart.ShouldBeGreaterThanOrEqualTo(0);
         ReadOnlySpan<byte> tsObject = pdf.AsSpan(tsStart, tsEnd - tsStart);
         int streamPosition = tsObject.IndexOf("stream\n"u8);

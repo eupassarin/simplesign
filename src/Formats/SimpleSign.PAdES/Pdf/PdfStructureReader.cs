@@ -1,9 +1,8 @@
 using System.Buffers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Internal;
-
+using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
@@ -17,30 +16,7 @@ public sealed partial class PdfStructureReader
     /// <summary>Maximum PDF file size supported (200 MB).</summary>
     public const int MaxPdfSize = 200 * 1024 * 1024;
 
-    /// <summary>Maximum number of xref revisions to follow via /Prev chain.</summary>
-    private const int MaxXrefRevisions = 100;
-
-    /// <summary>Search window for /P permission level after /TransformMethod /DocMDP (bytes).</summary>
-    private const int PermissionSearchWindow = 2048;
-
-    /// <summary>Maximum stream scan size when /Length is missing (10 MB).</summary>
-    private const int MaxStreamScanBytes = 10 * 1024 * 1024;
-
-    #region PDF byte markers
-
     private static ReadOnlySpan<byte> PdfHeaderMarker => "%PDF-"u8;
-    private static ReadOnlySpan<byte> StartXrefMarker => "startxref"u8;
-    private static ReadOnlySpan<byte> XrefMarker => "xref"u8;
-    private static ReadOnlySpan<byte> TrailerMarker => "trailer"u8;
-    private static ReadOnlySpan<byte> ObjMarker => " obj"u8;
-    private static ReadOnlySpan<byte> StreamMarker => "stream"u8;
-    private static ReadOnlySpan<byte> EndStreamMarker => "endstream"u8;
-    private static ReadOnlySpan<byte> ByteRangeKey => "/ByteRange"u8;
-    private static ReadOnlySpan<byte> PrevKey => "/Prev "u8;
-    private static ReadOnlySpan<byte> TransformMethodDocMdp => "/TransformMethod /DocMDP"u8;
-    private static ReadOnlySpan<byte> PermissionKey => "/P "u8;
-    private static ReadOnlySpan<byte> EncryptKey => "/Encrypt"u8;
-    #endregion
 
     #region Public API
 
@@ -101,7 +77,7 @@ public sealed partial class PdfStructureReader
     {
         // The Linearized dictionary must be in the first 1024 bytes
         int searchLen = Math.Min(data.Length, 1024);
-        return IndexOf(data[..searchLen], "/Linearized"u8, 0) >= 0;
+        return data[..searchLen].IndexOf("/Linearized"u8) >= 0;
     }
 
     /// <summary>
@@ -241,4 +217,38 @@ public sealed partial class PdfStructureReader
     }
 
     #endregion
+
+    /// <summary>Reads as many bytes as possible from the stream into the buffer.</summary>
+    private static async Task<int> ReadFullyAsync(Stream stream, byte[] buffer, CancellationToken ct)
+    {
+        int total = 0;
+        while (total < buffer.Length)
+        {
+            int bytesRead = await stream.ReadAsync(buffer.AsMemory(total, buffer.Length - total), ct).ConfigureAwait(false);
+            if (bytesRead == 0)
+            {
+                break;
+            }
+
+            total += bytesRead;
+        }
+
+        return total;
+    }
+
+    /// <summary>Reads exactly buffer.Length bytes from the stream, throwing on premature EOF.</summary>
+    private static async Task ReadExactAsync(Stream stream, Memory<byte> buffer, CancellationToken ct)
+    {
+        int total = 0;
+        while (total < buffer.Length)
+        {
+            int bytesRead = await stream.ReadAsync(buffer[total..], ct).ConfigureAwait(false);
+            if (bytesRead == 0)
+            {
+                throw new EndOfStreamException("Unexpected end of PDF stream.");
+            }
+
+            total += bytesRead;
+        }
+    }
 }

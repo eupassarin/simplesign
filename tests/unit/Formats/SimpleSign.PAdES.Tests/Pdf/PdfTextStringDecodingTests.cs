@@ -18,35 +18,36 @@ public sealed class PdfTextStringDecodingTests
     public void DecodePdfTextString_Utf16BeBom_DecodesAsBigEndian()
     {
         byte[] raw = [0xFE, 0xFF, 0x00, 0x41, 0x00, 0x42];
-        PdfStructureReader.DecodePdfTextString(raw).ShouldBe("AB");
+        SimpleSign.PAdES.Pdf.Model.PdfText.Decode(raw).ShouldBe("AB");
     }
 
     [Fact]
     public void DecodePdfTextString_Utf16LeBom_DecodesAsLittleEndian()
     {
         byte[] raw = [0xFF, 0xFE, 0x41, 0x00, 0x42, 0x00];
-        PdfStructureReader.DecodePdfTextString(raw).ShouldBe("AB");
+        SimpleSign.PAdES.Pdf.Model.PdfText.Decode(raw).ShouldBe("AB");
     }
 
     [Fact]
     public void DecodePdfTextString_Utf16BeOddTrailingByte_IsDropped()
     {
         byte[] raw = [0xFE, 0xFF, 0x00, 0x41, 0x00];
-        PdfStructureReader.DecodePdfTextString(raw).ShouldBe("A");
+        SimpleSign.PAdES.Pdf.Model.PdfText.Decode(raw).ShouldBe("A");
     }
 
     [Fact]
     public void DecodePdfTextString_PdfDocEncoding_MapsAnnexDRange()
     {
         byte[] raw = [0x80, 0xA0, 0x92, 0xE3];
-        PdfStructureReader.DecodePdfTextString(raw).ShouldBe("\u2022\u20AC\u2122\u00E3");
+        SimpleSign.PAdES.Pdf.Model.PdfText.Decode(raw).ShouldBe("\u2022\u20AC\u2122\u00E3");
     }
 
     [Fact]
     public void DecodePdfHexString_WhitespaceIgnoredAndOddNibblePadded()
     {
-        byte[] hex = Encoding.ASCII.GetBytes("4 1 42 0");
-        PdfStructureReader.DecodePdfHexString(hex).ShouldBe([0x41, 0x42, 0x00]);
+        byte[] hex = Encoding.ASCII.GetBytes("<4 1 42 0>");
+        var parsed = (SimpleSign.PAdES.Pdf.Model.PdfString)SimpleSign.PAdES.Pdf.Model.PdfParser.ParseObject(hex, new SimpleSign.PAdES.Pdf.Model.PdfParseContext())!;
+        parsed.Bytes.ToArray().ShouldBe([0x41, 0x42, 0x00]);
     }
 
     // ── Signature-dictionary extraction tests ────────────────────────────────

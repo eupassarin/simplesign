@@ -2,7 +2,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Shouldly;
 using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
 using Xunit;
 
@@ -102,107 +101,58 @@ public sealed class PdfAConformanceTests
 
     // ── ISO 19005-3 §6.1.9 Test 1 — EOL after obj ────────────────────────────
 
-    [Fact(DisplayName = "BuildUpdatedPageObject output begins with 'N 0 obj\\n' (LF after obj)")]
-    public void BuildUpdatedPageObject_StartsWithObjEOL()
+    [Theory(DisplayName = "A page written again with the field begins with 'N 0 obj\\n' (LF after obj), whatever its source")]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void PageWithAnnotation_AnySource_StartsWithObjEol(string eol)
     {
-        // Build a minimal page object as raw bytes, then run it through
-        // BuildUpdatedPageObject and inspect the result.
-        const int pageObjNum = 3;
-        const int fieldObjNum = 99;
-        string pageDict = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n";
-        byte[] pageBytes = Encoding.Latin1.GetBytes(pageDict);
-        byte[] input = pageBytes;
+        byte[] pdf = new Tests.Pdf.Parity.PdfFileBuilder(eol: eol)
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Object(3, $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>{eol}")
+            .EndRevision()
+            .ToArray();
+        var document = SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(pdf);
 
-        byte[] updated = PdfSignatureWriter.BuildUpdatedPageObject(
-            pageObjNum, input, 0, pageDict.Length, fieldObjNum);
+        string updated = Encoding.Latin1.GetString(PdfFormUpdate.PageWithAnnotation(document, 3, document.GetObject(3)!, "99 0 R"));
 
-        string updatedText = Encoding.Latin1.GetString(updated);
-        // The "obj" keyword MUST be followed by an EOL marker (LF / CR / CRLF) per
-        // ISO 19005-3 §6.1.9 Test 1 — a single space fails the check.
-        updatedText.ShouldStartWith("3 0 obj\n");
-        updatedText.ShouldNotStartWith("3 0 obj ");
+        // The "obj" keyword MUST be followed by an EOL marker (ISO 19005-3 §6.1.9 Test 1): a space fails the check.
+        updated.ShouldStartWith("3 0 obj\n");
+        updated.ShouldContain("/Annots [99 0 R]");
     }
 
-    [Fact(DisplayName = "CRLF source PDF: BuildUpdatedPageObject still produces LF after obj")]
-    public void BuildUpdatedPageObject_CrlfSource_StillProducesObjLF()
+    // ── CRLF + nested-dict handling in the dictionary patch ─────────────────
+
+    [Fact(DisplayName = "Setting a key in a CRLF object with a nested dict inserts it at the top level")]
+    public void Set_CrlfSourceWithNestedDict_InsertsAtTopLevel()
     {
-        const int pageObjNum = 3;
-        const int fieldObjNum = 99;
-        string pageDict = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\r\nendobj\r\n";
-        byte[] input = Encoding.Latin1.GetBytes(pageDict);
+        const string obj = "5 0 obj\r\n<< /Foo 1\r\n   /Bar << /Inner 2 >>\r\n>>\r\nendobj\r\n";
 
-        byte[] updated = PdfSignatureWriter.BuildUpdatedPageObject(
-            pageObjNum, input, 0, pageDict.Length, fieldObjNum);
+        string result = Encoding.Latin1.GetString(new SimpleSign.PAdES.Pdf.Writing.PdfDictionaryPatch(Encoding.Latin1.GetBytes(obj)).Set("Baz", "99").ToBytes());
 
-        string updatedText = Encoding.Latin1.GetString(updated);
-        updatedText.ShouldStartWith("3 0 obj\n");
+        result.ShouldContain("/Inner 2 >>");
+        result.IndexOf("/Baz 99", StringComparison.Ordinal).ShouldBeGreaterThan(result.IndexOf("/Inner 2 >>", StringComparison.Ordinal));
+        result.ShouldEndWith("   /Baz 99\n>>\r\nendobj\r\n");
     }
 
-    // ── CRLF + nested-dict handling in InsertIntoDict / AppendAnnots ─────────
-
-    [Fact(DisplayName = "InsertIntoDict with CRLF source matches sentinel and inserts at top level")]
-    public void InsertIntoDict_CrlfSource_InsertsAtTopLevel()
+    [Fact(DisplayName = "Setting a key in a dict with nested dicts inserts it before the outermost >>")]
+    public void Set_NestedDicts_InsertsBeforeTheOutermostClose()
     {
-        // Source uses CRLF (Windows / iText / Adobe) and has a nested dict.
-        string obj = "5 0 obj\r\n<< /Foo 1\r\n   /Bar << /Inner 2 >>\r\n>>\r\nendobj\r\n";
-        string insert = "   /Baz 99\r\n";
+        const string obj = "5 0 obj\n<< /Foo 1\n   /DR << /Font << /Helv 6 0 R >> >>\n>>\nendobj";
 
-        string result = PdfStructureParser.InsertIntoDict(obj, insert);
+        string result = Encoding.Latin1.GetString(new SimpleSign.PAdES.Pdf.Writing.PdfDictionaryPatch(Encoding.Latin1.GetBytes(obj)).Set("Baz", "99").ToBytes());
 
-        result.ShouldContain("/Baz 99");
-        // The insert must land before the OUTER >>\nendobj, not inside the nested /Bar dict.
-        int outerClose = result.LastIndexOf(">>\nendobj", StringComparison.Ordinal);
-        int bazPos = result.IndexOf("/Baz 99", StringComparison.Ordinal);
-        bazPos.ShouldBeLessThan(outerClose);
-        // And the nested /Inner must still be intact (not corrupted by the insert).
-        result.ShouldContain("/Inner 2");
+        result.ShouldBe("5 0 obj\n<< /Foo 1\n   /DR << /Font << /Helv 6 0 R >> >>\n   /Baz 99\n>>\nendobj");
     }
 
-    [Fact(DisplayName = "InsertIntoDict with nested dict and LF source inserts at top level")]
-    public void InsertIntoDict_NestedDict_InsertsAtTopLevel()
+    [Fact(DisplayName = "Removing a key from a CRLF object keeps the others and the line ends")]
+    public void Remove_CrlfSource_RemovesOnlyTheEntry()
     {
-        // LF source with nested dict — the depth-aware fallback must kick in.
-        // Use a source that has nested dicts but doesn't end with ">>\nendobj"
-        // (or that has an unusual terminator) to force the depth-aware path.
-        string obj = "5 0 obj\n<< /Foo 1\n   /DR << /Font << /Helv 6 0 R >> >>\n>>";
-        string insert = "   /Baz 99\n";
+        const string obj = "5 0 obj\r\n<< /Foo 1\r\n   /Bar 2\r\n   /Baz 3\r\n>>\r\nendobj\r\n";
 
-        string result = PdfStructureParser.InsertIntoDict(obj, insert);
+        string result = Encoding.Latin1.GetString(new SimpleSign.PAdES.Pdf.Writing.PdfDictionaryPatch(Encoding.Latin1.GetBytes(obj)).Remove("Bar").ToBytes());
 
-        result.ShouldContain("/Baz 99");
-        // The /Baz insert must be at the top level — placed BEFORE the outermost ">>",
-        // not inside the /DR nested dict.
-        int outerClose = result.LastIndexOf(">>", StringComparison.Ordinal);
-        int bazPos = result.IndexOf("/Baz 99", StringComparison.Ordinal);
-        bazPos.ShouldBeLessThan(outerClose);
-        result.ShouldContain("/Helv 6 0 R");
-    }
-
-    [Fact(DisplayName = "FindOutermostDictClose returns the top-level >> in a nested-dict source")]
-    public void FindOutermostDictClose_NestedDict_ReturnsTopLevelClose()
-    {
-        // Source: << /Foo 1 /DR << /Font << /F 0 R >> >> >>
-        // Properly balanced: three "<<" open and three ">>" close.
-        // The outermost ">>" (depth 1 → 0) is the very last one in the string.
-        string source = "<< /Foo 1 /DR << /Font << /F 0 R >> >> >>";
-        int result = PdfStructureParser.FindOutermostDictClose(source);
-
-        result.ShouldBeGreaterThan(-1);
-        // The top-level close is the last ">>" (index of the first '>' character).
-        // In the source above, the final ">>" starts at position source.Length - 2.
-        result.ShouldBe(source.Length - 2);
-    }
-
-    [Fact(DisplayName = "RemoveKeyFromDict with CRLF source removes the correct line")]
-    public void RemoveKeyFromDict_CrlfSource_RemovesCorrectLine()
-    {
-        string obj = "5 0 obj\r\n<< /Foo 1\r\n   /Bar 2\r\n   /Baz 3\r\n>>\r\nendobj\r\n";
-
-        string result = PdfStructureParser.RemoveKeyFromDict(obj, "/Bar");
-
-        result.ShouldNotContain("/Bar 2");
-        result.ShouldContain("/Foo 1");
-        result.ShouldContain("/Baz 3");
+        result.ShouldBe("5 0 obj\r\n<< /Foo 1\r\n   \r\n   /Baz 3\r\n>>\r\nendobj\r\n");
     }
 
     // ── Round-trip with PDF/A-3b labelled input ──────────────────────────────

@@ -1,11 +1,9 @@
 using System.IO.Compression;
-using System.Reflection;
 using System.Text;
-using Microsoft.Extensions.Logging;
 using Shouldly;
-using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Model;
 using SimpleSign.TestHelpers;
+using SimpleSign.PAdES.Tests.Pdf.Parity;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Pdf.Model;
@@ -271,63 +269,38 @@ public sealed class PdfFiltersTests
     [InlineData("AHx")]
     public void IsSupported_SupportedFilter_ReturnsTrue(string filter) => PdfFilters.IsSupported(filter).ShouldBeTrue();
 
-    // ── Parity with the old reader ──────────────────────────────────────────────
-
-    private delegate byte[] OldInflate(ReadOnlySpan<byte> data, ILogger? logger);
+    // ── Every Flate stream of the integration fixtures (it was the old reader's inflate, before it was removed) ──
 
     [Fact]
-    public void Inflate_EveryFlateStreamOfIntegrationFixtures_MatchesOldReaderInflate()
+    public void Inflate_EveryFlateStreamOfIntegrationFixtures_IsItsSnapshot()
     {
-        OldInflate old = typeof(PdfStructureReader)
-            .GetMethod("InflateZlib", BindingFlags.NonPublic | BindingFlags.Static)
-            .ShouldNotBeNull()
-            .CreateDelegate<OldInflate>();
-
         string fixtures = RepositoryPaths.Get("tests", "integration", "SimpleSign.Integration.Tests", "Fixtures");
         int compared = 0;
         int files = 0;
-        var notZlib = new SortedSet<string>(StringComparer.Ordinal);
         foreach (string path in Directory.EnumerateFiles(fixtures, "*.pdf", SearchOption.AllDirectories))
         {
             files++;
             byte[] pdf = File.ReadAllBytes(path);
             foreach ((int offset, byte[] raw) in FlateStreams(pdf))
             {
-                string where = $"{Path.GetFileName(path)} @ {offset}";
-                byte[]? expected = null;
-                bool oldThrew = false;
+                string result;
                 try
                 {
-                    expected = old(raw, null);
+                    result = Snapshot.Hash(PdfFilters.Inflate(raw));
                 }
-                catch (InvalidDataException)
+                catch (PdfFilterException ex)
                 {
-                    oldThrew = true;
+                    // Not zlib (an encrypted stream), or broken: refused, with why.
+                    result = "error: " + ex.Message;
                 }
 
-                if (oldThrew)
-                {
-                    Should.Throw<PdfFilterException>(() => PdfFilters.Inflate(raw), where);
-                }
-                else if (raw.Length >= 2 && ((raw[0] & 0x0F) != 8 || ((raw[0] << 8) | raw[1]) % 31 != 0))
-                {
-                    // Not zlib (an encrypted stream): the old inflate skipped two bytes and returned whatever came out;
-                    // the header is checked now.
-                    Should.Throw<PdfFilterException>(() => PdfFilters.Inflate(raw), where).Message.ShouldContain("zlib header");
-                    notZlib.Add(Path.GetFileName(path));
-                }
-                else
-                {
-                    PdfFilters.Inflate(raw).ShouldBe(expected, where);
-                }
-
+                Snapshot.MatchKey("model/inflate.txt", $"{Path.GetFileName(path)} @ {offset}", Snapshot.OneLine(result));
                 compared++;
             }
         }
 
         files.ShouldBeGreaterThan(10);
         compared.ShouldBeGreaterThan(100);
-        notZlib.ShouldBe(["encrypted.pdf"]);
     }
 
     /// <summary>

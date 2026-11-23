@@ -4,8 +4,9 @@ using SimpleSign.TestHelpers;
 namespace SimpleSign.PAdES.Tests.Pdf.Parity;
 
 /// <summary>
-/// The documents the parity harness compares the readers on: every PDF committed under <c>tests/integration</c>, and
-/// documents generated in memory with each kind of cross-reference and the usual breakages.
+/// The documents the model's facts are snapshotted on (ADR 0032): every PDF committed under <c>tests/integration</c>,
+/// and documents generated in memory with each kind of cross-reference and the usual breakages (each one was built to
+/// show a difference from the reader before the model, catalogued then and now in the ADR).
 /// </summary>
 internal static class ParityCorpus
 {
@@ -40,38 +41,6 @@ internal static class ParityCorpus
         .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
         .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
         .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>");
-
-    /// <summary>
-    /// The catalogued differences each generated document must show (by rule name); a document not listed must show none.
-    /// </summary>
-    public static IReadOnlyDictionary<string, string[]> ExpectedRules { get; } = new Dictionary<string, string[]>(StringComparer.Ordinal)
-    {
-        ["hybrid"] = ["HybridXRefStm"],
-        ["generation-2"] = ["GenerationAboveZero"],
-        ["free-in-update"] = ["FreeEntryHonoured"],
-        ["subsection-shifted"] = ["LegacyMisreadsTable"],
-        ["lone-cr-table"] = ["LegacyMisreadsTable"],
-        ["blank-line-before-trailer"] = ["LegacyMisreadsTable"],
-        ["no-startxref"] = ["RebuiltWhereLegacyFailed"],
-        ["stray-object-after-eof"] = ["LookupByXref"],
-        ["nested-pages"] = ["NestedPageTree"],
-        ["signature-field-in-objstm"] = ["FieldInObjectStream"],
-        ["signature-prop-build-name"] = ["LegacyKeyAnywhereInDictionary"],
-        ["signature-dictionary-rewritten"] = ["SignatureDictionaryReportedOnce"],
-        ["dss-indirect-arrays"] = ["DssSummaryFromTheModel", "LegacyDssArrayInlineWithSpace", "LegacyVriInlineOnly"],
-        ["dss-inline-vri-entry"] = ["LegacyVriInlineOnly"],
-        ["dss-catalog-in-objstm"] = ["DssLookupByText", "FieldInObjectStream"],
-        ["pdfa-xmp-outside-catalog"] = ["PdfAFromCatalogMetadata"],
-        ["encrypt-in-content"] = ["EncryptFromTrailer"],
-        ["docmdp-without-space"] = ["DocMdpFromStructure"],
-        ["changes-page-rewritten"] = ["ComparedSemantically"],
-        ["changes-utf16-field-added"] = ["FieldNameDecoding"],
-        ["text-inline-descendant-font"] = ["LegacyInlineDescendantFont"],
-        ["text-encrypted"] = ["EncryptedContentUnreadable"],
-        ["attachment-predictor"] = ["EmbeddedFileDecodeParms"],
-        ["attachment-pdfdoc-name"] = ["PdfDocEncodingText"],
-        ["attachment-tree-loop"] = ["NameTreeNodeReadOnce"],
-    };
 
     /// <summary>A document whose catalog's /Names /EmbeddedFiles is object 5.</summary>
     private static PdfFileBuilder Attachments() => new PdfFileBuilder()

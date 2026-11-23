@@ -10,14 +10,14 @@ using SimpleSign.Core.Constants;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Extensions;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Internal;
 using SimpleSign.Core.Revocation;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Model;
 using SimpleSign.PAdES.Pdf.Writing;
-using SimpleSign.PAdES.Internal;
-using SimpleSign.Core.Internal;
 
 namespace SimpleSign.PAdES.Signing;
 
@@ -482,13 +482,6 @@ public sealed class LtvEmbedder : ILtvEmbedder
         IReadOnlyList<PdfDssArtifact> artifacts,
         TimeProvider? timeProvider = null)
     {
-        if (PdfWriterSwitch.UseLegacy)
-        {
-            return LtvEmbedderLegacy.AppendDssDictionary(
-                signedPdf, crls, ocsps, certs, LtvEmbedderLegacy.ExtractSignatureContentHashes(signedPdf),
-                Validation.DssExtractor.ParseExistingDss(signedPdf), timestampTokenBytes, artifacts, timeProvider);
-        }
-
         var document = PdfDocument.Open(signedPdf);
         var view = document.View();
         if (document.RootId is not { } rootId || document.GetObject(rootId) is not { Value: PdfDictionary } catalogObject)

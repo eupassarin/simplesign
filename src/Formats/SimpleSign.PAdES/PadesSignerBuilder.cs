@@ -10,12 +10,12 @@ using SimpleSign.Core.Policies;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.PAdES.Inspection;
-using SimpleSign.PAdES.Signing;
-using SimpleSign.PAdES.Validation;
+using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Enums;
 using SimpleSign.PAdES.Pdf.Exceptions;
-using SimpleSign.PAdES.Internal;
+using SimpleSign.PAdES.Signing;
+using SimpleSign.PAdES.Validation;
 
 namespace SimpleSign.PAdES;
 

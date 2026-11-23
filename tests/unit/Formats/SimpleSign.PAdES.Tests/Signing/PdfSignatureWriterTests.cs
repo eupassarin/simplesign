@@ -465,4 +465,26 @@ public sealed class PdfSignatureWriterTests
     {
         public override bool CanSeek => false;
     }
+
+    [Theory]
+    [InlineData("<< /FT /Sig /Subtype /Widget /T (S) /DA (/Helv 0 Tf 0 g /Helv 0 Tf 0 g /Helv 0 Tf 0 g /Helv 0 Tf 0 g /Helv 0 Tf 0 g) /Rect [10 10 200 60] >>", null, 1)]
+    [InlineData("<< /FT /Sig /Subtype /Widget /T (S) /Rect [0 0 0 0] >>", null, 0)]
+    [InlineData("<< /FT /Sig /Subtype /Widget /T (S) /Rect [10 10 200 60] >>", "<< /FT /Sig /Subtype /Widget /T (T) /Rect [10 70 200 120] >>", 2)]
+    [InlineData("<< /FT /Sig /Subtype /Widget /T (S) /MK << /Rect [10 10 200 60] >> >>", null, 0)]
+    public void CountVisibleSignatures_SignatureWidgets_CountsThoseWithARectangle(string first, string? second, int expected)
+    {
+        var builder = new PdfFileBuilder()
+            .Object(1, $"<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R{(second is null ? "" : " 6 0 R")}] >> >>")
+            .Object(2, "<< /Type /Pages /Kids [] /Count 0 >>")
+            .Object(5, first);
+        if (second is not null)
+        {
+            builder.Object(6, second);
+        }
+
+        var document = SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(builder.EndRevision().ToArray());
+
+        PdfSignatureWriter.CountVisibleSignatures(document, document.View()).ShouldBe(expected);
+    }
 }
+

@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Crypto;
 using SimpleSign.PAdES.Internal;
-using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Enums;
+using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Model;
 using SimpleSign.PAdES.Pdf.Writing;
 
@@ -59,7 +59,7 @@ public static class DocTimeStampWriter
     /// <remarks>
     /// The document is read through the PDF object model (ADR 0032): the catalog, the AcroForm and the first page are
     /// the objects the cross-reference lists, wherever they are (an object stream included). The update is written as
-    /// <see cref="DocTimeStampWriterLegacy"/> wrote it: the signature dictionary, the field, the AcroForm when it is an
+    /// the writer has always written it: the signature dictionary, the field, the AcroForm when it is an
     /// object of its own (rebuilt with its <c>/Fields</c> and the new field), the catalog when the AcroForm changes
     /// (an inline AcroForm is kept inline), and the first page with the field in its <c>/Annots</c>.
     /// </remarks>
@@ -77,11 +77,6 @@ public static class DocTimeStampWriter
         ArgumentNullException.ThrowIfNull(signedPdf);
         ArgumentException.ThrowIfNullOrWhiteSpace(tsaUrl);
         ArgumentNullException.ThrowIfNull(httpClient);
-        if (PdfWriterSwitch.UseLegacy)
-        {
-            return await DocTimeStampWriterLegacy.AppendDocTimeStampAsync(
-                signedPdf, tsaUrl, httpClient, logger, hashAlgorithm, pdfALevel, tsaFactory, timeProvider, cancellationToken).ConfigureAwait(false);
-        }
 
         var hashAlg = hashAlgorithm ?? HashAlgorithmName.SHA256;
         int contentsReservedBytes = DefaultTimestampReservedBytes;
