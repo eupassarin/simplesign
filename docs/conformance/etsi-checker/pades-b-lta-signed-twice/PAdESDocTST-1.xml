@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?><xcc:ConformanceReports xmlns:xcc="http://www.etsi.org/xxx/conformanceChecker">
+   <Contents>
+      <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Contents: 1. Instances found: 1</CheckSuccess>
+   </Contents>
+   <SubFilter>
+      <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child SubFilter: 0..1. Instances found: 1</CheckSuccess>
+      <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: ETSI.RFC3161 Found value: ETSI.RFC3161</CheckSuccess>
+   </SubFilter>
+   <Type>
+      <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child Type: 0..1. Instances found: 1</CheckSuccess>
+      <CheckSuccess check="CheckIfValueIsEqualTo" testedBy="Tool">Reference value: DocTimeStamp Found value: DocTimeStamp</CheckSuccess>
+   </Type>
+   <CheckSuccess check="InstancesNumber" testedBy="Tool"> Instances specified for child V: 0..1. Instances found: 0</CheckSuccess>
+   <Value field="sid.Issuer">O=SimpleSign Tests,CN=SimpleSign Synthetic Intermediate CA</Value>
+   <Value field="sid.SerialNumber">124892183201622030097034710631094011806</Value>
+   <Value field="genTime">Mon Nov 23 12:58:12 UTC 2026</Value>
+   <Value field="ordering">false</Value>
+   <Value field="policy">1.2.3.4</Value>
+   <Value field="serialNumber">1</Value>
+   <Value field="nonce">23896074614940075495781385884521898276</Value>
+   <X509Certificate index="1">
+      <Value field="Issuer">CN=SimpleSign Synthetic Root CA, O=SimpleSign Tests</Value>
+      <Value field="SerialNumber">164098806040052484591494843153036097472</Value>
+      <Value field="Subject">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+      <Value field="NotBefore">Sun Nov 22 12:55:57 UTC 2026</Value>
+      <Value field="NotAfter">Sat Nov 22 12:55:57 UTC 2031</Value>
+   </X509Certificate>
+   <X509Certificate index="2">
+      <Value field="Issuer">CN=SimpleSign Synthetic Intermediate CA, O=SimpleSign Tests</Value>
+      <Value field="SerialNumber">124892183201622030097034710631094011806</Value>
+      <Value field="Subject">CN=SimpleSign Synthetic TSA, O=SimpleSign Tests</Value>
+      <Value field="NotBefore">Sun Nov 22 12:56:57 UTC 2026</Value>
+      <Value field="NotAfter">Wed Nov 22 12:56:57 UTC 2028</Value>
+   </X509Certificate>
+   <CheckSuccess check="CheckIfMssgImpIsAsInSpec" testedBy="Tool">Both the message imprint found in the time-stamp token and the computed one by the tool, have the same value:  2a639e7919e15f91525fe3301ddd5674c124e6f1c7e0ec5c4ed7fadbe855d81c</CheckSuccess>
+</xcc:ConformanceReports>

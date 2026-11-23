@@ -2,8 +2,10 @@
 
 **Status:** Accepted (2026-11-23). The migration's last step removed the scanning code, the legacy writers and their
 `AppContext` switch. It was taken at the maintainer's decision before all the conditions of point 7 held. On the final
-code the Interop (62 tests: qpdf, pyHanko, OpenSSL, xmlsec1) and VeraPdf (41) categories ran green; still owed, now on
-the model alone: the EtsiChecker category, the weekly external corpus green twice, and a preview release.
+code the Interop (62 tests: qpdf, pyHanko, OpenSSL, xmlsec1) and VeraPdf (41) categories ran green, and the ETSI
+Signatures Conformance Checker passed all 17 PAdES samples (four new multi-signature ones among them); its one failure,
+`cades-b-lta-cosigned`, is CAdES, which this migration did not change. Still owed, on the model alone: the weekly
+external corpus green twice, and a preview release.
 
 **Context:**
 ADR 0005 chose to write our own PDF code, and that stays. How that code works is what this ADR changes. `SimpleSign.PAdES`
