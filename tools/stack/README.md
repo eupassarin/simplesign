@@ -3,10 +3,10 @@
 One command brings up what the TestBench needs to test with a real PKI, a token and an
 independent validator:
 
-1. the **SimpleSign Sandbox** (Docker): the test PKI, CRLs over HTTP/HTTPS/LDAP, OCSP, TSA, CSC;
+1. the **SimpleSign Sandbox** (Docker or Podman): the test PKI, CRLs over HTTP/HTTPS/LDAP, OCSP, TSA, CSC;
 2. a **SoftHSM token** on this machine, holding a key pair for each of the Sandbox's signing
    certificates;
-3. the **EU DSS** validation service (Docker, [`tools/dss`](../dss/README.md)), trusting the Sandbox's
+3. the **EU DSS** validation service (Docker or Podman, [`tools/dss`](../dss/README.md)), trusting the Sandbox's
    PKI through its trusted list.
 
 ```bash
@@ -21,7 +21,8 @@ In the TestBench:
   with its Sandbox id (`signer`, `revoked`, `expired`, `no-nonrepudiation`…);
 - **DSS** in the top bar: turn it on, address `http://localhost:8080`.
 
-Requirements: Docker, the .NET SDK, and on the host `softhsm2-util`, `pkcs11-tool`, OpenSSL 3+, `curl`, `jq`
+Requirements: Docker (or Podman Desktop on Windows; see below), the .NET SDK, and on the host `softhsm2-util`,
+`pkcs11-tool`, OpenSSL 3+, `curl`, `jq`
 (macOS: `brew install softhsm opensc openssl@3 jq`).
 
 ## Windows (PowerShell)
@@ -42,9 +43,24 @@ pwsh -File tools/stack/testbench.ps1
 pwsh -File tools/stack/down.ps1
 ```
 
+Docker is the default. Select Podman for both start and stop with `-ContainerEngine Podman`, or set
+`$env:SIMPLESIGN_CONTAINER_ENGINE = 'Podman'` for the current PowerShell session:
+
+```powershell
+pwsh -File tools/stack/up.ps1 -ContainerEngine Podman
+pwsh -File tools/stack/down.ps1 -ContainerEngine Podman
+```
+
+The Sandbox ports remain published on `127.0.0.1` only. Do not remove the loopback binding: the Sandbox admin API
+can return private keys.
+
 Requirements:
 
-- Docker Desktop with Linux containers.
+- Docker Desktop with Linux containers, or Podman Desktop with a running WSL Podman machine and a Compose provider
+  (`podman compose version`).
+- For Podman Desktop, the Windows OpenSSH Client (`ssh.exe`) must be on `PATH`. If published ports are not reachable
+  from Windows, `up.ps1` automatically opens SSH tunnels through the Podman machine for the Sandbox and DSS, bound
+  only to `127.0.0.1`; `down.ps1` stops those tunnels. The default Podman machine SSH connection must be available.
 - The .NET SDK.
 - PowerShell 7.2 or later (`winget install Microsoft.PowerShell`). The built-in Windows PowerShell 5.1 does not run
   them. `pwsh -File` also avoids the execution-policy prompt.
@@ -64,7 +80,7 @@ What is tested:
   each script sees the other's token as current.
 - **On Windows, in CI (`windows-scripts` job):** the token step (`softhsm-provision.ps1`) and a lint of every script.
   GitHub's Windows runners cannot run Linux containers, so `up.ps1`, `down.ps1` and `pkcs11.ps1` have not run against
-  Docker Desktop on Windows.
+  Docker Desktop or Podman Desktop on Windows.
 
 ## Why the token is not in a container
 
@@ -150,6 +166,7 @@ DSS container whenever the root changed.
 | `SANDBOX_HTTPS_PORT` / `SANDBOX_LDAP_PORT`   | port + 1 / + 2     | CRLs over HTTPS / LDAP                                  |
 | `DSS_PORT`                                   | `8080`             | DSS on the host                                         |
 | `COMPOSE_PROJECT_NAME`                       | `simplesign-stack` | to run a second stack next to the first                 |
+| `SIMPLESIGN_CONTAINER_ENGINE` / `-ContainerEngine` | `Docker` | container engine for the PowerShell scripts |
 
 The DSS variables of [`tools/dss/docker-compose.yml`](../dss/docker-compose.yml) (`DSS_LOAD_EU_TRUSTED_LISTS`,
 `DSS_SANDBOX_TRUST`…) apply here too: the `dss` service extends it.

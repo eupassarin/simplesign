@@ -1,6 +1,7 @@
 # The test stack for the TestBench: the SimpleSign Sandbox and the EU DSS validation service.
-# Start it with tools/stack/up.sh, which also fills a local SoftHSM token with the Sandbox's
-# certificates between the two (see tools/stack/README.md). By hand:
+# Start it with tools/stack/up.sh (Docker) or tools/stack/up.ps1 -ContainerEngine Podman (Podman Desktop);
+# both scripts also fill a local SoftHSM token with the Sandbox's certificates (see tools/stack/README.md).
+# By hand:
 #   docker compose -f tools/stack/docker-compose.yml up -d --build --wait sandbox
 #   tools/stack/softhsm-provision.sh
 #   docker compose -f tools/stack/docker-compose.yml up -d --wait dss
