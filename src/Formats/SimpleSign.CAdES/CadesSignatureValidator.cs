@@ -613,7 +613,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         }
         else if (cmsData.ArchiveTimestampToken is not null)
         {
-            if (cmsBytes is not null && content is not null && !isCounterSignature)
+            bool hasArchiveV3 = cmsData.UnsignedAttributes?.ContainsKey(Oids.ArchiveTimeStampV3) == true;
+            if (cmsBytes is not null && content is not null && !isCounterSignature && hasArchiveV3)
             {
                 archiveTsValid = ValidateArchiveTimestamp(cmsBytes, content, cmsData, signerIndex, warnings);
                 archiveToken = cmsData.ArchiveTimestampToken;
@@ -621,7 +622,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             }
             else
             {
-                warnings.Add("The archive timestamp was not validated (it needs the signed content and is not checked on a countersignature).");
+                warnings.Add("The archive timestamp was not validated (it needs the signed content; an archive-time-stamp v2 is checked " +
+                    "for the first signer only, and none is checked on a countersignature).");
             }
         }
 

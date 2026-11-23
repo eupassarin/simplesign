@@ -270,6 +270,23 @@ public sealed class CadesMultiSignerTests : IDisposable
             Assert.True(signer.Result.HasValidArchiveTimestamp == true, string.Join("; ", signer.Result.Warnings)));
     }
 
+    [Fact]
+    public async Task CoSign_CoSignerWithArchiveTimestampV2_IsNotCheckedAsAV3()
+    {
+        using var pki = new OfflinePki();
+        byte[] first = await CadesSigner.Document(_data).WithCertificate(pki.Pki.Leaf, pki.Chain)
+            .WithContentType(CadesContentType.Enveloped).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("T")).SignAsync();
+
+        byte[] cosigned = await CadesSigner.CoSign(first).WithCertificate(pki.Ecdsa, pki.Chain)
+            .WithHttpClientProvider(pki.Http).WithLevel(pki.Level("T")).WithExtendedValidationData(CadesExtendedForm.Archive).SignAsync();
+
+        var report = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false })
+            .ValidateAll(cosigned, trustAnchors: [pki.Pki.RootCa]);
+        var coSigner = report.Signers[1].Result;
+        Assert.True(coSigner.IsValid, string.Join("; ", coSigner.Errors));
+        Assert.Null(coSigner.HasValidArchiveTimestamp);
+    }
+
     /// <summary>The encoded SignerInfos of a SignedData, in order.</summary>
     private static List<byte[]> SignerInfos(byte[] cms)
     {
