@@ -435,6 +435,47 @@ public sealed partial class PadesSignerBuilder
     }
 
     /// <summary>
+    /// Signs a field of the document's signature envelope (ADR 0033, <see cref="Envelope.PdfEnvelope"/>), as
+    /// <see cref="WithExistingField"/> does, after checking, before anything is signed:
+    /// <list type="bullet">
+    /// <item>the field and the turn: <see cref="SigningErrorReason.EnvelopeFieldNotFound"/>,
+    /// <see cref="SigningErrorReason.EnvelopeFieldAlreadySigned"/>, <see cref="SigningErrorReason.NotYourTurn"/>,
+    /// <see cref="SigningErrorReason.EnvelopeTampered"/>;</item>
+    /// <item>the signer: every identifier the manifest gives them, read from the certificate by the profile's identity
+    /// readers (<see cref="SigningErrorReason.UnexpectedSigner"/>);</item>
+    /// <item>the field's seed values and the level, against how this builder signs (<see cref="SigningErrorReason.TimestampRequired"/>,
+    /// <see cref="SigningErrorReason.SeedValueViolated"/>, <see cref="SigningErrorReason.LevelNotMet"/>): the level is not
+    /// applied for you.</item>
+    /// </list>
+    /// The signer's role in the manifest is claimed (signer-attributes-v2) unless roles were set before this call; a
+    /// later <see cref="WithSignerRoles(IReadOnlyList{string})"/> replaces it.
+    /// </summary>
+    /// <param name="fieldName">The field, such as <c>SimpleSign_2</c>.</param>
+    /// <returns>A new builder that signs that field.</returns>
+    public PadesSignerBuilder WithEnvelopeField(string fieldName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        var options = _options with { Field = CloneField(existingFieldName: fieldName), EnvelopeField = fieldName };
+        if (options.SignerRoles.Count == 0
+            && Envelope.PdfEnvelopeReader.Read(InputBytes())?.Fields.FirstOrDefault(f => f.Name == fieldName)?.Signer?.Role is { Length: > 0 } role)
+        {
+            options = options with { SignerRoles = PadesSigningInputs.SignerRoles([role]) };
+        }
+
+        return With(options);
+    }
+
+    /// <summary>The input document's bytes.</summary>
+    private byte[] InputBytes()
+    {
+        _inputPdf.Seek(0, SeekOrigin.Begin);
+        using var copy = new MemoryStream();
+        _inputPdf.CopyTo(copy);
+        _inputPdf.Seek(0, SeekOrigin.Begin);
+        return copy.ToArray();
+    }
+
+    /// <summary>
     /// Enables PDF/A conformance checking before signing. If the input document is
     /// a PDF/A file and the signature options are incompatible with that level,
     /// a <see cref="SigningException"/> is thrown during signing.
@@ -646,6 +687,14 @@ public sealed partial class PadesSignerBuilder
         var effectiveHash = resolvedAlgorithm.HashAlgorithm;
         SignerAcceptance.EnsureHashAllowed(effectiveHash, _options.SigningPolicy, warnings, logger);
         var sigOid = resolvedAlgorithm.SignatureAlgorithmOid;
+        if (_options.EnvelopeField is { } envelopeField)
+        {
+            Envelope.EnvelopeSigningGuard.Ensure(
+                InputBytes(), envelopeField, certificate, _options.CountryExtensions.SelectMany(e => e.SignerIdentityReaders),
+                new Envelope.EnvelopeSignatureSettings(
+                    _options.Profile.Level, _options.Field.SubFilter, _options.SignaturePolicy?.Oid, _options.Field.CertificationLevel, effectiveHash));
+        }
+
         logger.AlgorithmResolved(opId, effectiveHash.Name ?? "?", sigOid, _options.Profile.Level.ToString(), _options.Field.SubFilter.ToString());
         logger.FieldConfigured(opId, _options.Field.ExistingFieldName ?? _options.Field.FieldName,
             _options.Field.ExistingFieldName is not null, _options.Field.Appearance is not null,

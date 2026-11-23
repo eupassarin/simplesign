@@ -62,6 +62,9 @@ internal sealed record PadesSigningOptions(
     /// <summary>The roles the signer claims, written as signer-attributes-v2; empty: none.</summary>
     public IReadOnlyList<string> SignerRoles { get; init; } = [];
 
+    /// <summary>The envelope field signed (ADR 0033), checked before signing; null when not signing an envelope.</summary>
+    public string? EnvelopeField { get; init; }
+
     /// <summary>Entries to set in the document information dictionary in the signing revision.</summary>
     public IReadOnlyDictionary<string, string>? DocumentInfo { get; init; }
 
