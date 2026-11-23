@@ -31,6 +31,53 @@ internal static class PdfText
         return DecodePdfDocEncoding(raw);
     }
 
+    /// <summary>
+    /// Reads a PDF date (ISO 32000-1 §7.9.4), <c>D:YYYYMMDDHHmmSS</c> followed by an optional offset (<c>+HH'mm'</c>,
+    /// <c>-HH'mm'</c>, <c>Z</c>): the seconds must be there; an offset that cannot be read is taken as UTC.
+    /// </summary>
+    /// <param name="text">The date, its <c>D:</c> prefix optional.</param>
+    /// <returns>The date; null when it cannot be read.</returns>
+    public static DateTimeOffset? ParseDate(string text)
+    {
+        if (text.StartsWith("D:", StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[2..];
+        }
+
+        if (text.Length < 14
+            || !int.TryParse(text[0..4], out int year)
+            || !int.TryParse(text[4..6], out int month)
+            || !int.TryParse(text[6..8], out int day)
+            || !int.TryParse(text[8..10], out int hour)
+            || !int.TryParse(text[10..12], out int minute)
+            || !int.TryParse(text[12..14], out int second))
+        {
+            return null;
+        }
+
+        var offset = TimeSpan.Zero;
+        if (text.Length >= 20
+            && text[14] is '+' or '-'
+            && int.TryParse(text[15..17], out int offsetHours)
+            && int.TryParse(text[18..20], out int offsetMinutes))
+        {
+            offset = new TimeSpan(offsetHours, offsetMinutes, 0);
+            if (text[14] == '-')
+            {
+                offset = -offset;
+            }
+        }
+
+        try
+        {
+            return new DateTimeOffset(year, month, day, hour, minute, second, offset);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Decodes UTF-16 bytes, dropping a trailing odd byte.</summary>
     private static string DecodeUtf16(ReadOnlySpan<byte> payload, Encoding encoding)
     {

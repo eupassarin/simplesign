@@ -55,7 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `LevelNotMet`, `EnvelopeTampered`. Nothing raises them yet.
 - **`PdfEmbeddedFiles.Read`** (`SimpleSign.PAdES`): the files embedded in a PDF (the catalog's `/Names /EmbeddedFiles`
   name tree), decoded. A file larger than 64 MB decoded, more than 1024 files, an unsupported filter or an encrypted
-  document is refused.
+  document is refused. Each `PdfEmbeddedFile` also says what the document declares about it: `IsAssociated` (its file
+  specification is in the catalog's `/AF`, ISO 32000-2 §14.13, as PDF/A-3 asks), `Relationship` (`/AFRelationship`),
+  `Description` (`/Desc`), `MediaType` (the stream's `/Subtype`, `application/json` for `/application#2Fjson`), and
+  `Size`, `CreationDate` and `ModDate` from `/Params`.
+- **ADR 0033, a signature envelope inside the PDF** (proposed): the signers of a document, their order, identities and
+  levels, carried by the PDF itself — empty signature fields with seed values and locks, and the associated file
+  `simplesign-envelope.json` — for signing in turn with no server. This release has its format and the reading of
+  associated files; the API follows.
 
 ### Changed
 

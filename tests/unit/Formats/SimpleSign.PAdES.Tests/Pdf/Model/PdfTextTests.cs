@@ -35,4 +35,20 @@ public sealed class PdfTextTests
 
     [Fact]
     public void Decode_Empty_IsEmpty() => PdfText.Decode([]).ShouldBeEmpty();
+
+    [Theory]
+    [InlineData("D:20261123120000-03'00'", -180)]
+    [InlineData("D:20261123120000+05'30'", 330)]
+    [InlineData("D:20261123120000Z", 0)]
+    [InlineData("20261123120000", 0)]
+    [InlineData("D:20261123120000+05", 0)]
+    public void ParseDate_ValidDate_ReadsItWithItsOffset(string text, int offsetMinutes) =>
+        PdfText.ParseDate(text).ShouldBe(new DateTimeOffset(2026, 11, 23, 12, 0, 0, TimeSpan.FromMinutes(offsetMinutes)));
+
+    [Theory]
+    [InlineData("D:2026")]
+    [InlineData("D:2026112312000x")]
+    [InlineData("D:20261399000000")]
+    [InlineData("yesterday")]
+    public void ParseDate_InvalidDate_ReturnsNull(string text) => PdfText.ParseDate(text).ShouldBeNull();
 }
