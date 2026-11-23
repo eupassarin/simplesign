@@ -175,16 +175,29 @@ public sealed class TimestampClient : ITimestampClient
 
     /// <summary>
     /// Embeds a timestamp token in the CMS as an unsigned attribute
-    /// <c>id-aa-signatureTimeStampToken</c> (RFC 3161 / PAdES).
+    /// <c>id-aa-signatureTimeStampToken</c> (RFC 3161 / PAdES) of its first SignerInfo. The other SignerInfos
+    /// (co-signers) are kept as they are, in their order.
     /// </summary>
-    public static byte[] EmbedTimestampInCms(byte[] cms, byte[] timestampToken)
+    public static byte[] EmbedTimestampInCms(byte[] cms, byte[] timestampToken) =>
+        EmbedTimestampInCms(cms, timestampToken, signerIndex: 0);
+
+    /// <summary>
+    /// Embeds a timestamp token in the CMS as an unsigned attribute <c>id-aa-signatureTimeStampToken</c>
+    /// (RFC 3161 / CAdES) of SignerInfo <paramref name="signerIndex"/>. The other SignerInfos and the rest of the
+    /// SignedData are kept as they are, the SignerInfos in their order.
+    /// </summary>
+    /// <param name="cms">DER-encoded CMS SignedData.</param>
+    /// <param name="timestampToken">The token, over that SignerInfo's signature value.</param>
+    /// <param name="signerIndex">The SignerInfo, in SignerInfo order (<see cref="CmsParser.ParseAll"/>).</param>
+    /// <returns>The rewritten CMS.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The SignedData has no SignerInfo <paramref name="signerIndex"/>.</exception>
+    public static byte[] EmbedTimestampInCms(byte[] cms, byte[] timestampToken, int signerIndex)
     {
         ArgumentNullException.ThrowIfNull(cms);
         ArgumentNullException.ThrowIfNull(timestampToken);
 
-        // Strategy: locate the end of the SignerInfo and insert the unauthenticated attribute
-        // This implementation appends the attribute to the existing SignerInfo
-        return AppendUnsignedAttribute(cms, Oids.SignatureTimestampToken, timestampToken);
+        return CmsSignatureBuilder.RewriteSignerInfo(cms, signerIndex,
+            signerInfo => AddUnsignedAttrToSignerInfo(signerInfo, Oids.SignatureTimestampToken, timestampToken));
     }
 
     /// <summary>
@@ -571,90 +584,6 @@ public sealed class TimestampClient : ITimestampClient
     #endregion
 
     #region Timestamp embedding in CMS
-
-    private static byte[] AppendUnsignedAttribute(byte[] cms, string attrOid, byte[] attrValue)
-    {
-        // Locates the end of the SignerInfo to insert the unauthenticated attribute.
-        // Approach: simple parse of the CMS DER to find the last SignerInfo
-        // and add the unauthenticatedAttrs [1] IMPLICIT.
-        //
-        // For this version, we use the full-rewrite approach via AsnReader/Writer.
-        var reader = new AsnReader(cms, AsnEncodingRules.DER);
-        return RewriteCmsWithTimestamp(reader, attrOid, attrValue);
-    }
-
-    private static byte[] RewriteCmsWithTimestamp(AsnReader outerReader, string attrOid, byte[] attrValue)
-    {
-        // Reads ContentInfo
-        var contentInfoSeq = outerReader.ReadSequence();
-        string contentOid = contentInfoSeq.ReadObjectIdentifier();
-
-        // [0] EXPLICIT → SignedData SEQUENCE
-        var explicitWrapper = contentInfoSeq.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true));
-        var signedDataSeq = explicitWrapper.ReadSequence();
-
-        // Collect all fields from SignedData
-        int version = (int)signedDataSeq.ReadInteger();
-
-        // digestAlgorithms SET
-        byte[] digestAlgorithms = signedDataSeq.ReadEncodedValue().ToArray();
-
-        // encapContentInfo
-        byte[] encapContentInfo = signedDataSeq.ReadEncodedValue().ToArray();
-
-        // certificates [0] OPTIONAL
-        byte[]? certificates = null;
-        if (signedDataSeq.HasData && signedDataSeq.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 0, true))
-        {
-            certificates = signedDataSeq.ReadEncodedValue().ToArray();
-        }
-
-        // crls [1] OPTIONAL
-        byte[]? crls = null;
-        if (signedDataSeq.HasData && signedDataSeq.PeekTag() == new Asn1Tag(TagClass.ContextSpecific, 1, true))
-        {
-            crls = signedDataSeq.ReadEncodedValue().ToArray();
-        }
-
-        // signerInfos SET
-        var signerInfosTag = signedDataSeq.ReadSetOf();
-        byte[] signerInfoBytes = signerInfosTag.ReadEncodedValue().ToArray();
-
-        // Rewrite with the timestamp embedded in the signerInfo
-        byte[] newSignerInfo = AddUnsignedAttrToSignerInfo(signerInfoBytes, attrOid, attrValue);
-
-        // Rebuilds the SignedData
-        var writer = new AsnWriter(AsnEncodingRules.DER);
-        using (writer.PushSequence()) // ContentInfo
-        {
-            writer.WriteObjectIdentifier(contentOid);
-            using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)))
-            {
-                using (writer.PushSequence()) // SignedData
-                {
-                    writer.WriteInteger(version);
-                    writer.WriteEncodedValue(digestAlgorithms);
-                    writer.WriteEncodedValue(encapContentInfo);
-
-                    if (certificates is not null)
-                    {
-                        writer.WriteEncodedValue(certificates);
-                    }
-                    if (crls is not null)
-                    {
-                        writer.WriteEncodedValue(crls);
-                    }
-
-                    using (writer.PushSetOf()) // signerInfos
-                    {
-                        writer.WriteEncodedValue(newSignerInfo);
-                    }
-                }
-            }
-        }
-
-        return writer.Encode();
-    }
 
     private static byte[] AddUnsignedAttrToSignerInfo(byte[] signerInfoBytes, string attrOid, byte[] attrValue)
     {

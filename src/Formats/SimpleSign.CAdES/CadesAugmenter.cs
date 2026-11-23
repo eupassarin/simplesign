@@ -19,8 +19,10 @@ namespace SimpleSign.CAdES;
 public sealed record CadesAugmentationResult(byte[] Signature, AdesBaselineLevel InitialLevel, AdesBaselineLevel Level);
 
 /// <summary>
-/// Raises an existing CAdES signature (its first signer) to a higher baseline level (ETSI EN 319 122-1) with
-/// unsigned attributes and the SignedData's certificate and revocation sets only, so the signature value stays valid:
+/// Raises one signer of an existing CAdES signature (the first, or the one <see cref="ForSigner"/> names) to a higher
+/// baseline level (ETSI EN 319 122-1) with unsigned attributes of its SignerInfo and the SignedData's certificate and
+/// revocation sets only, so every signature value stays valid and the other SignerInfos (co-signers) are kept octet for
+/// octet, in their order:
 /// <list type="bullet">
 /// <item>B-B → B-T: a signature-time-stamp over the signature value;</item>
 /// <item>→ B-LT: the certificates and revocation data of the signer and of the time-stamp's TSA;</item>
@@ -40,6 +42,7 @@ public sealed class CadesAugmenter
     private IChainRevocationChecker? _chainRevocationChecker;
     private AdesBaselineLevel _target = AdesBaselineLevel.Archive;
     private bool _renew;
+    private int _signerIndex;
     private ILogger _logger = NullLogger.Instance;
 
     private CadesAugmenter(byte[] cms, byte[]? detachedContent)
@@ -56,6 +59,22 @@ public sealed class CadesAugmenter
     {
         ArgumentNullException.ThrowIfNull(cms);
         return new CadesAugmenter(cms, detachedContent);
+    }
+
+    /// <summary>
+    /// The signer to augment, when the signature has several (co-signers, <c>CadesSigner.CoSign</c>): its index in
+    /// SignerInfo order (<see cref="CmsParser.ParseAll"/>). Default: 0, the first. Each signer has its own time-stamps
+    /// (ETSI EN 319 122-1 §5.5.3: an archive-time-stamp-v3 is about one SignerInfo); to raise them all, augment each in
+    /// turn. The certificates and revocation data of B-LT go in the SignedData, which the signers share.
+    /// </summary>
+    /// <param name="signerIndex">The index of the SignerInfo.</param>
+    /// <returns>This augmenter.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="signerIndex"/> is negative.</exception>
+    public CadesAugmenter ForSigner(int signerIndex)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(signerIndex);
+        _signerIndex = signerIndex;
+        return this;
     }
 
     /// <summary>The TSA of the signature and archive time-stamps.</summary>
@@ -159,21 +178,42 @@ public sealed class CadesAugmenter
     /// <summary>The baseline level of a CAdES signature's first signer.</summary>
     /// <param name="cms">The signature.</param>
     /// <returns>Its level.</returns>
-    public static AdesBaselineLevel LevelOf(byte[] cms)
+    public static AdesBaselineLevel LevelOf(byte[] cms) => LevelOf(cms, signerIndex: 0);
+
+    /// <summary>
+    /// The baseline level of signer <paramref name="signerIndex"/> of a CAdES signature. B-LT and above build on B-T:
+    /// a signer without a signature-time-stamp is at B-B, whatever validation data the SignedData holds for its
+    /// co-signers.
+    /// </summary>
+    /// <param name="cms">The signature.</param>
+    /// <param name="signerIndex">The index of the signer, in SignerInfo order (<see cref="CmsParser.ParseAll"/>).</param>
+    /// <returns>Its level.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The signature has no signer <paramref name="signerIndex"/>.</exception>
+    public static AdesBaselineLevel LevelOf(byte[] cms, int signerIndex)
     {
         ArgumentNullException.ThrowIfNull(cms);
-        var parsed = CmsParser.Parse(cms);
+        var parsed = SignerAt(cms, signerIndex);
         bool Has(string oid) => parsed.UnsignedAttributes?.ContainsKey(oid) == true;
         return parsed.ArchiveTimestampToken is not null || Has(Oids.ArchiveTimeStampV3) || Has(Oids.ArchiveTimeStamp) ? AdesBaselineLevel.Archive
+            : parsed.SignatureTimestampToken is null ? AdesBaselineLevel.Basic
             : CadesValidationMaterial.Read(cms).HasRevocationSet || (Has(Oids.CertValues) && Has(Oids.RevocationValues)) ? AdesBaselineLevel.LongTerm
-            : parsed.SignatureTimestampToken is not null ? AdesBaselineLevel.Timestamped
-            : AdesBaselineLevel.Basic;
+            : AdesBaselineLevel.Timestamped;
+    }
+
+    /// <summary>Signer <paramref name="signerIndex"/> of <paramref name="cms"/>.</summary>
+    private static CmsSignedData SignerAt(byte[] cms, int signerIndex)
+    {
+        var signers = CmsParser.ParseAll(cms).Signers;
+        return signerIndex >= 0 && signerIndex < signers.Count
+            ? signers[signerIndex]
+            : throw new ArgumentOutOfRangeException(nameof(signerIndex), signerIndex, $"The signature has {signers.Count} signer(s).");
     }
 
     /// <summary>Adds what the target level needs.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The augmented signature and its levels.</returns>
     /// <exception cref="ArgumentException">B-LTA of a detached signature without its data.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The signature has no signer <see cref="ForSigner"/>.</exception>
     /// <exception cref="SigningException">
     /// <see cref="SigningErrorReason.LevelNotAchievable"/>: no TSA for a level that needs a time-stamp, or the
     /// revocation data of B-LT could not be collected.
@@ -184,16 +224,16 @@ public sealed class CadesAugmenter
     /// </exception>
     public async Task<CadesAugmentationResult> AugmentAsync(CancellationToken cancellationToken = default)
     {
-        var initial = LevelOf(_cms);
+        var initial = LevelOf(_cms, _signerIndex);
         var level = initial;
         byte[] cms = _cms;
-        var hash = HashOf(CmsParser.Parse(cms).DigestAlgorithmOid);
+        var hash = HashOf(SignerAt(cms, _signerIndex).DigestAlgorithmOid);
 
         if (_target >= AdesBaselineLevel.Timestamped && level < AdesBaselineLevel.Timestamped)
         {
-            byte[] signatureValue = TimestampClient.ExtractSignatureValue(cms);
+            byte[] signatureValue = CmsComposer.SignatureValue(cms, _signerIndex);
             byte[] token = await TimestampAsync(signatureValue, hash, cancellationToken).ConfigureAwait(false);
-            cms = TimestampClient.EmbedTimestampInCms(cms, token);
+            cms = TimestampClient.EmbedTimestampInCms(cms, token, _signerIndex);
             level = AdesBaselineLevel.Timestamped;
         }
 
@@ -213,7 +253,7 @@ public sealed class CadesAugmenter
             cms = await AddArchiveTimestampAsync(cms, hash, cancellationToken).ConfigureAwait(false);
         }
 
-        return new CadesAugmentationResult(cms, initial, LevelOf(cms));
+        return new CadesAugmentationResult(cms, initial, LevelOf(cms, _signerIndex));
     }
 
     private async Task<byte[]> TimestampAsync(byte[] data, HashAlgorithmName hash, CancellationToken cancellationToken)
@@ -237,7 +277,7 @@ public sealed class CadesAugmenter
     /// <summary>The certificates and revocation data of the signer and of the signature (or, for a renewal, archive) time-stamp's TSA.</summary>
     private async Task<byte[]> AddValidationDataAsync(byte[] cms, bool archive, CancellationToken cancellationToken)
     {
-        var parsed = CmsParser.Parse(cms);
+        var parsed = SignerAt(cms, _signerIndex);
         var signer = parsed.SignerCertificate ?? throw new SigningException("The signature has no signer certificate.", SigningErrorReason.LevelNotAchievable);
         var known = new List<X509Certificate2> { signer };
         known.AddRange(parsed.Certificates.Where(c => !c.RawData.AsSpan().SequenceEqual(signer.RawData)));
@@ -265,12 +305,12 @@ public sealed class CadesAugmenter
     {
         byte[] content = _detachedContent ?? CmsParser.Parse(cms).EncapsulatedContent
             ?? throw new ArgumentException("The signature is detached: give its data to reach B-LTA (the archive time-stamp covers it).");
-        byte[] hashIndex = CadesArchiveTimestampV3.CreateHashIndex(cms, hash);
-        byte[] input = CadesArchiveTimestampV3.CreateMessageImprintInput(cms, content, hash, hashIndex);
+        byte[] hashIndex = CadesArchiveTimestampV3.CreateHashIndex(cms, hash, _signerIndex);
+        byte[] input = CadesArchiveTimestampV3.CreateMessageImprintInput(cms, content, hash, hashIndex, _signerIndex);
         byte[] token = CadesArchiveTimestampV3.AddHashIndexToTimestampToken(await TimestampAsync(input, hash, cancellationToken).ConfigureAwait(false), hashIndex);
-        byte[] completed = CmsSignatureBuilder.AddUnsignedAttributes(cms, [CmsAttribute.Raw(Oids.ArchiveTimeStampV3, token)]);
+        byte[] completed = CmsSignatureBuilder.AddUnsignedAttributes(cms, [CmsAttribute.Raw(Oids.ArchiveTimeStampV3, token)], _signerIndex);
         var warnings = new List<string>();
-        return CadesArchiveTimestampV3.Validate(completed, content, warnings)
+        return CadesArchiveTimestampV3.Validate(completed, content, warnings, _signerIndex)
             ? completed
             : throw new SigningException($"The archive time-stamp did not validate: {string.Join(" ", warnings)}", SigningErrorReason.LevelNotAchievable);
     }
