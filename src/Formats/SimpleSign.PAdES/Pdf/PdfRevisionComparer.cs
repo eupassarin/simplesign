@@ -12,7 +12,7 @@ namespace SimpleSign.PAdES.Pdf;
 /// Read through the object model (ADR 0032): the signed revision is the document as the signature covers it (the bytes
 /// up to the end of its byte range, opened as a document of its own), the final one the whole document; objects are
 /// compared with <see cref="PdfObject.SemanticEquals"/>, so writing an object again with other white-space, or with
-/// its entries in another order, is not a change. The messages are those the scanning comparison before it gave.
+/// its entries in another order, is not a change.
 /// </remarks>
 internal static class PdfRevisionComparer
 {

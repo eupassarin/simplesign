@@ -44,8 +44,8 @@ internal sealed record PdfDecodeParams
 /// (ADR 0032), with no dependency on the model's own types.
 /// </para>
 /// <para>
-/// Every filter's output is held to <c>maxDecodedBytes</c> (<see cref="DefaultMaxDecodedBytes"/>, the limit
-/// the old reader has always had), and inflating stops as soon as it is passed: a decompression bomb costs
+/// Every filter's output is held to <c>maxDecodedBytes</c> (<see cref="DefaultMaxDecodedBytes"/>), and
+/// inflating stops as soon as it is passed: a decompression bomb costs
 /// at most that much memory. Corrupt data throws <see cref="PdfFilterException"/>; data that simply ends
 /// early (a truncated deflate stream, an <c>ASCII85Decode</c> stream without its <c>~&gt;</c>) gives what was
 /// decoded, as viewers do.

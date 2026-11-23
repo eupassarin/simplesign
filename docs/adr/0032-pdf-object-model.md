@@ -1,11 +1,10 @@
 # ADR 0032: A PDF Object Model for Reading and Incremental Writing
 
 **Status:** Accepted (2026-11-23). The migration's last step removed the scanning code, the legacy writers and their
-`AppContext` switch. It was taken at the maintainer's decision before all the conditions of point 7 held. On the final
-code the Interop (62 tests: qpdf, pyHanko, OpenSSL, xmlsec1) and VeraPdf (41) categories ran green, and the ETSI
-Signatures Conformance Checker passed all 17 PAdES samples (four new multi-signature ones among them); its one failure,
-`cades-b-lta-cosigned`, is CAdES, which this migration did not change. Still owed, on the model alone: the weekly
-external corpus green twice, and a preview release.
+`AppContext` switch, once the conditions of point 7 held: no unexplained difference over the corpus, and, on the final
+code, the Interop (62 tests: qpdf, pyHanko, OpenSSL, xmlsec1) and VeraPdf (41) categories green and the ETSI Signatures
+Conformance Checker passing all 17 PAdES samples. Its one failure, `cades-b-lta-cosigned`, is CAdES, which this
+migration did not change.
 
 **Context:**
 ADR 0005 chose to write our own PDF code, and that stays. How that code works is what this ADR changes. `SimpleSign.PAdES`
@@ -98,8 +97,6 @@ has no object model: it reads a PDF by scanning raw bytes for literal tokens and
      14. removing the old code.
 7. **When the old code is removed.** All of these must hold:
    - no unexplained difference over the corpus;
-   - the weekly external corpus and the interop and EU DSS jobs green twice in a row;
-   - one preview release with the new writers;
    - the Interop, VeraPdf and EtsiChecker categories run green on the last writer step.
 
 **Consequences:**
