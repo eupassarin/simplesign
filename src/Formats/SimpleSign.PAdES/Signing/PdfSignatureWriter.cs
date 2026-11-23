@@ -162,7 +162,7 @@ public sealed class PdfSignatureWriter
 
         var update = new PdfIncrementalUpdate(document);
         var (_, values) = update.Add(
-            sigObjNum, SignatureDictionary(options, options.ContentsReservedBytes, sigNow),
+            sigObjNum, SignatureDictionary(options, options.ContentsReservedBytes, sigNow, FieldMdpParameters(document, field.Lock)),
             new Dictionary<string, string>(StringComparer.Ordinal) { ["ByteRange"] = ByteRangePlaceholder });
 
         // The field with its /V; a visible appearance is drawn into its widget's rectangle.
@@ -612,7 +612,14 @@ public sealed class PdfSignatureWriter
     /// The signature dictionary (ISO 32000-1 §12.8.1, Table 252) with its placeholders: <c>/ByteRange</c> (written as
     /// <see cref="ByteRangePlaceholder"/>) and <c>/Contents</c> of the reserved size, zeros.
     /// </summary>
-    internal static PdfDictionary SignatureDictionary(SignatureFieldOptions options, int contentsReservedBytes, DateTime signingTime)
+    /// <param name="options">The field's options.</param>
+    /// <param name="contentsReservedBytes">The bytes reserved for the CMS.</param>
+    /// <param name="signingTime">The signing time written in <c>/M</c>.</param>
+    /// <param name="fieldMdp">
+    /// The FieldMDP transform parameters (§12.8.2.4) the signed field's <c>/Lock</c> asks for; null when it has none.
+    /// They are written in a FieldMDP signature reference, after the DocMDP one when certifying.
+    /// </param>
+    internal static PdfDictionary SignatureDictionary(SignatureFieldOptions options, int contentsReservedBytes, DateTime signingTime, PdfDictionary? fieldMdp = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         var (filter, subFilter) = options.SubFilter switch
@@ -638,14 +645,54 @@ public sealed class PdfSignatureWriter
         }
 
         entries.Add(new(PdfName.Of("M"), PdfObjectSerializer.TextString($"D:{signingTime:yyyyMMddHHmmss}+00'00'")));
+        var references = new List<PdfObject>();
         if (options.CertificationLevel is { } level)
         {
             // DocMDP: a certification signature with its transform method.
             var parameters = new PdfDictionary(("Type", PdfName.Of("TransformParams")), ("P", new PdfInteger((int)level)), ("V", PdfName.Of("1.2")));
-            var reference = new PdfDictionary(("Type", PdfName.Of("SigRef")), ("TransformMethod", PdfName.Of("DocMDP")), ("TransformParams", parameters));
-            entries.Add(new(PdfName.Of("Reference"), new PdfArray([reference])));
+            references.Add(new PdfDictionary(("Type", PdfName.Of("SigRef")), ("TransformMethod", PdfName.Of("DocMDP")), ("TransformParams", parameters)));
         }
 
+        if (fieldMdp is not null)
+        {
+            references.Add(new PdfDictionary(("Type", PdfName.Of("SigRef")), ("TransformMethod", PdfName.Of("FieldMDP")), ("TransformParams", fieldMdp)));
+        }
+
+        if (references.Count > 0)
+        {
+            entries.Add(new(PdfName.Of("Reference"), new PdfArray(references)));
+        }
+
+        return new PdfDictionary(entries);
+    }
+
+    /// <summary>
+    /// The FieldMDP transform parameters (ISO 32000-1 §12.8.2.4, Table 256) of a field's <c>/Lock</c>: its
+    /// <c>/Action</c>, its <c>/Fields</c> and, from PDF 2.0, its <c>/P</c>; null when there is no lock or its action
+    /// cannot be read.
+    /// </summary>
+    private static PdfDictionary? FieldMdpParameters(PdfDocument document, PdfDictionary? fieldLock)
+    {
+        if (fieldLock is null || document.Resolve(fieldLock.Get("Action")) is not PdfName { Value: "All" or "Include" or "Exclude" } action)
+        {
+            return null;
+        }
+
+        var entries = new List<PdfDictionaryEntry> { new(PdfName.Type, PdfName.Of("TransformParams"), null), new(PdfName.Of("Action"), action, null) };
+        if (action.Value != "All")
+        {
+            var fields = document.Resolve(fieldLock.Get("Fields")) is PdfArray array
+                ? array.Select(item => document.Resolve(item)).OfType<PdfString>().Select(s => (PdfObject)s).ToList()
+                : [];
+            entries.Add(new(PdfName.Of("Fields"), new PdfArray(fields), null));
+        }
+
+        if (document.Resolve(fieldLock.Get("P")) is PdfInteger { Value: >= 1 and <= 3 } permissions)
+        {
+            entries.Add(new(PdfName.Of("P"), permissions, null));
+        }
+
+        entries.Add(new(PdfName.Of("V"), PdfName.Of("1.2"), null));
         return new PdfDictionary(entries);
     }
 

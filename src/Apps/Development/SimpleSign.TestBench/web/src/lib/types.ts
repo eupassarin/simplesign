@@ -782,3 +782,78 @@ export interface PolicyView {
   counts?: { fail: number; warn: number; inform: number; ignore: number; evaluated: number; toConnect: number; toImplement: number } | null
   levels: Record<PolicyLevel, string>
 }
+
+/** A signer of an envelope to prepare (the Envelope tab, ADR 0033). */
+export interface EnvelopeSignerRequest {
+  name: string
+  credentialId?: string | null
+  identifierType?: string | null
+  identifierValue?: string | null
+  role?: string | null
+  email?: string | null
+  external: boolean
+  level: string
+  page: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface EnvelopePrepareRequest {
+  fileId: string
+  order: "sequential" | "parallel"
+  tsaUrl?: string | null
+  certify?: string | null
+  lockDocument: boolean
+  signers: EnvelopeSignerRequest[]
+}
+
+export interface EnvelopeFieldView {
+  name: string
+  signer?: string | null
+  role?: string | null
+  level?: string | null
+  page?: number | null
+  isSigned: boolean
+  signedBy?: string | null
+  signingTime?: string | null
+  signatureOrder?: number | null
+  claimedRoles: string[]
+}
+
+export interface EnvelopeView {
+  fileId: string
+  fileName: string
+  status: string
+  order?: string | null
+  next?: string | null
+  problems: string[]
+  fields: EnvelopeFieldView[]
+  manifest?: string | null
+}
+
+/** PdfEnvelopeReport.ToJson, as the server writes it. */
+export interface EnvelopeReport {
+  id?: string
+  status: string
+  isComplete: boolean
+  orderRespected: boolean
+  manifestUnchanged: boolean
+  missingFields: string[]
+  problems: string[]
+  signatures: {
+    field: string
+    signer?: string
+    isSigned: boolean
+    indication?: string
+    subIndication?: string
+    signerMatches: boolean
+    level?: string
+    reachedLevel?: string
+    levelMet: boolean
+    levelProblems: string[]
+    inOrder: boolean
+    isComplete: boolean
+  }[]
+}

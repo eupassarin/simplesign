@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Logging;
-using SimpleSign.PAdES.Internal;
 using SimpleSign.PAdES.Pdf.Model;
 
 namespace SimpleSign.PAdES.Pdf;
@@ -45,7 +43,7 @@ public sealed partial class PdfStructureReader
                 ByteRange = byteRange,
                 ContentsBytes = ExtractContents(byteRange, data),
                 SigDictObjectNumber = number,
-                PdfSigningTime = signature.Text("M") is { } time ? ParsePdfDate(time) : null,
+                PdfSigningTime = signature.Text("M") is { } time ? PdfText.ParseDate(time) : null,
                 Filter = signature.Name("Filter"),
                 SubFilter = signature.Name("SubFilter"),
                 Reason = NullIfEmpty(signature.Text("Reason")),
@@ -60,76 +58,6 @@ public sealed partial class PdfStructureReader
 
     /// <summary>An empty text string is no value, as the reader has always reported it.</summary>
     private static string? NullIfEmpty(string? text) => string.IsNullOrEmpty(text) ? null : text;
-
-    /// <summary>
-    /// Parses a PDF date string (D:YYYYMMDDHHmmss±HH'mm') into a DateTimeOffset.
-    /// </summary>
-    private static DateTimeOffset? ParsePdfDate(string dateStr, ILogger? logger = null)
-    {
-        // Strip "D:" prefix
-        if (dateStr.StartsWith("D:", StringComparison.OrdinalIgnoreCase))
-        {
-            dateStr = dateStr[2..];
-        }
-
-        if (dateStr.Length < 14)
-        {
-            return null;
-        }
-
-        if (!int.TryParse(dateStr[0..4], out int year))
-        {
-            return null;
-        }
-        if (!int.TryParse(dateStr[4..6], out int month))
-        {
-            return null;
-        }
-        if (!int.TryParse(dateStr[6..8], out int day))
-        {
-            return null;
-        }
-        if (!int.TryParse(dateStr[8..10], out int hour))
-        {
-            return null;
-        }
-        if (!int.TryParse(dateStr[10..12], out int minute))
-        {
-            return null;
-        }
-        if (!int.TryParse(dateStr[12..14], out int second))
-        {
-            return null;
-        }
-
-        // Parse timezone offset (e.g., +03'00', -05'30', Z)
-        var tzOffset = TimeSpan.Zero;
-        if (dateStr.Length > 14)
-        {
-            char sign = dateStr[14];
-            if ((sign == '+' || sign == '-')
-                && dateStr.Length >= 20
-                && int.TryParse(dateStr[15..17], out int tzHours)
-                && int.TryParse(dateStr[18..20], out int tzMinutes))
-            {
-                tzOffset = new TimeSpan(tzHours, tzMinutes, 0);
-                if (sign == '-')
-                {
-                    tzOffset = -tzOffset;
-                }
-            }
-        }
-
-        try
-        {
-            return new DateTimeOffset(year, month, day, hour, minute, second, tzOffset);
-        }
-        catch (Exception ex) when (ex is ArgumentOutOfRangeException or ArgumentException)
-        {
-            logger?.PdfDateParsingFailed(ex.Message);
-            return null;
-        }
-    }
 
     /// <summary>
     /// Extracts the /Contents hex string between the two ByteRange segments.

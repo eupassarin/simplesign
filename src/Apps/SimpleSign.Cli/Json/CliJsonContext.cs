@@ -15,7 +15,35 @@ namespace SimpleSign.Cli.Json;
 [JsonSerializable(typeof(CadesValidateOutput))]
 [JsonSerializable(typeof(XadesValidateOutput))]
 [JsonSerializable(typeof(SignOutput))]
+[JsonSerializable(typeof(EnvelopeStatusOutput))]
 internal sealed partial class CliJsonContext : JsonSerializerContext;
+
+// ─── Envelope DTOs ───────────────────────────────────────────────────
+
+/// <summary>The result of envelope status with --json.</summary>
+internal sealed class EnvelopeStatusOutput
+{
+    public string? Id { get; init; }
+    public string? Status { get; init; }
+    public string? Order { get; init; }
+    public string? Next { get; init; }
+    public List<string> Problems { get; init; } = [];
+    public List<EnvelopeFieldOutput> Fields { get; init; } = [];
+}
+
+/// <summary>A field of an envelope, in envelope status --json.</summary>
+internal sealed class EnvelopeFieldOutput
+{
+    public string? Name { get; init; }
+    public string? Signer { get; init; }
+    public string? Role { get; init; }
+    public string? Level { get; init; }
+    public int? Page { get; init; }
+    public bool IsSigned { get; init; }
+    public string? SignedBy { get; init; }
+    public DateTimeOffset? SigningTime { get; init; }
+    public int? SignatureOrder { get; init; }
+}
 
 // ─── Sign DTOs ───────────────────────────────────────────────────────
 

@@ -85,6 +85,7 @@ public sealed class DeferredSignerBuilder
             SigningTime = options.SigningTime,
             SignaturePolicy = options.SignaturePolicy,
             SignerRoles = options.SignerRoles,
+            EnvelopeField = options.EnvelopeField,
             Metadata = options.Metadata,
             DocumentInfo = options.DocumentInfo,
             DssArtifacts = options.DssArtifacts,
@@ -460,6 +461,27 @@ public sealed class DeferredSignerBuilder
     }
 
     /// <summary>
+    /// Signs a field of the document's signature envelope (ADR 0033), with the checks of
+    /// <see cref="PadesSignerBuilder.WithEnvelopeField"/>, made by <see cref="PrepareAsync"/> before the hash is given
+    /// out. The signer's role in the manifest is claimed unless roles were set before this call.
+    /// </summary>
+    /// <param name="fieldName">The field, such as <c>SimpleSign_2</c>.</param>
+    /// <returns>A new builder that signs that field.</returns>
+    /// <exception cref="InvalidOperationException">The builder was resumed.</exception>
+    public DeferredSignerBuilder WithEnvelopeField(string fieldName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        var state = _state with { Field = CloneField(existingFieldName: fieldName), EnvelopeField = fieldName };
+        if (state.SignerRoles.Count == 0
+            && Envelope.PdfEnvelopeReader.Read(state.PdfBytes)?.Fields.FirstOrDefault(f => f.Name == fieldName)?.Signer?.Role is { Length: > 0 } role)
+        {
+            state = state with { SignerRoles = PadesSigningInputs.SignerRoles([role]) };
+        }
+
+        return PhaseOne(state);
+    }
+
+    /// <summary>
     /// Sets the signature SubFilter value. Default is <see cref="PdfSignatureSubFilter.EtsiCadesDetached"/>.
     /// Use <see cref="PdfSignatureSubFilter.AdbePkcs7Detached"/> for PDF/A-1 compatibility
     /// or when the target validator requires the legacy subfilter.
@@ -509,6 +531,14 @@ public sealed class DeferredSignerBuilder
         var sessionIntegrityKey = _state.SessionIntegrityKey ?? throw new SigningException(
             "A session integrity key is required. Call WithSessionIntegrityKey() before preparing a deferred signature.",
             SigningErrorReason.LevelDependenciesMissing);
+        if (_state.EnvelopeField is { } envelopeField)
+        {
+            Envelope.EnvelopeSigningGuard.Ensure(
+                _state.PdfBytes, envelopeField, certificate, _state.CountryExtensions.SelectMany(e => e.SignerIdentityReaders),
+                new Envelope.EnvelopeSignatureSettings(
+                    RequestedLevel, _state.Field.SubFilter, _state.SignaturePolicy?.Oid, _state.Field.CertificationLevel, _state.HashAlgorithm));
+        }
+
         var options = new DeferredSigningOptions
         {
             HashAlgorithm = _state.HashAlgorithm,
@@ -712,6 +742,8 @@ public sealed class DeferredSignerBuilder
         public SignaturePolicyReference? SignaturePolicy { get; init; }
 
         public IReadOnlyList<string> SignerRoles { get; init; } = [];
+
+        public string? EnvelopeField { get; init; }
 
         public SignatureMetadata? Metadata { get; init; }
 

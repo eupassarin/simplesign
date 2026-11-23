@@ -86,6 +86,14 @@ internal static partial class Program
                 deferred.AddCommand<DeferredCompleteCommand>("complete")
                     .WithDescription("Embed the signature made elsewhere into the prepared PDF");
             });
+            config.AddBranch("envelope", envelope =>
+            {
+                envelope.SetDescription("A signature envelope inside a PDF: who signs, in which order, where (ADR 0033)");
+                envelope.AddCommand<EnvelopePrepareCommand>("prepare")
+                    .WithDescription("Prepare the envelope: one field per signer and the manifest, before any signature");
+                envelope.AddCommand<EnvelopeStatusCommand>("status")
+                    .WithDescription("Show the envelope: its fields, what is signed, and who signs next");
+            });
             config.AddCommand<AugmentCommand>("augment")
                 .WithDescription("Raise an existing signature (PDF, CMS or XML) to B-T, B-LT or B-LTA");
             config.AddCommand<ValidateCommand>("validate")

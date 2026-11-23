@@ -129,6 +129,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         [Description("Sign a pre-existing empty signature field")]
         public string? ExistingField { get; init; }
 
+        /// <summary>Sign a field of the PDF's signature envelope, after its checks (ADR 0033).</summary>
+        [CommandOption("--envelope-field <NAME>")]
+        [Description("Sign a field of the PDF's signature envelope (SimpleSign_1…), checking the signer, the turn and the level first")]
+        public string? EnvelopeField { get; init; }
+
         /// <summary>Create certification (DocMDP) signature: no-changes, form-filling (default), annotations.</summary>
         [CommandOption("--certify <LEVEL>")]
         [Description("Create certification (DocMDP) signature: no-changes, form-filling (default), annotations")]
@@ -897,6 +902,11 @@ internal sealed class SignCommand : AsyncCommand<SignCommand.Settings>
         if (settings.ExistingField is not null)
         {
             builder = builder.WithExistingField(settings.ExistingField);
+        }
+
+        if (settings.EnvelopeField is not null)
+        {
+            builder = builder.WithEnvelopeField(settings.EnvelopeField);
         }
 
         if (settings.Certify is not null)

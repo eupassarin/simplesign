@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Brazil.Cli</PackageId>
     <Description>Brazil (ICP-Brasil, Gov.br, Lei 14.063) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Brazil.Cli': --profile icp-brasil and gov-br, the icp-brasil and govbr policy presets, 'simplesign brasil sign' (ICP-Brasil PAdES policies AD-RB to AD-RA, advanced electronic signatures, VALIDAR health documents), 'brasil timestamp verify' (ICP-Brasil ACT), and the Brazilian chain validation and Lei 14.063 level in 'validate' and 'inspect'.</Description>
     <PackageTags>icp-brasil;gov-br;brazil;lei-14063;simplesign;cli;extension</PackageTags>
-    <Version>0.15.0</Version>
+    <Version>0.16.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <CliExtensionName>brasil</CliExtensionName>
     <CliExtensionType>SimpleSign.Brazil.Cli.BrasilCliExtension</CliExtensionType>

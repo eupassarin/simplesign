@@ -1,5 +1,3 @@
-using System.Globalization;
-using System.Text;
 using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Model;
 
@@ -8,12 +6,45 @@ namespace SimpleSign.PAdES.Pdf;
 /// <summary>A file embedded in a PDF document (ISO 32000-1 §7.11.4), as <see cref="PdfEmbeddedFiles.Read"/> returns it.</summary>
 /// <param name="Name">The file's name: the file specification's <c>/UF</c> or <c>/F</c>, else its key in the name tree.</param>
 /// <param name="Data">The file's bytes, decoded.</param>
-public sealed record PdfEmbeddedFile(string Name, ReadOnlyMemory<byte> Data);
+public sealed record PdfEmbeddedFile(string Name, ReadOnlyMemory<byte> Data)
+{
+    /// <summary>
+    /// Whether the file is an associated file of the document (ISO 32000-2 §14.13): its file specification is in the
+    /// catalog's <c>/AF</c> array, as PDF/A-3 asks of every embedded file.
+    /// </summary>
+    public bool IsAssociated { get; init; }
+
+    /// <summary>
+    /// How the file relates to the document, the file specification's <c>/AFRelationship</c> without the slash
+    /// (ISO 32000-2 §7.11.3, Table 43): <c>Source</c>, <c>Data</c>, <c>Alternative</c>, <c>Supplement</c>,
+    /// <c>EncryptedPayload</c>, <c>FormData</c>, <c>Schema</c> or <c>Unspecified</c>; null when it has none.
+    /// </summary>
+    public string? Relationship { get; init; }
+
+    /// <summary>The file specification's <c>/Desc</c>; null when it has none.</summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// The media type of the file, the embedded file stream's <c>/Subtype</c> (ISO 32000-1 §7.11.4, Table 45) with its
+    /// escapes resolved: <c>application/json</c> for <c>/application#2Fjson</c>; null when it has none.
+    /// </summary>
+    public string? MediaType { get; init; }
+
+    /// <summary>The file's size as its <c>/Params /Size</c> declares it (not checked against <see cref="Data"/>); null when not declared.</summary>
+    public long? Size { get; init; }
+
+    /// <summary>The file's creation date, its <c>/Params /CreationDate</c>; null when not declared or not a PDF date.</summary>
+    public DateTimeOffset? CreationDate { get; init; }
+
+    /// <summary>The file's last modification date, its <c>/Params /ModDate</c>; null when not declared or not a PDF date.</summary>
+    public DateTimeOffset? ModDate { get; init; }
+}
 
 /// <summary>
 /// Reads the files embedded in a PDF document: the entries of the catalog's <c>/Names /EmbeddedFiles</c> name tree
 /// (ISO 32000-1 §7.11.4, §7.9.6), each decoded (<c>/FlateDecode</c> with its predictors, <c>/ASCII85Decode</c>,
-/// <c>/ASCIIHexDecode</c>).
+/// <c>/ASCIIHexDecode</c>), with what the document says about it: whether it is an associated file (the catalog's
+/// <c>/AF</c>) and its relationship, description, media type, size and dates.
 /// <para>
 /// The document is read as it is now, its last revision, through its cross-reference. To know that a signature
 /// covers what is read, check that the signature's byte range covers the whole file
@@ -25,7 +56,7 @@ public sealed record PdfEmbeddedFile(string Name, ReadOnlyMemory<byte> Data);
 /// <code>
 /// foreach (var file in PdfEmbeddedFiles.Read(File.ReadAllBytes("invoice.pdf")))
 /// {
-///     Console.WriteLine($"{file.Name}: {file.Data.Length} bytes");
+///     Console.WriteLine($"{file.Name} ({file.MediaType}, {file.Relationship}): {file.Data.Length} bytes");
 /// }
 /// </code>
 /// </example>
@@ -36,8 +67,6 @@ public static class PdfEmbeddedFiles
 
     /// <summary>The most files read from one document.</summary>
     public const int MaxFiles = 1024;
-
-    private const int MaxValueDepth = 64;
 
     /// <summary>Reads the embedded files of a PDF document.</summary>
     /// <param name="pdf">The PDF document.</param>
@@ -56,15 +85,16 @@ public static class PdfEmbeddedFiles
         }
 
         var view = document.View();
-        if (view.Catalog is null)
+        if (view.Catalog is not { } catalog)
         {
             throw new PdfStructureException("The PDF's catalog cannot be read.");
         }
 
+        var associated = view.Resolve(catalog.Get("AF")) as PdfArray ?? new PdfArray([]);
         var files = new List<PdfEmbeddedFile>();
         foreach (var (key, value) in view.NameTree("EmbeddedFiles"))
         {
-            if (File(view, key, value) is not { } file)
+            if (File(view, key, value, associated) is not { } file)
             {
                 continue;
             }
@@ -81,7 +111,7 @@ public static class PdfEmbeddedFiles
     }
 
     /// <summary>The file of a name tree entry; null when the entry has no embedded file stream.</summary>
-    private static PdfEmbeddedFile? File(PdfRevisionView view, PdfString key, PdfObject value)
+    private static PdfEmbeddedFile? File(PdfRevisionView view, PdfString key, PdfObject value, PdfArray associated)
     {
         if (view.Resolve(value) is not PdfDictionary specification
             || view.Resolve(specification.Get("EF")) is not PdfDictionary streams
@@ -93,12 +123,10 @@ public static class PdfEmbeddedFiles
         string name = (view.Resolve(specification.Get("UF")) as PdfString)?.Text
             ?? (view.Resolve(specification.Get("F")) as PdfString)?.Text
             ?? key.Text;
+        byte[] content;
         try
         {
-            byte[] content = PdfStreamDecoding.Decode(stream, MaxFileSize, item => view.Resolve(item));
-
-            // Without a filter the data is not decoded, so not held to the limit by the filters.
-            return content.Length > MaxFileSize ? throw TooLarge(name) : new PdfEmbeddedFile(name, content);
+            content = PdfStreamDecoding.Decode(stream, MaxFileSize, item => view.Resolve(item));
         }
         catch (PdfDecodedSizeLimitException)
         {
@@ -112,325 +140,48 @@ public static class PdfEmbeddedFiles
         {
             throw new PdfStructureException($"The embedded file '{name}' cannot be decoded: {ex.Message}", ex);
         }
+
+        // Without a filter the data is not decoded, so not held to the limit by the filters.
+        if (content.Length > MaxFileSize)
+        {
+            throw TooLarge(name);
+        }
+
+        var parameters = view.Resolve(stream.Dictionary.Get("Params")) as PdfDictionary;
+        return new PdfEmbeddedFile(name, content)
+        {
+            IsAssociated = IsAssociated(view, value, specification, associated),
+            Relationship = (view.Resolve(specification.Get("AFRelationship")) as PdfName)?.Value,
+            Description = (view.Resolve(specification.Get("Desc")) as PdfString)?.Text,
+            MediaType = (view.Resolve(stream.Dictionary.Get("Subtype")) as PdfName)?.Value,
+            Size = view.Resolve(parameters?.Get("Size")) is PdfInteger size ? size.Value : null,
+            CreationDate = Date(view, parameters, "CreationDate"),
+            ModDate = Date(view, parameters, "ModDate"),
+        };
     }
 
-    private static PdfStructureException TooLarge(string name) =>
-        new($"The embedded file '{name}' is larger than {MaxFileSize / (1024 * 1024)} MB.");
-
-    private readonly record struct Reference(int Number);
-
-    private sealed record Name(string Value);
-
     /// <summary>
-    /// A reader of PDF objects (ISO 32000-1 §7.3) over the Latin-1 text of an object: dictionaries
-    /// (<c>Dictionary&lt;string, object?&gt;</c>), arrays (<c>List&lt;object?&gt;</c>), names, strings (<c>byte[]</c>),
-    /// numbers (<c>double</c>), booleans, null and indirect references.
+    /// Whether the file specification is in the catalog's <c>/AF</c>: the same object, or, written inline, an equal
+    /// dictionary.
     /// </summary>
-    private sealed class Parser(string text)
+    private static bool IsAssociated(PdfRevisionView view, PdfObject value, PdfDictionary specification, PdfArray associated)
     {
-        public int Position { get; private set; }
-
-        /// <summary>Skips <c>N G obj</c>; false when the text does not start with it.</summary>
-        public bool SkipObjectHeader()
+        foreach (var item in associated)
         {
-            int keyword = text.IndexOf("obj", StringComparison.Ordinal);
-            if (keyword < 0)
-            {
-                return false;
-            }
-
-            Position = keyword + 3;
-            return true;
-        }
-
-        /// <summary>The value at the position, which moves past it; null for the null object and for what cannot be read.</summary>
-        public object? Value(int depth)
-        {
-            SkipWhitespaceAndComments();
-            if (Position >= text.Length || depth > MaxValueDepth)
-            {
-                return null;
-            }
-
-            char c = text[Position];
-            if (c == '<')
-            {
-                return Position + 1 < text.Length && text[Position + 1] == '<' ? DictionaryValue(depth) : HexString();
-            }
-
-            return c switch
-            {
-                '[' => Array(depth),
-                '(' => LiteralString(),
-                '/' => new Name(NameToken()),
-                _ => Keyword(),
-            };
-        }
-
-        private Dictionary<string, object?> DictionaryValue(int depth)
-        {
-            var dictionary = new Dictionary<string, object?>(StringComparer.Ordinal);
-            Position += 2;
-            while (true)
-            {
-                SkipWhitespaceAndComments();
-                if (Position >= text.Length)
-                {
-                    return dictionary;
-                }
-
-                if (text[Position] == '>')
-                {
-                    Position = Math.Min(Position + 2, text.Length);
-                    return dictionary;
-                }
-
-                if (text[Position] != '/')
-                {
-                    // Not a key: the dictionary is malformed from here on.
-                    return dictionary;
-                }
-
-                string key = NameToken();
-                dictionary[key] = Value(depth + 1);
-            }
-        }
-
-        private List<object?> Array(int depth)
-        {
-            var array = new List<object?>();
-            Position++;
-            while (true)
-            {
-                SkipWhitespaceAndComments();
-                if (Position >= text.Length)
-                {
-                    return array;
-                }
-
-                if (text[Position] == ']')
-                {
-                    Position++;
-                    return array;
-                }
-
-                int before = Position;
-                array.Add(Value(depth + 1));
-                if (Position == before)
-                {
-                    // Nothing was read (a stray delimiter): skip it so the loop ends.
-                    Position++;
-                }
-            }
-        }
-
-        private string NameToken()
-        {
-            var name = new StringBuilder();
-            Position++;
-            while (Position < text.Length && !IsDelimiter(text[Position]) && !IsWhitespace(text[Position]))
-            {
-                if (text[Position] == '#' && Position + 2 < text.Length
-                    && int.TryParse(text.AsSpan(Position + 1, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int code))
-                {
-                    name.Append((char)code);
-                    Position += 3;
-                }
-                else
-                {
-                    name.Append(text[Position++]);
-                }
-            }
-
-            return name.ToString();
-        }
-
-        private byte[] LiteralString()
-        {
-            var bytes = new List<byte>();
-            Position++;
-            int open = 1;
-            while (Position < text.Length)
-            {
-                char c = text[Position++];
-                if (c == '\\' && Position < text.Length)
-                {
-                    Escape(bytes);
-                }
-                else if (c == '(')
-                {
-                    open++;
-                    bytes.Add((byte)c);
-                }
-                else if (c == ')')
-                {
-                    if (--open == 0)
-                    {
-                        break;
-                    }
-
-                    bytes.Add((byte)c);
-                }
-                else
-                {
-                    bytes.Add((byte)c);
-                }
-            }
-
-            return [.. bytes];
-        }
-
-        private void Escape(List<byte> bytes)
-        {
-            char c = text[Position++];
-            if (c == '\r')
-            {
-                // A backslash at the end of a line continues the string on the next one.
-                if (Position < text.Length && text[Position] == '\n')
-                {
-                    Position++;
-                }
-            }
-            else if (c is >= '0' and <= '7')
-            {
-                int code = c - '0';
-                for (int i = 0; i < 2 && Position < text.Length && text[Position] is >= '0' and <= '7'; i++)
-                {
-                    code = (code * 8) + (text[Position++] - '0');
-                }
-
-                bytes.Add((byte)code);
-            }
-            else if (c != '\n')
-            {
-                bytes.Add(c switch
-                {
-                    'n' => (byte)'\n',
-                    'r' => (byte)'\r',
-                    't' => (byte)'\t',
-                    'b' => (byte)'\b',
-                    'f' => (byte)'\f',
-                    _ => (byte)c,
-                });
-            }
-        }
-
-        private byte[] HexString()
-        {
-            var bytes = new List<byte>();
-            Position++;
-            int high = -1;
-            while (Position < text.Length && text[Position] != '>')
-            {
-                int digit = HexDigit(text[Position++]);
-                if (digit < 0)
-                {
-                    continue;
-                }
-
-                if (high < 0)
-                {
-                    high = digit;
-                }
-                else
-                {
-                    bytes.Add((byte)((high << 4) | digit));
-                    high = -1;
-                }
-            }
-
-            if (high >= 0)
-            {
-                // An odd number of digits: the last one is followed by an implied 0.
-                bytes.Add((byte)(high << 4));
-            }
-
-            Position = Math.Min(Position + 1, text.Length);
-            return [.. bytes];
-        }
-
-        /// <summary>A number, an indirect reference (<c>N G R</c>), true, false or null.</summary>
-        private object? Keyword()
-        {
-            string token = Token();
-            if (token.Length == 0)
-            {
-                return null;
-            }
-
-            if (token == "true")
+            if (value is PdfReference reference
+                ? item is PdfReference other && other.Id == reference.Id
+                : PdfObject.SemanticEquals(view.Resolve(item), specification))
             {
                 return true;
             }
-
-            if (token == "false")
-            {
-                return false;
-            }
-
-            if (!double.TryParse(token, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out double number))
-            {
-                return null;
-            }
-
-            // "N G R": two integers and the keyword R make an indirect reference.
-            int after = Position;
-            if (IsObjectNumber(token) && IsObjectNumber(Token()) && Token() == "R")
-            {
-                return new Reference((int)number);
-            }
-
-            Position = after;
-            return number;
         }
 
-        private string Token()
-        {
-            SkipWhitespaceAndComments();
-            int start = Position;
-            while (Position < text.Length && !IsDelimiter(text[Position]) && !IsWhitespace(text[Position]))
-            {
-                Position++;
-            }
-
-            return text[start..Position];
-        }
-
-        private void SkipWhitespaceAndComments()
-        {
-            while (Position < text.Length)
-            {
-                if (IsWhitespace(text[Position]))
-                {
-                    Position++;
-                }
-                else if (text[Position] == '%')
-                {
-                    while (Position < text.Length && text[Position] is not ('\r' or '\n'))
-                    {
-                        Position++;
-                    }
-                }
-                else
-                {
-                    return;
-                }
-            }
-        }
-
-        private static bool IsObjectNumber(string token) =>
-            token.Length is > 0 and < 10 && token.All(char.IsAsciiDigit);
-
-        private static bool IsWhitespace(char c) => c is ' ' or '\n' or '\r' or '\t' or '\f' or '\0';
-
-        private static bool IsDelimiter(char c) => c is '(' or ')' or '<' or '>' or '[' or ']' or '{' or '}' or '/' or '%';
-
-        private static int HexDigit(char c) => c switch
-        {
-            >= '0' and <= '9' => c - '0',
-            >= 'a' and <= 'f' => c - 'a' + 10,
-            >= 'A' and <= 'F' => c - 'A' + 10,
-            _ => -1,
-        };
+        return false;
     }
+
+    private static DateTimeOffset? Date(PdfRevisionView view, PdfDictionary? parameters, string key) =>
+        view.Resolve(parameters?.Get(key)) is PdfString date ? PdfText.ParseDate(date.Text) : null;
+
+    private static PdfStructureException TooLarge(string name) =>
+        new($"The embedded file '{name}' is larger than {MaxFileSize / (1024 * 1024)} MB.");
 }

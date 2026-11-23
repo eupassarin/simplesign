@@ -254,6 +254,94 @@ public sealed class PdfEmbeddedFilesTests
     }
 
     [Fact]
+    public void Read_AssociatedFile_ReadsRelationshipAndIsAssociated()
+    {
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /AF [ 2 0 R ] /Names << /EmbeddedFiles << /Names [ (envelope.json) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /Type /Filespec /F (envelope.json) /UF (envelope.json) /AFRelationship /Data /Desc (The envelope) /EF << /F 3 0 R >> >>\nendobj\n" +
+            "3 0 obj\n<< /Type /EmbeddedFile /Subtype /application#2Fjson /Length 2 >>\nstream\n{}\nendstream\nendobj\n");
+
+        var file = PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem();
+
+        file.IsAssociated.ShouldBeTrue();
+        file.Relationship.ShouldBe("Data");
+        file.Description.ShouldBe("The envelope");
+        file.MediaType.ShouldBe("application/json");
+    }
+
+    [Fact]
+    public void Read_FileNotInAf_IsNotAssociated()
+    {
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /AF [ 4 0 R ] /Names << /EmbeddedFiles << /Names [ (a.txt) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /Type /Filespec /F (a.txt) /AFRelationship /Source /EF << /F 3 0 R >> >>\nendobj\n" +
+            "3 0 obj\n<< /Length 1 >>\nstream\na\nendstream\nendobj\n" +
+            "4 0 obj\n<< /Type /Filespec /F (other.txt) >>\nendobj\n");
+
+        var file = PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem();
+
+        file.IsAssociated.ShouldBeFalse();
+        file.Relationship.ShouldBe("Source");
+    }
+
+    [Fact]
+    public void Read_InlineFileSpecInAf_IsAssociated()
+    {
+        const string specification = "<< /Type /Filespec /F (a.txt) /AFRelationship /Supplement /EF << /F 3 0 R >> >>";
+        byte[] pdf = Pdf(
+            $"1 0 obj\n<< /Type /Catalog /AF [ {specification} ] /Names << /EmbeddedFiles << /Names [ (a.txt) {specification} ] >> >> >>\nendobj\n" +
+            "3 0 obj\n<< /Length 1 >>\nstream\na\nendstream\nendobj\n");
+
+        PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem().IsAssociated.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Read_Params_ReadsSizeAndDates()
+    {
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /Names << /EmbeddedFiles << /Names [ (a.txt) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /Type /Filespec /F (a.txt) /EF << /F 3 0 R >> >>\nendobj\n" +
+            "3 0 obj\n<< /Type /EmbeddedFile /Params << /Size 1 /CreationDate (D:20261123120000-03'00') /ModDate 4 0 R >> /Length 1 >>\nstream\na\nendstream\nendobj\n" +
+            "4 0 obj\n(D:20261124083015Z)\nendobj\n");
+
+        var file = PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem();
+
+        file.Size.ShouldBe(1);
+        file.CreationDate.ShouldBe(new DateTimeOffset(2026, 11, 23, 12, 0, 0, TimeSpan.FromHours(-3)));
+        file.ModDate.ShouldBe(new DateTimeOffset(2026, 11, 24, 8, 30, 15, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Read_InvalidParams_LeavesThemNull()
+    {
+        byte[] pdf = Pdf(
+            "1 0 obj\n<< /Type /Catalog /Names << /EmbeddedFiles << /Names [ (a.txt) 2 0 R ] >> >> >>\nendobj\n" +
+            "2 0 obj\n<< /Type /Filespec /F (a.txt) /AFRelationship (Data) /EF << /F 3 0 R >> >>\nendobj\n" +
+            "3 0 obj\n<< /Subtype (text/plain) /Params << /Size (one) /CreationDate (yesterday) /ModDate (D:20261399000000) >> /Length 1 >>\nstream\na\nendstream\nendobj\n");
+
+        var file = PdfEmbeddedFiles.Read(pdf).ShouldHaveSingleItem();
+
+        file.Relationship.ShouldBeNull();
+        file.MediaType.ShouldBeNull();
+        file.Size.ShouldBeNull();
+        file.CreationDate.ShouldBeNull();
+        file.ModDate.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Read_NoMetadata_PropertiesAreNull()
+    {
+        var file = PdfEmbeddedFiles.Read(TestPdfFactory.CreatePdfWithAttachments(("a.txt", "a"u8.ToArray()))).ShouldHaveSingleItem();
+
+        file.IsAssociated.ShouldBeFalse();
+        file.Relationship.ShouldBeNull();
+        file.Description.ShouldBeNull();
+        file.Size.ShouldBeNull();
+        file.CreationDate.ShouldBeNull();
+        file.ModDate.ShouldBeNull();
+    }
+
+    [Fact]
     public void Read_NoCatalog_Throws() =>
         Should.Throw<PdfStructureException>(() => PdfEmbeddedFiles.Read("%PDF-1.7\n%%EOF"u8.ToArray()));
 

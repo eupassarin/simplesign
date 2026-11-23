@@ -19,6 +19,9 @@ import type {
   PolicyKind,
   PolicyPreset,
   PolicyView,
+  EnvelopePrepareRequest,
+  EnvelopeView,
+  EnvelopeReport,
 } from "./types"
 
 import type { AugmentFacts, DssComparison, DssPolicyView, DssSettings, DssStatus, Evaluation, Format, Options, RealEnvironment, ReportView, RunEngine, RunKind, RunSummary, RunView, ValidationSampleView, WorkbenchSchema } from "@/features/workbench/schema"
@@ -115,6 +118,14 @@ export const api = {
   },
   environment: {
     real: () => request<RealEnvironment>("GET", "/api/environment/real"),
+  },
+  envelope: {
+    levels: () => request<{ id: string }[]>("GET", "/api/envelope/levels"),
+    prepare: (body: EnvelopePrepareRequest) => request<EnvelopeView>("POST", "/api/envelope/prepare", body),
+    status: (fileId: string) => request<EnvelopeView>("POST", "/api/envelope/status", { fileId }),
+    sign: (body: { fileId: string; field: string; credentialId: string; icpPolicy?: string | null; tsaUrl?: string | null; certify?: string | null }) =>
+      request<EnvelopeView>("POST", "/api/envelope/sign", body),
+    validate: (fileId: string) => request<EnvelopeReport>("POST", "/api/envelope/validate", { fileId }),
   },
   sandbox: {
     connect: (url: string) => request<EnvironmentInfo>("POST", "/api/sandbox/connect", { url }),

@@ -64,7 +64,8 @@ src/
 ├── Formats/
 │   ├── SimpleSign.PAdES/       PAdES signing, validation, inspection (main package); Pdf/Model = PDF object model (ADR 0032:
 │   │                           objects, filters, cross-reference, revisions and their views), Pdf/Writing = incremental updates
-│   │                           (serializer, dictionary patch, cross-reference); PdfEmbeddedFiles reads attachments
+│   │                           (serializer, dictionary patch, cross-reference); PdfEmbeddedFiles reads attachments;
+│   │                           Envelope/ = the signature envelope (ADR 0033: PdfEnvelope, PdfEnvelopeReader, PdfEnvelopeValidator)
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
 │   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
 │   └── SimpleSign/             Meta-package
@@ -164,6 +165,19 @@ var augmented = await PadesAugmenter.Document(signedPdf)
     .WithTimestamp(TimestampOptions.DigiCert)
     .AugmentAsync();                              // .Document, .InitialLevel, .Level
 // Same shape: CadesAugmenter.Signature(cms, detachedContent?) / XadesAugmenter.Document(xml, detachedData?)
+```
+
+### Signature envelope (ADR 0033)
+```csharp
+// Several signers in turn, no server: fields + the manifest simplesign-envelope.json, before any signature
+var prepared = await PdfEnvelope.Prepare(pdf).WithCertification(CertificationLevel.FormFilling)
+    .AddSigner(new EnvelopeSigner { Name = "Maria", Identifiers = [new("CPF", "52998224725")], Level = IcpBrasilEnvelopeLevels.AdRt,
+        Placement = new EnvelopePlacement(1, 72, 72, 200, 50) }).PrepareAsync();
+var info = PdfEnvelopeReader.Read(prepared);                          // Status, Fields, Next, Problems
+var check = PdfEnvelope.CheckSigner(prepared, "SimpleSign_1", cert, profile);   // before the PIN
+await PadesSigner.Document(prepared).WithCertificate(cert).WithProfile(profile).WithEnvelopeField("SimpleSign_1").SignAsync();
+var report = await new PdfEnvelopeValidator(options).ValidateAsync(signed);      // IsComplete, ToJson()
+// Errors: SigningErrorReason 29–36 (EnvelopeFieldNotFound … EnvelopeTampered); CLI: envelope prepare|status, sign --envelope-field, validate --envelope
 ```
 
 ### Trust profiles

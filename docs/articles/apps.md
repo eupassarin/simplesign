@@ -231,7 +231,7 @@ lets you pause the agent, open the window, or quit. It speaks English, Portugues
 Three endpoints:
 
 ```http
-GET  /api/health          → { "status": "ok", "version": "0.15.0", "app": "SimpleSign Agent" }
+GET  /api/health          → { "status": "ok", "version": "0.16.0", "app": "SimpleSign Agent" }
 GET  /api/certificates    → the usable certificates, filtered by country or trust framework
 POST /api/sign            → signs one payload, after the user confirms
 ```

@@ -108,6 +108,9 @@ public sealed class BrasilCliExtension : ICliExtension
     /// <inheritdoc />
     public IReadOnlyList<CliTrustedListProfile> TrustedListProfiles { get; } = [];
 
+    /// <summary>The ICP-Brasil levels of a signature envelope's fields: <c>icp-ad-rb</c>, <c>icp-ad-rt</c>.</summary>
+    public IReadOnlyList<SimpleSign.PAdES.Envelope.EnvelopeLevel> EnvelopeLevels { get; } = [IcpBrasilEnvelopeLevels.AdRb, IcpBrasilEnvelopeLevels.AdRt];
+
     // The Sandbox's root belongs to the profile, which lives as long as the command: not disposed.
 #pragma warning disable CA2000
     private static async Task<TrustProfile> LoadIcpBrasilAsync(CliProfileContext context, CancellationToken cancellationToken)

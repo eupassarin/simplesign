@@ -19,10 +19,6 @@ internal static partial class Log
         Message = "FlateDecode decompression failed: {Message}")]
     internal static partial void FlateDecodeDecompressionFailed(this ILogger logger, string message);
 
-    [LoggerMessage(EventId = 3013, Level = LogLevel.Warning,
-        Message = "PDF date parsing failed: {Message}")]
-    internal static partial void PdfDateParsingFailed(this ILogger logger, string message);
-
     [LoggerMessage(EventId = 3020, Level = LogLevel.Debug,
         Message = "Reading PDF signature fields from {Size} byte stream")]
     internal static partial void PdfReadingSignatureFields(this ILogger logger, long size);

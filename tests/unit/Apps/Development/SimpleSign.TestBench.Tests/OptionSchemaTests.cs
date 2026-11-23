@@ -194,6 +194,8 @@ public sealed class OptionSchemaTests(TestBenchFixture fixture)
             "WithDssArtifacts", "WithSubFilter", "WithAppearance",
             // The revocation checker of the signing policy is built from the HTTP provider the workbench sets.
             "WithChainRevocationChecker",
+            // A field of a signature envelope is signed on the Envelope tab (EnvelopeApi), not on the Sign tab.
+            "WithEnvelopeField",
         ];
         string apis = string.Join('\n', s_schema.Options.Where(o => o.Formats.Contains(format))
             .SelectMany(o => o.Values.Select(v => v.Api).Append(o.Api)).OfType<string>()
