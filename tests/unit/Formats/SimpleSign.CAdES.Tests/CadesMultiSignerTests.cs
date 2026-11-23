@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Constants;
@@ -238,6 +239,123 @@ public sealed class CadesMultiSignerTests : IDisposable
         {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task CoSign_ArchiveOverArchive_EachSignerInfoKeepsAValidArchiveTimestampV3()
+    {
+        using var pki = new OfflinePki();
+        byte[] rsa = await CadesSigner.Document(_data).WithCertificate(pki.Pki.Leaf, pki.Chain)
+            .WithContentType(CadesContentType.Enveloped).WithHttpClientProvider(pki.Http).WithLevel(pki.Level("LTA")).SignAsync();
+        byte[] rsaSignerInfo = SignerInfos(rsa)[0];
+
+        byte[] cosigned = await CadesSigner.CoSign(rsa).WithCertificate(pki.Ecdsa, pki.Chain)
+            .WithHttpClientProvider(pki.Http).WithLevel(pki.Level("LTA")).SignAsync();
+
+        List<byte[]> signerInfos = SignerInfos(cosigned);
+        Assert.Equal(2, signerInfos.Count);
+        Assert.Equal(rsaSignerInfo, signerInfos[0]);
+        foreach (byte[] signerInfo in signerInfos)
+        {
+            // ETSI EN 319 122-1 §5.5.3: the ATS-hash-index-v3 lists, for every value of every unsigned attribute of the
+            // SignerInfo the archive-time-stamp-v3 is about, the digest of attrType || attrValue.
+            HashSet<string> own = UnsignedAttributeValueDigests(signerInfo);
+            Assert.All(IndexedUnsignedAttributeDigests(signerInfo), digest => Assert.Contains(digest, own));
+        }
+
+        var report = new CadesSignatureValidator(new ValidationOptions { CheckRevocation = false, TrustSystemRoots = false })
+            .ValidateAll(cosigned, trustAnchors: [pki.Pki.RootCa]);
+        Assert.Equal(2, report.Signers.Count);
+        Assert.All(report.Signers, signer =>
+            Assert.True(signer.Result.HasValidArchiveTimestamp == true, string.Join("; ", signer.Result.Warnings)));
+    }
+
+    /// <summary>The encoded SignerInfos of a SignedData, in order.</summary>
+    private static List<byte[]> SignerInfos(byte[] cms)
+    {
+        var contentInfo = new AsnReader(cms, AsnEncodingRules.BER).ReadSequence();
+        _ = contentInfo.ReadObjectIdentifier();
+        var signedData = contentInfo.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, true)).ReadSequence();
+        _ = signedData.ReadInteger();
+        _ = signedData.ReadEncodedValue(); // digestAlgorithms
+        _ = signedData.ReadEncodedValue(); // encapContentInfo
+        while (signedData.PeekTag().TagClass == TagClass.ContextSpecific)
+        {
+            _ = signedData.ReadEncodedValue(); // certificates, crls
+        }
+
+        return ReadAll(signedData.ReadSetOf(skipSortOrderValidation: true));
+    }
+
+    /// <summary>The unsigned attributes of a SignerInfo, as (encoded attrType, encoded values).</summary>
+    private static List<(byte[] Type, List<byte[]> Values)> UnsignedAttributes(byte[] signerInfo)
+    {
+        var fields = new AsnReader(signerInfo, AsnEncodingRules.BER).ReadSequence();
+        var attributes = new List<(byte[], List<byte[]>)>();
+        while (fields.HasData)
+        {
+            if (fields.PeekTag() != new Asn1Tag(TagClass.ContextSpecific, 1, true))
+            {
+                _ = fields.ReadEncodedValue();
+                continue;
+            }
+
+            var set = fields.ReadSetOf(skipSortOrderValidation: true, new Asn1Tag(TagClass.ContextSpecific, 1, true));
+            while (set.HasData)
+            {
+                var attribute = set.ReadSequence();
+                attributes.Add((attribute.ReadEncodedValue().ToArray(), ReadAll(attribute.ReadSetOf(skipSortOrderValidation: true))));
+            }
+        }
+
+        return attributes;
+    }
+
+    private static HashSet<string> UnsignedAttributeValueDigests(byte[] signerInfo) =>
+        [.. UnsignedAttributes(signerInfo).SelectMany(a => a.Values.Select(v => Convert.ToHexString(SHA256.HashData([.. a.Type, .. v]))))];
+
+    /// <summary>The unsigned attribute digests listed by the ATSHashIndexV3 of every archive-time-stamp-v3 of a SignerInfo.</summary>
+    private static List<string> IndexedUnsignedAttributeDigests(byte[] signerInfo)
+    {
+        byte[] archiveType = Encode(w => w.WriteObjectIdentifier(Oids.ArchiveTimeStampV3));
+        var tokens = UnsignedAttributes(signerInfo).Where(a => a.Type.AsSpan().SequenceEqual(archiveType)).SelectMany(a => a.Values).ToList();
+        Assert.NotEmpty(tokens);
+        byte[] indexType = Encode(w => w.WriteObjectIdentifier(Oids.AtsHashIndexV3));
+        var digests = new List<string>();
+        foreach (byte[] token in tokens)
+        {
+            byte[] tokenSignerInfo = Assert.Single(SignerInfos(token));
+            byte[] index = UnsignedAttributes(tokenSignerInfo).Single(a => a.Type.AsSpan().SequenceEqual(indexType)).Values.Single();
+            var hashIndex = new AsnReader(index, AsnEncodingRules.DER).ReadSequence();
+            _ = hashIndex.ReadEncodedValue(); // hashIndAlgorithm
+            _ = hashIndex.ReadEncodedValue(); // certificatesHashIndex
+            _ = hashIndex.ReadEncodedValue(); // crlsHashIndex
+            var unsigned = hashIndex.ReadSequence();
+            while (unsigned.HasData)
+            {
+                digests.Add(Convert.ToHexString(unsigned.ReadOctetString()));
+            }
+        }
+
+        return digests;
+    }
+
+    private static List<byte[]> ReadAll(AsnReader set)
+    {
+        var values = new List<byte[]>();
+        while (set.HasData)
+        {
+            values.Add(set.ReadEncodedValue().ToArray());
+        }
+
+        return values;
+    }
+
+    private static byte[] Encode(Action<AsnWriter> write)
+    {
+        var writer = new AsnWriter(AsnEncodingRules.DER);
+        write(writer);
+        return writer.Encode();
     }
 
     private static string? FindOpenSsl() =>

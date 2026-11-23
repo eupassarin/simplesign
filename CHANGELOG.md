@@ -56,6 +56,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A co-signed CAdES B-LTA: each archive-time-stamp-v3 is about its own SignerInfo** (ETSI EN 319 122-1 §5.5.3). Once
+  `CadesSigner.CoSign` had added a second SignerInfo, `CadesSignatureValidator` rebuilt the archive time-stamp's input
+  from every SignerInfo at once — all their signature fields in the message imprint, all their unsigned attributes in
+  the ATS-hash-index-v3 — so the first signer's archive time-stamp no longer validated, and the second's was not
+  checked at all. Each SignerInfo's archive-time-stamp-v3 is now checked against that SignerInfo alone (`ValidateAll`
+  checks every co-signer's), and a SignedData whose SignerInfos are in signing order rather than DER order is read.
+  The ATS-hash-index-v3 is checked as the standard and the ETSI checker check it: every certificate, revocation value
+  and unsigned attribute it lists must still be present. A value added after the time-stamp (the co-signer's
+  certificate, for example) no longer makes it fail; that value is just not covered by the time-stamp. Signatures made
+  before this fix were already correct, because co-signing leaves the existing SignerInfo byte-identical.
 - **The augmenters check each time-stamp they obtain, as the signers do**: `PadesAugmenter`, `CadesAugmenter` and
   `XadesAugmenter` ignored `TimestampOptions.ExpectedTsaCertificate` and accepted a token from any TSA; such a token now
   throws `SigningException` with `SigningErrorReason.TimestampUntrusted`. New, on each augmenter: `WithSigningPolicy`
