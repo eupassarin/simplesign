@@ -131,6 +131,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [CAdES and XAdES](docs/articles/cades-xades.md) | Detached/enveloped CMS, XML forms, validation, augmentation |
 | [Inspection and validation](docs/articles/inspection-validation.md) | Validation results and fast inspection |
 | [Deferred signing](docs/articles/deferred-signing.md) | Two-phase signing (PAdES, CAdES, XAdES) for keys on another machine |
+| [Signature envelope](docs/articles/envelope.md) | Several signers in turn, no server: the PDF says who signs, where, in which order and at which level |
 | [Remote signing](docs/articles/remote-signing.md) | The generic interface for keys outside the engine |
 | [PKCS#11](docs/articles/pkcs11.md) / [Cloud signing](docs/articles/cloud-signing.md) | Tokens, HSMs and cloud certificates |
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |

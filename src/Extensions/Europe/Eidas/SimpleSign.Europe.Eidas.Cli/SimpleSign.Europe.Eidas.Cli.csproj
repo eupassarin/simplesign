@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Europe.Eidas.Cli</PackageId>
     <Description>eIDAS (EU) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Europe.Eidas.Cli': --profile eidas (the EU LOTL and its trusted lists, the qualification of each signature) and the eidas policy presets.</Description>
     <PackageTags>eidas;eu;lotl;qes;simplesign;cli;extension</PackageTags>
-    <Version>0.15.0</Version>
+    <Version>0.16.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <CliExtensionName>eidas</CliExtensionName>
     <CliExtensionType>SimpleSign.Europe.Eidas.Cli.EidasCliExtension</CliExtensionType>

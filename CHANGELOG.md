@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-23
+
 ### Added
 
 - **The Adobe Approved Trust List as a trust profile** (ADR 0031): `SimpleSign.Adobe.Aatl` (`AatlProfile`), and
@@ -59,10 +61,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   specification is in the catalog's `/AF`, ISO 32000-2 §14.13, as PDF/A-3 asks), `Relationship` (`/AFRelationship`),
   `Description` (`/Desc`), `MediaType` (the stream's `/Subtype`, `application/json` for `/application#2Fjson`), and
   `Size`, `CreationDate` and `ModDate` from `/Params`.
-- **ADR 0033, a signature envelope inside the PDF** (proposed): the signers of a document, their order, identities and
-  levels, carried by the PDF itself — empty signature fields with seed values and locks, and the associated file
-  `simplesign-envelope.json` — for signing in turn with no server. This release has its format and the reading of
-  associated files; the API follows.
+- **A signature envelope inside the PDF** (ADR 0033, `SimpleSign.PAdES.Envelope`): several people sign the same PDF in
+  turn, with no server; the PDF itself says who signs, in which order, where and at which level.
+  - `PdfEnvelope.Prepare(pdf)…PrepareAsync()` writes, in one incremental update before any signature, a signature field
+    per signer (`SimpleSign_1`…, empty, with seed values — time-stamp server, the certification asked of the first
+    signer, digests, reasons; never `/Filter` nor `/SubFilter`, so ICP-Brasil's `PBAD.PAdES` stays free — and a
+    `/Lock` that excludes the fields still to sign) and the manifest `simplesign-envelope.json`, an associated file
+    (`/AF`, `/AFRelationship /Data`, `application/json`). A signed, certified, encrypted, PDF/A-1 or PDF/A-4 (but A-4e)
+    document, or one that holds an envelope, is refused; a PDF/A-2 document is declared PDF/A-3.
+  - `PdfEnvelopeReader.Read`: the manifest, each field (placement, seed values, lock, signed, by whom, in which order,
+    the roles claimed), the status (`Prepared`, `InProgress`, `Completed`, `Inconsistent` with the problems), the next
+    field.
+  - `PdfEnvelope.CheckSigner`, before the PIN: the field, the turn, and every identifier of the signer read from the
+    certificate by the profile's identity readers — matched, mismatched, or not verifiable (refused).
+  - `WithEnvelopeField` on `PadesSignerBuilder` and `DeferredSignerBuilder`: those checks, then the field's seed values
+    and level against how the signature is configured (the level is checked, never applied); the manifest's role is
+    claimed in signer-attributes-v2. The `SigningErrorReason` values 29–36 are raised.
+  - `PdfEnvelopeValidator` / `PdfEnvelopeReport`: each field signed, valid, by its signer, at its level, in order, the
+    manifest unchanged; `ToJson()`.
+  - `EnvelopeLevel` (`any`, `pades-b`…`pades-lta`), and `IcpBrasilEnvelopeLevels.AdRb` / `AdRt` (`SimpleSign.Brazil.IcpBrasil`).
+  - CLI: `simplesign envelope prepare|status`, `sign --envelope-field`, `validate --envelope`; a framework's levels come
+    with its extension (`ICliExtension.EnvelopeLevels`, the Brazil extension's `icp-ad-rb` and `icp-ad-rt`).
+  - TestBench: an Envelope tab (prepare, sign each field with the Sandbox's certificates, validate).
+  - Checked by qpdf and pyHanko (the certified first signature's later revisions are acceptable form filling) and by
+    veraPDF (PDF/A-3b); see `docs/articles/envelope.md`.
 
 ### Changed
 
@@ -102,6 +124,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider checks the hash, period, signature timestamp, format and root, not the XML PA's attribute rules.
 
 ### Fixed
+
+- **A signature field with a `/Lock` is signed with the FieldMDP reference it asks for** (ISO 32000-1 §12.7.4.5,
+  §12.8.2.4): the signature dictionary's `/Reference` gets a FieldMDP transform with the lock's `/Action`, `/Fields`
+  (and, from PDF 2.0, `/P`), after the DocMDP one when certifying. Before, the lock was left out of the signature, so a
+  reader could not enforce it from the signature. A field without a lock is signed byte for byte as before.
 
 - **A co-signed CAdES B-LTA: each archive-time-stamp-v3 is about its own SignerInfo** (ETSI EN 319 122-1 §5.5.3). Once
   `CadesSigner.CoSign` had added a second SignerInfo, `CadesSignatureValidator` rebuilt the archive time-stamp's input

@@ -27,8 +27,8 @@ updates that keep the bytes they do not change.
    envelope is refused (`DocumentNotSignable`, `DocumentEncrypted`). A PDF/A-2 or PDF/A-3 document is declared PDF/A-3
    in its XMP (`pdfaid:part` 3), as an associated file needs; nothing else of the XMP changes.
 2. **One signature field per signer**, `SimpleSign_1`, `SimpleSign_2`…: a flat name, the field merged with its widget,
-   no `/V`; `/F 4`, the page and rectangle chosen when preparing, and an appearance that is a frame without text (no font
-   to embed, safe for PDF/A).
+   no `/V`; `/F 4` (132, print and locked, outside PDF/A), the page and rectangle chosen when preparing, and an empty
+   appearance stream (nothing drawn: no font, no colour space, safe for PDF/A; a reader marks the empty field itself).
    - `/SV` holds only what any reader understands:
      - `/TimeStamp << /URL … /Ff 1 >>` when the signer's level needs a signature time-stamp;
      - `/MDP << /P n >>`, on the first field only, when the first signature certifies;
@@ -123,9 +123,9 @@ updates that keep the bytes they do not change.
 - The writer of an existing field writes a FieldMDP reference when the field has a `/Lock`. A field without one is
   signed as before, byte for byte.
 - `SigningErrorReason` 29–36 (already public) are raised.
-- The CLI gets `simplesign envelope prepare|status|validate` and `sign --envelope-field`. A framework's levels reach it
-  through its extension (`ICliExtension.EnvelopeLevels`), so the CLI still references no framework (ADR 0030). The
-  TestBench gets an Envelope tab and a playbook.
+- The CLI gets `simplesign envelope prepare|status`, `sign --envelope-field` and `validate --envelope` (with the trust
+  options of `validate`). A framework's levels reach it through its extension (`ICliExtension.EnvelopeLevels`), so the
+  CLI still references no framework (ADR 0030). The TestBench gets an Envelope tab.
 
 **Alternatives considered:**
 
@@ -143,5 +143,6 @@ updates that keep the bytes they do not change.
 **Follow-ups:**
 
 - A reserved page for a completion report.
+- A TestBench playbook for the envelope (its steps and the evidence of each refusal).
 - Identity readers for Peru (DNI, RUC).
 - DocMDP `/P` absent read as 2 (ADR 0032).

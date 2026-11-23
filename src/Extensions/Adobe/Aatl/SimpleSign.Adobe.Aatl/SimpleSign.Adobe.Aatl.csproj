@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Adobe.Aatl</PackageId>
     <Description>Adobe Approved Trust List (AATL) for SimpleSign: the trust anchors Acrobat trusts for signatures, read from Adobe's signed list at run time and checked against the Adobe root, with the list's certificate policy restrictions. Not affiliated with or endorsed by Adobe.</Description>
     <PackageTags>aatl;adobe;acrobat;trust-list;pades;pdf;digital-signature</PackageTags>
-    <Version>0.15.0</Version>
+    <Version>0.16.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
