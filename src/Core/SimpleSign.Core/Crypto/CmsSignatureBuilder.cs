@@ -742,23 +742,45 @@ public sealed class CmsSignatureBuilder
     };
 
     /// <summary>
-    /// Adds unsigned attributes to an existing CMS/PKCS#7 SignedData structure.
+    /// Adds unsigned attributes to the first SignerInfo of an existing CMS/PKCS#7 SignedData structure.
     /// Parses the original CMS, injects the attributes into SignerInfo unsignedAttrs [1],
     /// and returns the rewritten DER. Follows the same pattern used for timestamp embedding.
+    /// The other SignerInfos (co-signers) are kept as they are, in their order.
     /// </summary>
     /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
     /// <param name="unsignedAttributes">Unsigned attributes to inject (e.g., CertValues, RevocationValues, ArchiveTimeStamp).</param>
     /// <returns>Rewritten CMS bytes with unsigned attributes appended.</returns>
-    public static byte[] AddUnsignedAttributes(byte[] cmsBytes, IReadOnlyList<CmsAttribute> unsignedAttributes)
+    public static byte[] AddUnsignedAttributes(byte[] cmsBytes, IReadOnlyList<CmsAttribute> unsignedAttributes) =>
+        AddUnsignedAttributes(cmsBytes, unsignedAttributes, signerIndex: 0);
+
+    /// <summary>
+    /// Adds unsigned attributes to SignerInfo <paramref name="signerIndex"/> of an existing CMS/PKCS#7 SignedData
+    /// structure. The other SignerInfos and the rest of the SignedData are kept as they are, the SignerInfos in their
+    /// order (signing order, as <c>CadesSigner.CoSign</c> writes them).
+    /// </summary>
+    /// <param name="cmsBytes">DER-encoded CMS/PKCS#7 SignedData.</param>
+    /// <param name="unsignedAttributes">Unsigned attributes to inject (e.g., CertValues, RevocationValues, ArchiveTimeStamp).</param>
+    /// <param name="signerIndex">The SignerInfo to add them to, in SignerInfo order (<see cref="CmsParser.ParseAll"/>).</param>
+    /// <returns>Rewritten CMS bytes with unsigned attributes appended.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The SignedData has no SignerInfo <paramref name="signerIndex"/>.</exception>
+    public static byte[] AddUnsignedAttributes(byte[] cmsBytes, IReadOnlyList<CmsAttribute> unsignedAttributes, int signerIndex)
     {
         ArgumentNullException.ThrowIfNull(cmsBytes);
         ArgumentNullException.ThrowIfNull(unsignedAttributes);
 
-        if (unsignedAttributes.Count == 0)
-        {
-            return cmsBytes;
-        }
+        return unsignedAttributes.Count == 0
+            ? cmsBytes
+            : RewriteSignerInfo(cmsBytes, signerIndex, signerInfo => AddUnsignedAttrsToSignerInfo(signerInfo, unsignedAttributes));
+    }
 
+    /// <summary>
+    /// Rewrites SignerInfo <paramref name="signerIndex"/> of a DER SignedData with <paramref name="rewrite"/>. Every
+    /// other field and SignerInfo is kept octet for octet, and the SignerInfos SET keeps its order: DER would sort it
+    /// and renumber the signers (see <see cref="CmsComposer"/>).
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The SignedData has no SignerInfo <paramref name="signerIndex"/>.</exception>
+    internal static byte[] RewriteSignerInfo(byte[] cmsBytes, int signerIndex, Func<byte[], byte[]> rewrite)
+    {
         var reader = new AsnReader(cmsBytes, AsnEncodingRules.DER);
         var contentInfoSeq = reader.ReadSequence();
         string contentOid = contentInfoSeq.ReadObjectIdentifier();
@@ -782,9 +804,20 @@ public sealed class CmsSignatureBuilder
             crls = signedDataSeq.ReadEncodedValue().ToArray();
         }
 
-        var signerInfosTag = signedDataSeq.ReadSetOf();
-        byte[] signerInfoBytes = signerInfosTag.ReadEncodedValue().ToArray();
-        byte[] newSignerInfo = AddUnsignedAttrsToSignerInfo(signerInfoBytes, unsignedAttributes);
+        // In signing order, which is not DER's sort order once a co-signer was added.
+        var signerInfosSet = signedDataSeq.ReadSetOf(skipSortOrderValidation: true);
+        var signerInfos = new List<byte[]>();
+        while (signerInfosSet.HasData)
+        {
+            signerInfos.Add(signerInfosSet.ReadEncodedValue().ToArray());
+        }
+
+        if (signerIndex < 0 || signerIndex >= signerInfos.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(signerIndex), signerIndex, $"The signature has {signerInfos.Count} signer(s).");
+        }
+
+        signerInfos[signerIndex] = rewrite(signerInfos[signerIndex]);
 
         var writer = new AsnWriter(AsnEncodingRules.DER);
         using (writer.PushSequence())
@@ -807,10 +840,7 @@ public sealed class CmsSignatureBuilder
                         writer.WriteEncodedValue(crls);
                     }
 
-                    using (writer.PushSetOf())
-                    {
-                        writer.WriteEncodedValue(newSignerInfo);
-                    }
+                    CmsComposer.WriteSetInOrder(writer, signerInfos);
                 }
             }
         }

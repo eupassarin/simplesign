@@ -166,7 +166,7 @@ internal static class CmsComposer
     }
 
     /// <summary>Writes a SET OF without reordering its elements (BER-valid; signer order is meaningful to callers).</summary>
-    private static void WriteSetInOrder(AsnWriter w, List<byte[]> values)
+    internal static void WriteSetInOrder(AsnWriter w, List<byte[]> values)
     {
         var inner = new AsnWriter(AsnEncodingRules.BER);
         using (inner.PushSetOf())
