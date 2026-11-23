@@ -589,6 +589,12 @@ public sealed class PdfSignatureWriter
             updatedField = SetTopLevelValue(updatedField, "/AP", $"<< /N {appObjNum} 0 R >>");
         }
 
+        // The next object's number must start a line (ISO 32000-1 §7.3.10): the field ends at its endobj.
+        if (!updatedField.EndsWith('\n'))
+        {
+            updatedField += "\n";
+        }
+
         byte[] updatedFieldBytes = Encoding.Latin1.GetBytes(updatedField);
 
         // Write objects
@@ -626,15 +632,21 @@ public sealed class PdfSignatureWriter
 
         int catalogObjNum = PdfStructureParser.FindRootObjectNumber(inputMem.Span);
 
-        // If DocMDP, also update catalog
+        // If DocMDP, also update the catalog (a stale /Perms goes). The field is already in the form: the AcroForm
+        // stays as it is, inline or its own object (writing a reference to a new AcroForm object here, which was
+        // never written, lost the form of a document whose AcroForm is inline).
         if (options.CertificationLevel is not null)
         {
             int existingAcroFormObjNum = PdfStructureParser.FindAcroFormObjNum(inputMem.Span, catalogObjNum);
-            int acroFormObjNum = existingAcroFormObjNum > 0 ? existingAcroFormObjNum : (nextObjNum + 1);
-            byte[] catalogBytes = BuildCatalogDictionary(catalogObjNum, inputMem.Span, acroFormObjNum, options.CertificationLevel);
-            long catalogObjOffset = outputStream.Position;
-            await outputStream.WriteAsync(catalogBytes, cancellationToken).ConfigureAwait(false);
-            objectOffsets[catalogObjNum] = catalogObjOffset;
+            byte[]? catalogBytes = existingAcroFormObjNum > 0
+                ? BuildCatalogDictionary(catalogObjNum, inputMem.Span, existingAcroFormObjNum, options.CertificationLevel)
+                : BuildCatalogWithoutPerms(catalogObjNum, inputMem.Span);
+            if (catalogBytes is not null)
+            {
+                long catalogObjOffset = outputStream.Position;
+                await outputStream.WriteAsync(catalogBytes, cancellationToken).ConfigureAwait(false);
+                objectOffsets[catalogObjNum] = catalogObjOffset;
+            }
         }
 
         int newTrailerSize = Math.Max(sigObjNum + 1, objectOffsets.Keys.Max() + 1);
@@ -881,6 +893,32 @@ public sealed class PdfSignatureWriter
         // ITI guide: do NOT add /Perms with /DocMDP to the catalog (Adobe compatibility issues).
         // The /Reference array in the signature object is sufficient for DocMDP.
         return Encoding.Latin1.GetBytes($"{catalogObjNum} 0 obj\n<< /Type /Catalog /AcroForm {acroFormObjNum} 0 R >>\nendobj\n");
+    }
+
+    /// <summary>
+    /// The Catalog object again, without /Perms and otherwise unchanged (its inline /AcroForm kept); null when the
+    /// catalog cannot be found, so that it is not rewritten.
+    /// </summary>
+    internal static byte[]? BuildCatalogWithoutPerms(int catalogObjNum, ReadOnlySpan<byte> data)
+    {
+        var (objStart, objEnd) = PdfStructureParser.FindObjectBytes(data, catalogObjNum);
+        string? catalogText = objStart >= 0
+            ? Encoding.Latin1.GetString(data.Slice(objStart, objEnd - objStart))
+            : PdfStructureParser.ExtractObjectFromObjStm(data, catalogObjNum) is { } compressed
+                ? $"{catalogObjNum} 0 obj\n{compressed.Trim()}\nendobj\n"
+                : null;
+        if (catalogText is null)
+        {
+            return null;
+        }
+
+        string updatedCatalog = PdfStructureParser.RemoveKeyFromDict(catalogText, PdfKeys.Perms);
+        if (!updatedCatalog.EndsWith('\n'))
+        {
+            updatedCatalog += "\n";
+        }
+
+        return Encoding.Latin1.GetBytes(updatedCatalog);
     }
 
     /// <summary>

@@ -544,6 +544,49 @@ public sealed class PdfSignatureWriterTests
 
     // ── Helper: non-seekable stream ────────────────────────────────────────────
 
+    [Theory(DisplayName = "Certifying into an existing field of an inline AcroForm keeps the form")]
+    [InlineData(CertificationLevel.NoChanges)]
+    [InlineData(CertificationLevel.FormFilling)]
+    [InlineData(CertificationLevel.FormFillingAndAnnotations)]
+    public async Task SignAsync_ExistingFieldInlineAcroFormCertified_KeepsTheFormAndTheFieldName(CertificationLevel level)
+    {
+        var objects = new[]
+        {
+            "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] /SigFlags 3 >> >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Annots [4 0 R] >>",
+            "<< /Type /Annot /Subtype /Widget /FT /Sig /T (Assinatura) /P 3 0 R /Rect [72 300 292 370] /F 4 >>",
+        };
+        var sb = new StringBuilder("%PDF-1.7\n");
+        var offsets = new List<int>();
+        for (int i = 0; i < objects.Length; i++)
+        {
+            offsets.Add(sb.Length);
+            sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
+        }
+
+        int xref = sb.Length;
+        sb.Append("xref\n0 5\n0000000000 65535 f \n");
+        foreach (int offset in offsets)
+        {
+            sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"{offset:D10} 00000 n \n");
+        }
+
+        sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        using var cert = TestCertificateFactory.CreateSelfSignedCert();
+
+        byte[] signed = await PadesSigner.Document(Encoding.Latin1.GetBytes(sb.ToString())).WithCertificate(cert)
+            .WithExistingField("Assinatura").AsCertification(level).SignAsync();
+
+        var document = SimpleSign.PAdES.Pdf.Model.PdfDocument.Open(signed);
+        document.View().AcroForm.ShouldNotBeNull();
+        document.View().Fields.ShouldHaveSingleItem().FullName.ShouldBe("Assinatura");
+        using var stream = new MemoryStream(signed);
+        var field = (await PdfStructureReader.ReadSignatureFieldsAsync(stream)).ShouldHaveSingleItem();
+        field.FieldName.ShouldBe("Assinatura");
+        (await PdfStructureReader.GetDocMdpPermissionLevelAsync(stream)).ShouldBe((int)level);
+    }
+
     private sealed class NonSeekableStream : MemoryStream
     {
         public override bool CanSeek => false;

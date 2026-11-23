@@ -77,6 +77,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Certifying into an existing signature field of a document whose AcroForm is inline kept the form**: the catalog
+  was rewritten with a reference to an AcroForm object that was never written, so the document lost its form (viewers
+  showed no field, and the field's name was lost). The catalog now keeps its inline AcroForm, without a stale `/Perms`.
 - **What changed after a signature is compared object by object** (ADR 0032): the revision a signature covers is the
   file up to the end of its byte range, read as a document, and its objects are compared with the final ones
   semantically. A page written again with its keys in another order, other spacing or `612.0` for `612` is no longer
