@@ -8,6 +8,12 @@ internal static class Translations
 {
     public static readonly IReadOnlyDictionary<string, string> All = new Dictionary<string, string>(StringComparer.Ordinal)
     {
+        // ── Envelope tab ───────────────────────────────────────────────
+        ["Choose a document."] = "Escolha um documento.",
+        ["Choose a credential."] = "Escolha uma credencial.",
+        ["The PDF holds no signature envelope."] = "O PDF não tem envelope de assinaturas.",
+        ["Unknown level '{0}'."] = "Nível desconhecido: '{0}'.",
+
         // ── Signing policy ─────────────────────────────────────────────
         ["EU (eIDAS)"] = "UE (eIDAS)",
         ["EidasProfile: the EU list of trusted lists (or the Sandbox's, with the source below), the eidas policies and the qualification of each signature (QESig, AdESig-QC…)."] = "EidasProfile: a lista de listas de confiança da UE (ou a do Sandbox, com a origem abaixo), as políticas eidas e a qualificação de cada assinatura (QESig, AdESig-QC…).",

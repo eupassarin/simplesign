@@ -47,134 +47,131 @@ internal static class EnvelopeApi
     {
         var envelope = api.MapGroup("/envelope");
         envelope.MapGet("/levels", () => Levels.Select(l => new { l.Id, Baseline = l.Baseline.ToString(), l.Timestamp, l.SubFilters, l.PolicyOids }));
-
-        envelope.MapPost("/prepare", async (EnvelopePrepareRequest body, DocumentStore documents, CredentialStore credentials, CancellationToken ct) =>
-        {
-            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
-            {
-                return Results.NotFound(new { error = L.T("Choose a document.") });
-            }
-
-            try
-            {
-                var builder = PdfEnvelope.Prepare(file!.Content)
-                    .WithOrder(body.Order == "parallel" ? EnvelopeOrder.Parallel : EnvelopeOrder.Sequential);
-                foreach (var signer in body.Signers)
-                {
-                    builder = builder.AddSigner(Signer(signer, credentials));
-                }
-
-                if (!string.IsNullOrWhiteSpace(body.TsaUrl))
-                {
-                    builder = builder.WithTimestampUrl(new Uri(body.TsaUrl));
-                }
-
-                if (Certification(body.Certify) is { } level)
-                {
-                    builder = builder.WithCertification(level);
-                }
-
-                if (body.LockDocument)
-                {
-                    builder = builder.WithDocumentLock();
-                }
-
-                byte[] prepared = await builder.PrepareAsync(ct);
-                var stored = documents.Add(Path.GetFileNameWithoutExtension(file.FileName) + "-envelope.pdf", prepared);
-                return Results.Ok(View(stored.Id, stored.FileName, prepared));
-            }
-            catch (SigningException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message, reason = ex.Reason.ToString() });
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException or UriFormatException)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
-        });
-
+        envelope.MapPost("/prepare", (EnvelopePrepareRequest body, DocumentStore documents, CredentialStore credentials, CancellationToken ct) =>
+            Answer(async () => Results.Ok(await PrepareAsync(body, documents, credentials, ct))));
         envelope.MapPost("/status", (EnvelopeFileRequest body, DocumentStore documents) =>
-            string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file)
-                ? Results.NotFound(new { error = L.T("Choose a document.") })
-                : PdfEnvelopeReader.Read(file!.Content) is null
-                    ? Results.BadRequest(new { error = L.T("The PDF holds no signature envelope.") })
-                    : Results.Ok(View(file.Id, file.FileName, file.Content)));
-
-        envelope.MapPost("/sign", async (EnvelopeSignRequest body, DocumentStore documents, CredentialStore credentials, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
-        {
-            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
-            {
-                return Results.NotFound(new { error = L.T("Choose a document.") });
-            }
-
-            if (!credentials.TryGet(body.CredentialId, out var credential))
-            {
-                return Results.BadRequest(new { error = L.T("Choose a credential.") });
-            }
-
-            try
-            {
-                var builder = credential!.External is { } external
-                    ? PadesSigner.Document(file!.Content).WithExternalSigner(credential.Certificate, external, credential.Chain)
-                    : PadesSigner.Document(file!.Content).WithCertificate(credential.Certificate, credential.Chain);
-                // The TestBench's HTTP provider lets the connected Sandbox's loopback services in (its TSA).
-                builder = builder.WithHttpClientProvider(sandbox);
-                var timestamp = string.IsNullOrWhiteSpace(body.TsaUrl) ? null : new TimestampOptions(new Uri(body.TsaUrl), sandbox);
-                if (body.IcpPolicy is { Length: > 0 } policy)
-                {
-                    builder = builder.WithCountryExtension(new IcpBrasilExtension())
-                        .WithIcpBrasilPolicy(policy == "ad-rt" ? IcpBrasilPolicy.AdRt : IcpBrasilPolicy.AdRb, timestamp);
-                }
-                else if (timestamp is not null)
-                {
-                    builder = builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp));
-                }
-
-                if (Certification(body.Certify) is { } level)
-                {
-                    builder = builder.AsCertification(level);
-                }
-
-                byte[] signed = await builder.WithEnvelopeField(body.Field).SignAsync(ct);
-                var stored = documents.Add(Path.GetFileNameWithoutExtension(file.FileName).Replace("-envelope", "", StringComparison.Ordinal) + $"-{body.Field}.pdf", signed);
-                return Results.Ok(View(stored.Id, stored.FileName, signed));
-            }
-            catch (SigningException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message, reason = ex.Reason.ToString() });
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UriFormatException or CryptographicException)
-            {
-                return Results.BadRequest(new { error = ex.Message });
-            }
-        });
-
-        envelope.MapPost("/validate", async (EnvelopeFileRequest body, DocumentStore documents, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
-        {
-            if (string.IsNullOrEmpty(body.FileId) || !documents.TryGet(body.FileId, out var file))
-            {
-                return Results.NotFound(new { error = L.T("Choose a document.") });
-            }
-
-            try
-            {
-                // The connected Sandbox's root is trusted, as the Sandbox's certificates sign the fields here.
-                var root = sandbox.Current?.Root;
-                var options = new SimpleSign.Core.Validation.ValidationOptions
-                {
-                    CheckRevocation = false,
-                    Profile = IdentityProfile,
-                    TrustedRoots = root is null ? null : [root],
-                };
-                var report = await new PdfEnvelopeValidator(options).ValidateAsync(file!.Content, ct);
-                return Results.Text(report.ToJson(), "application/json");
-            }
-            catch (SigningException ex)
-            {
-                return Results.BadRequest(new { error = ex.Message, reason = ex.Reason.ToString() });
-            }
-        });
+            Answer(() => Task.FromResult(Results.Ok(Status(body, documents)))));
+        envelope.MapPost("/sign", (EnvelopeSignRequest body, DocumentStore documents, CredentialStore credentials, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
+            Answer(async () => Results.Ok(await SignAsync(body, documents, credentials, sandbox, ct))));
+        envelope.MapPost("/validate", (EnvelopeFileRequest body, DocumentStore documents, Sandbox.SandboxEnvironment sandbox, CancellationToken ct) =>
+            Answer(async () => Results.Text((await ValidateAsync(body, documents, sandbox, ct)).ToJson(), "application/json")));
     }
+
+    /// <summary>Prepares the envelope and stores the prepared file.</summary>
+    internal static async Task<EnvelopeView> PrepareAsync(EnvelopePrepareRequest body, DocumentStore documents, CredentialStore credentials, CancellationToken ct)
+    {
+        var file = FileOf(body.FileId, documents);
+        var builder = PdfEnvelope.Prepare(file.Content)
+            .WithOrder(body.Order == "parallel" ? EnvelopeOrder.Parallel : EnvelopeOrder.Sequential);
+        foreach (var signer in body.Signers)
+        {
+            builder = builder.AddSigner(Signer(signer, credentials));
+        }
+
+        if (!string.IsNullOrWhiteSpace(body.TsaUrl))
+        {
+            builder = builder.WithTimestampUrl(new Uri(body.TsaUrl));
+        }
+
+        if (Certification(body.Certify) is { } level)
+        {
+            builder = builder.WithCertification(level);
+        }
+
+        if (body.LockDocument)
+        {
+            builder = builder.WithDocumentLock();
+        }
+
+        byte[] prepared = await builder.PrepareAsync(ct);
+        var stored = documents.Add(Path.GetFileNameWithoutExtension(file.FileName) + "-envelope.pdf", prepared);
+        return View(stored.Id, stored.FileName, prepared);
+    }
+
+    /// <summary>Where the envelope of a stored file stands.</summary>
+    internal static EnvelopeView Status(EnvelopeFileRequest body, DocumentStore documents)
+    {
+        var file = FileOf(body.FileId, documents);
+        return PdfEnvelopeReader.Read(file.Content) is null
+            ? throw new ArgumentException(L.T("The PDF holds no signature envelope."))
+            : View(file.Id, file.FileName, file.Content);
+    }
+
+    /// <summary>Signs a field with a credential of the workbench and stores the signed file.</summary>
+    internal static async Task<EnvelopeView> SignAsync(
+        EnvelopeSignRequest body, DocumentStore documents, CredentialStore credentials, Sandbox.SandboxEnvironment sandbox, CancellationToken ct)
+    {
+        var file = FileOf(body.FileId, documents);
+        if (!credentials.TryGet(body.CredentialId, out var credential))
+        {
+            throw new ArgumentException(L.T("Choose a credential."));
+        }
+
+        var builder = credential!.External is { } external
+            ? PadesSigner.Document(file.Content).WithExternalSigner(credential.Certificate, external, credential.Chain)
+            : PadesSigner.Document(file.Content).WithCertificate(credential.Certificate, credential.Chain);
+
+        // The TestBench's HTTP provider lets the connected Sandbox's loopback services in (its TSA).
+        builder = builder.WithHttpClientProvider(sandbox);
+        var timestamp = string.IsNullOrWhiteSpace(body.TsaUrl) ? null : new TimestampOptions(new Uri(body.TsaUrl), sandbox);
+        if (body.IcpPolicy is { Length: > 0 } policy)
+        {
+            builder = builder.WithCountryExtension(new IcpBrasilExtension())
+                .WithIcpBrasilPolicy(policy == "ad-rt" ? IcpBrasilPolicy.AdRt : IcpBrasilPolicy.AdRb, timestamp);
+        }
+        else if (timestamp is not null)
+        {
+            builder = builder.WithLevel(AdesBaselineProfile.Timestamped(timestamp));
+        }
+
+        if (Certification(body.Certify) is { } level)
+        {
+            builder = builder.AsCertification(level);
+        }
+
+        byte[] signed = await builder.WithEnvelopeField(body.Field).SignAsync(ct);
+        string name = Path.GetFileNameWithoutExtension(file.FileName).Replace("-envelope", "", StringComparison.Ordinal) + $"-{body.Field}.pdf";
+        var stored = documents.Add(name, signed);
+        return View(stored.Id, stored.FileName, signed);
+    }
+
+    /// <summary>Validates the envelope of a stored file, trusting the connected Sandbox's root (its certificates sign the fields here).</summary>
+    internal static Task<PdfEnvelopeReport> ValidateAsync(EnvelopeFileRequest body, DocumentStore documents, Sandbox.SandboxEnvironment sandbox, CancellationToken ct)
+    {
+        var file = FileOf(body.FileId, documents);
+        var root = sandbox.Current?.Root;
+        var options = new SimpleSign.Core.Validation.ValidationOptions
+        {
+            CheckRevocation = false,
+            Profile = IdentityProfile,
+            TrustedRoots = root is null ? null : [root],
+        };
+        return new PdfEnvelopeValidator(options).ValidateAsync(file.Content, ct);
+    }
+
+    /// <summary>The answer of an endpoint: a missing file is a 404, a refusal or a wrong request a 400 with the reason.</summary>
+    private static async Task<IResult> Answer(Func<Task<IResult>> action)
+    {
+        try
+        {
+            return await action();
+        }
+        catch (FileNotFoundException ex)
+        {
+            return Results.NotFound(new { error = ex.Message });
+        }
+        catch (SigningException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message, reason = ex.Reason.ToString() });
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException or UriFormatException or CryptographicException)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
+    }
+
+    private static StoredFile FileOf(string? id, DocumentStore documents) =>
+        !string.IsNullOrEmpty(id) && documents.TryGet(id, out var file) ? file! : throw new FileNotFoundException(L.T("Choose a document."));
 
     /// <summary>The levels offered: the library's and ICP-Brasil's.</summary>
     internal static IReadOnlyList<EnvelopeLevel> Levels { get; } =
