@@ -29,7 +29,7 @@ export interface ValidateTarget {
 }
 
 /** The tasks of the top bar: the three run kinds (sign, validate, augment), and the Playbook tab. */
-export type AppMode = RunKind | "playbook"
+export type AppMode = RunKind | "playbook" | "envelope"
 
 /** How the Augment task raises a signature: the level to reach, the TSA, and whether a B-LTA's archive time-stamp is renewed. */
 export interface AugmentSettings {
@@ -165,11 +165,11 @@ export function WorkbenchProvider({ schema, initialEnv, children }: { schema: Wo
   const [evaluating, setEvaluating] = useState(false)
   const [mode, setModeState] = useState<AppMode>(() => {
     const saved = load<string>("wb.mode", "sign")
-    return saved === "validate" || saved === "augment" || saved === "playbook" ? saved : "sign"
+    return saved === "validate" || saved === "augment" || saved === "playbook" || saved === "envelope" ? saved : "sign"
   })
   const [slots, setSlots] = useState<Record<RunKind, Slot>>({ sign: emptySlot, validate: emptySlot, augment: emptySlot })
   const patchSlot = useCallback((kind: RunKind, change: (slot: Slot) => Slot) => setSlots((all) => ({ ...all, [kind]: change(all[kind]) })), [])
-  const { run, logs, running } = slots[mode === "playbook" ? "sign" : mode]
+  const { run, logs, running } = slots[mode === "playbook" || mode === "envelope" ? "sign" : mode]
   const [validateTarget, setValidateTarget] = useState<ValidateTarget | null>(null)
   const [validateOptions, setValidateOptions] = useState<Options>(() => ({ validate: true, validation: initial(schema, "pades", connected).validation }))
   const [augmentTarget, setAugmentTarget] = useState<ValidateTarget | null>(null)

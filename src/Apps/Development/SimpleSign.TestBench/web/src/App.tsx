@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { ArrowUpFromLine, BookCheck, BookOpen, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
+import { ArrowUpFromLine, BookCheck, BookOpen, FileSignature, FileSliders, Globe, Loader2, Moon, PenTool, ShieldCheck, Sun, SunMoon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Toaster } from "@/components/ui/sonner"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AugmentPage } from "@/features/augment/AugmentPage"
+import { EnvelopePage } from "@/features/envelope/EnvelopePage"
 import { RealEnvironment } from "@/features/environment/RealEnvironment"
 import { PoliciesPage } from "@/features/policies/PoliciesPage"
 import { SandboxControl } from "@/features/sandbox/SandboxControl"
@@ -55,6 +56,7 @@ const modes: { id: AppMode; icon: typeof PenTool }[] = [
   { id: "sign", icon: PenTool },
   { id: "validate", icon: ShieldCheck },
   { id: "augment", icon: ArrowUpFromLine },
+  { id: "envelope", icon: FileSignature },
   { id: "playbook", icon: BookCheck },
 ]
 
@@ -114,7 +116,7 @@ function Shell() {
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">
-        {mode === "sign" ? <WorkbenchPage /> : mode === "validate" ? <ValidatePage /> : mode === "augment" ? <AugmentPage /> : <PlaybookPage />}
+        {mode === "sign" ? <WorkbenchPage /> : mode === "validate" ? <ValidatePage /> : mode === "augment" ? <AugmentPage /> : mode === "envelope" ? <EnvelopePage /> : <PlaybookPage />}
       </main>
     </div>
   )
