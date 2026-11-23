@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -64,354 +65,14 @@ public sealed partial class PdfSignatureWriter
                 throw new ArgumentException("Document information entries are not supported when signing an existing field.", nameof(documentInfo));
             }
 
-            return await PrepareExistingFieldAsync(outputStream, inputMem, options, pdfALevel, signingTime, cancellationToken).ConfigureAwait(false);
+            return PdfWriterSwitch.UseLegacy
+                ? await PrepareExistingFieldLegacyAsync(outputStream, inputPdf, inputMem, options, pdfALevel, cancellationToken, signingTime).ConfigureAwait(false)
+                : await PrepareExistingFieldAsync(outputStream, inputMem, options, pdfALevel, signingTime, cancellationToken).ConfigureAwait(false);
         }
 
-        // Step 2: Determine the next available object number.
-        int nextObjNum = PdfStructureParser.DetermineNextObjectNumber(inputMem.Span);
-
-        // Step 2b: Ensure unique field name — auto-increment if the default name is already used.
-        string fieldName = options.FieldName;
-        if (fieldName == "Signature1")
-        {
-            // Count existing fields from AcroForm /Fields array (handles ObjStm-compressed fields)
-            int catObjNum = PdfStructureParser.FindRootObjectNumber(inputMem.Span);
-            int acroObjNum = PdfStructureParser.FindAcroFormObjNum(inputMem.Span, catObjNum);
-            int existingSigFields = 0;
-            if (acroObjNum > 0)
-            {
-                var (objStart, objEnd) = PdfStructureParser.FindObjectBytes(inputMem.Span, acroObjNum);
-                if (objStart >= 0)
-                {
-                    string acroText = Encoding.Latin1.GetString(inputMem.Span.Slice(objStart, objEnd - objStart));
-                    var refs = PdfStructureParser.ParseFieldsArray(acroText);
-                    if (refs.Count == 0)
-                    {
-                        refs = PdfStructureParser.ResolveIndirectFields(inputMem.Span, acroText);
-                    }
-                    existingSigFields = refs.Count;
-                }
-                else
-                {
-                    existingSigFields = PdfStructureParser.ExtractFieldsFromCompressedAcroForm(inputMem.Span, acroObjNum).Count;
-                }
-            }
-
-            // Fallback: scan raw bytes for /FT /Sig (catches uncompressed fields)
-            if (existingSigFields == 0)
-            {
-                ReadOnlySpan<byte> ftSigToken = "/FT /Sig"u8;
-                int searchPos = 0;
-                while (searchPos < inputMem.Span.Length)
-                {
-                    int idx = inputMem.Span.Slice(searchPos).IndexOf(ftSigToken);
-                    if (idx < 0)
-                    {
-                        break;
-                    }
-                    existingSigFields++;
-                    searchPos += idx + ftSigToken.Length;
-                }
-            }
-
-            if (existingSigFields > 0)
-            {
-                fieldName = $"Signature{existingSigFields + 1}";
-            }
-        }
-
-        // Step 3: Locate the target page object for the widget annotation.
-        bool hasAppearance = options.Appearance != null;
-        int targetPage = options.Appearance?.Page ?? 1;
-
-        // An anchored stamp goes on the page of its text, at the start of the text plus the offsets.
-        (float X, float Y)? anchoredAt = null;
-        if (options.Appearance?.Anchor is { } anchor)
-        {
-            var placement = anchor.Locate(inputMem.ToArray());
-            targetPage = placement.Page;
-            anchoredAt = (placement.X, placement.Y);
-        }
-        int pageObjNum;
-        int pageObjDictStart;
-        int pageObjDictEnd;
-
-        if (targetPage > 1)
-        {
-            pageObjNum = PdfStructureParser.FindNthPageObjNum(inputMem.Span, targetPage);
-            if (pageObjNum > 0)
-            {
-                var (objStart, objEnd) = PdfStructureParser.FindObjectBytes(inputMem.Span, pageObjNum);
-                if (objStart >= 0)
-                {
-                    pageObjDictStart = -1;
-                    for (int pos = objStart; pos < objEnd - 1; pos++)
-                    {
-                        if (inputMem.Span[pos] == (byte)'<' && inputMem.Span[pos + 1] == (byte)'<')
-                        {
-                            pageObjDictStart = pos;
-                            break;
-                        }
-                    }
-                    pageObjDictEnd = objEnd;
-                }
-                else
-                {
-                    pageObjDictStart = -1;
-                    pageObjDictEnd = -1;
-                }
-            }
-            else
-            {
-                (pageObjNum, pageObjDictStart, pageObjDictEnd) = (-1, -1, -1);
-            }
-        }
-        else
-        {
-            (pageObjNum, pageObjDictStart, pageObjDictEnd) = PdfStructureParser.FindFirstPageObject(inputMem.Span);
-        }
-
-        (logger ?? NullLogger.Instance).PdfStructureParsed(nextObjNum, $"{pageObjNum} 0 R");
-        if (hasAppearance && pageObjNum <= 0)
-        {
-            hasAppearance = false;
-        }
-
-        // Step 4: Assign object numbers for the new PDF objects.
-        int sigObjNum = nextObjNum;
-        int fieldObjNum = nextObjNum + 1;
-        int catalogObjNum = PdfStructureParser.FindRootObjectNumber(inputMem.Span);
-        int existingAcroFormObjNum = PdfStructureParser.FindAcroFormObjNum(inputMem.Span, catalogObjNum);
-        // Reuse existing AcroForm object number to avoid changing the Catalog reference
-        // (changing it breaks EU DSS validation of the first signature in multi-sig PDFs).
-        bool reuseAcroForm = existingAcroFormObjNum > 0;
-        // An inline /AcroForm dictionary in the Catalog must stay inline: converting it to an
-        // indirect object drops entries such as /DA and /DR, and Acrobat's modification analysis
-        // then invalidates earlier signatures.
-        bool preserveInlineAcroForm = !reuseAcroForm
-            && PdfStructureParser.HasUpdatableInlineAcroForm(inputMem.Span, catalogObjNum);
-        int acroFormObjNum = reuseAcroForm ? existingAcroFormObjNum : (nextObjNum + 2);
-        int appObjNum = (reuseAcroForm || preserveInlineAcroForm) ? (nextObjNum + 2) : (nextObjNum + 3);
-        int imageObjNum = appObjNum + 1;
-        int fontFileObjNum = appObjNum + 2;
-        int fontDescriptorObjNum = appObjNum + 3;
-        int softMaskObjNum = appObjNum + 4;
-        int contentsHexLength = options.ContentsReservedBytes * 2;
-        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
-
-        // Compute appearance dimensions and auto-position if requested.
-        float appWidth = 0f, appHeight = 0f;
-        float appX = 0f, appY = 0f;
-        if (hasAppearance && options.Appearance != null)
-        {
-            var a = options.Appearance;
-            bool hasReason = !string.IsNullOrEmpty(options.Reason);
-            bool hasLocation = !string.IsNullOrEmpty(options.Location);
-            appWidth = a.ComputeWidth(options.SignerName ?? "Signer", options.Reason, options.Location, sigNow);
-            appHeight = a.ComputeHeight(hasReason, hasLocation);
-
-            // A page inside a compressed object stream (ISO 32000 §7.5.7) has no dictionary bytes of its own to slice.
-            string? pageDict = pageObjNum <= 0 ? null
-                : pageObjDictStart >= 0 ? Encoding.Latin1.GetString(inputMem.Span.Slice(pageObjDictStart, pageObjDictEnd - pageObjDictStart))
-                : PdfStructureParser.ExtractObjectFromObjStm(inputMem.Span, pageObjNum);
-            if (anchoredAt is { } anchored)
-            {
-                (appX, appY) = anchored;
-            }
-            else if (a.AutoPosition && pageDict is not null)
-            {
-                float pageWidth = PdfStructureParser.ParseMediaBoxWidth(inputMem.Span, pageDict);
-                int rotation = PdfStructureParser.ParsePageRotation(inputMem.Span, pageDict);
-                int existingSigCount = PdfStructureParser.CountVisibleSignatureAnnotations(inputMem.Span);
-
-                // For 90°/270° rotation, the effective page dimensions are swapped (§8.3.2.4)
-                float effectiveWidth = (rotation == 90 || rotation == 270)
-                    ? PdfStructureParser.ParsePageHeight(inputMem.Span, pageDict)
-                    : pageWidth;
-
-                (appX, appY) = SignatureAppearance.ComputeAutoPosition(effectiveWidth, 0f, existingSigCount, appWidth, appHeight);
-            }
-            else
-            {
-                appX = a.X;
-                appY = a.Y;
-            }
-        }
-
-        // Step 5: Build all new PDF objects.
-        string sigDictText = BuildSignatureDictionary(sigObjNum, options, contentsHexLength, sigNow);
-        var fieldAnnParams = new FieldAnnotationParams(fieldName, fieldObjNum, sigObjNum, appObjNum, appX, appY, appWidth, appHeight, pageObjNum);
-        string fieldDictText = BuildFieldAnnotation(options, fieldAnnParams, pdfALevel);
-        byte[] sigDictBytes = Encoding.Latin1.GetBytes(sigDictText);
-        byte[] fieldDictBytes = Encoding.Latin1.GetBytes(fieldDictText);
-        byte[]? acroFormBytes = preserveInlineAcroForm
-            ? null
-            : BuildAcroFormDictionary(acroFormObjNum, inputMem.Span, existingAcroFormObjNum, fieldObjNum, catalogObjNum);
-
-        // Only rewrite the Catalog when the AcroForm reference changes or certification is needed.
-        // Rewriting the Catalog in a 2nd incremental update (even with identical content) causes
-        // EU DSS to flag the 1st signature as inconsistent.
-        bool needCatalogUpdate = !reuseAcroForm || options.CertificationLevel is not null;
-        byte[]? catalogBytes = needCatalogUpdate
-            ? preserveInlineAcroForm
-                ? BuildCatalogWithUpdatedInlineAcroForm(catalogObjNum, inputMem.Span, fieldObjNum, options.CertificationLevel)
-                : BuildCatalogDictionary(catalogObjNum, inputMem.Span, acroFormObjNum, options.CertificationLevel)
-            : null;
-
-        // Step 6: Write objects and compute byte offsets.
-        long sigObjOffset = outputStream.Position;
-        long fieldObjOffset = sigObjOffset + sigDictBytes.Length;
-        long acroFormObjOffset = fieldObjOffset + fieldDictBytes.Length;
-
-        await outputStream.WriteAsync(sigDictBytes, cancellationToken).ConfigureAwait(false);
-        int byteRangePos = sigDictText.IndexOf(PdfKeys.ByteRange, StringComparison.Ordinal);
-        (logger ?? NullLogger.Instance).PdfSigDictWritten(sigObjOffset, sigObjOffset + byteRangePos);
-        await outputStream.WriteAsync(fieldDictBytes, cancellationToken).ConfigureAwait(false);
-        if (acroFormBytes != null)
-        {
-            await outputStream.WriteAsync(acroFormBytes, cancellationToken).ConfigureAwait(false);
-        }
-
-        long catalogObjOffset = 0L;
-        if (catalogBytes != null)
-        {
-            catalogObjOffset = outputStream.Position;
-            await outputStream.WriteAsync(catalogBytes, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Step 7: Write font embedding infrastructure (for PDF/A-1 / visible signatures).
-        long fontFileObjOffset = 0L;
-        long fontDescriptorObjOffset = 0L;
-        if (hasAppearance)
-        {
-            var fontFileBytes = PdfFontWriter.BuildFontFileObject(fontFileObjNum);
-            var fontDescriptorBytes = PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum);
-            fontFileObjOffset = outputStream.Position;
-            await outputStream.WriteAsync(fontFileBytes, cancellationToken).ConfigureAwait(false);
-            fontDescriptorObjOffset = outputStream.Position;
-            await outputStream.WriteAsync(fontDescriptorBytes, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Step 8: Write appearance XObject (if visible) and update page /Annots (always).
-        long appObjOffset = 0L;
-        long updPageObjOffset = 0L;
-        Dictionary<int, long> appendedObjOffsets = [];
-        bool hasImage = hasAppearance && options.Appearance?.HasBackgroundImage() == true;
-        if (hasAppearance && options.Appearance != null)
-        {
-            var colorProfiles = AppearanceColorProfiles.For(pdfALevel, appObjNum);
-            byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
-                appObjNum, options, sigNow, appWidth, appHeight,
-                hasImage ? imageObjNum : 0,
-                fontFileObjNum,
-                fontDescriptorObjNum,
-                hasImage ? softMaskObjNum : 0,
-                colorProfiles);
-            appObjOffset = outputStream.Position;
-            await outputStream.WriteAsync(appearanceBytes, cancellationToken).ConfigureAwait(false);
-
-            // The image XObject, its soft mask and the ICC profiles, when present, follow the form XObject.
-            appendedObjOffsets = FindAppendedObjects(appearanceBytes, appObjOffset, imageObjNum, softMaskObjNum, colorProfiles);
-        }
-
-        // Always add the widget annotation to the page's /Annots array.
-        // Adobe Reader requires this to display the signature in the signature panel,
-        // even for invisible signatures (Rect [0 0 0 0], no /AP).
-        if (pageObjNum > 0)
-        {
-            byte[] updatedPageBytes;
-            if (pageObjDictStart >= 0)
-            {
-                updatedPageBytes = BuildUpdatedPageObject(pageObjNum, inputMem.Span, pageObjDictStart, pageObjDictEnd, fieldObjNum);
-            }
-            else
-            {
-                // Page object is in a compressed ObjStm — extract and rewrite as regular object
-                updatedPageBytes = BuildUpdatedPageObjectFromObjStm(pageObjNum, inputMem.Span, fieldObjNum);
-            }
-
-            if (updatedPageBytes.Length > 0)
-            {
-                updPageObjOffset = outputStream.Position;
-                await outputStream.WriteAsync(updatedPageBytes, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                pageObjNum = -1; // failed to extract — skip page offset entry
-            }
-        }
-
-        // Step 8: Build and write the cross-reference section and trailer.
-        // Use xref streams when the original PDF uses them (ISO 32000 §7.5.8);
-        // otherwise use classic xref tables for maximum compatibility.
-        SortedDictionary<int, long> objectOffsets = new SortedDictionary<int, long>
-        {
-            [sigObjNum] = sigObjOffset,
-            [fieldObjNum] = fieldObjOffset
-        };
-        if (acroFormBytes != null)
-        {
-            objectOffsets[acroFormObjNum] = acroFormObjOffset;
-        }
-        if (needCatalogUpdate)
-        {
-            objectOffsets[catalogObjNum] = catalogObjOffset;
-        }
-        if (pageObjNum > 0)
-        {
-            objectOffsets[pageObjNum] = updPageObjOffset;
-        }
-        if (hasAppearance)
-        {
-            objectOffsets[appObjNum] = appObjOffset;
-            foreach (var (appendedObjNum, appendedOffset) in appendedObjOffsets)
-            {
-                objectOffsets[appendedObjNum] = appendedOffset;
-            }
-            objectOffsets[fontFileObjNum] = fontFileObjOffset;
-            objectOffsets[fontDescriptorObjNum] = fontDescriptorObjOffset;
-        }
-        long prevXRef = await PdfStructureParser.FindPrevXRefAsync(inputPdf, cancellationToken).ConfigureAwait(false);
-        string? trailerId = PdfStructureParser.FindTrailerId(inputMem.Span);
-        string? trailerInfo = PdfStructureParser.FindTrailerInfo(inputMem.Span);
-        if (documentInfo is { Count: > 0 })
-        {
-            int infoObjNum = Math.Max(objectOffsets.Keys.Max() + 1, nextObjNum);
-            objectOffsets[infoObjNum] = outputStream.Position;
-            await outputStream.WriteAsync(BuildInfoObject(inputMem.Span, trailerInfo, infoObjNum, documentInfo), cancellationToken).ConfigureAwait(false);
-            trailerInfo = $"/Info {infoObjNum} 0 R";
-        }
-
-        long xrefOffset = outputStream.Position;
-
-        bool useXRefStream = PdfStructureParser.UsesXRefStreams(inputMem.Span);
-        if (useXRefStream)
-        {
-            int xrefObjNum = objectOffsets.Keys.Max() + 1;
-            int newTrailerSize = xrefObjNum + 1;
-            var (xrefBytes, _) = BuildXrefStream(objectOffsets, xrefObjNum, newTrailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            await outputStream.WriteAsync(xrefBytes, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            int maxObjNum = objectOffsets.Keys.Max();
-            int newTrailerSize = maxObjNum + 1;
-            byte[] xrefBytes = BuildXrefTableAndTrailer(objectOffsets, newTrailerSize, catalogObjNum, prevXRef, xrefOffset, trailerId, trailerInfo);
-            await outputStream.WriteAsync(xrefBytes, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Step 9: Back-fill the ByteRange placeholder with actual offsets.
-        PdfByteRange byteRange = await BackfillByteRangeAsync(outputStream, sigDictText, sigObjOffset, contentsHexLength, cancellationToken).ConfigureAwait(false);
-        (logger ?? NullLogger.Instance).PdfByteRangeCalculated(byteRange.Offset1, byteRange.Length1, byteRange.Offset2, byteRange.Length2);
-        (logger ?? NullLogger.Instance).PdfPrepareCompleted(outputStream.Position, objectOffsets.Count);
-
-        return new PdfSignaturePrepareResult
-        {
-            ByteRange = byteRange,
-            ContentsHexOffset = byteRange.Length1 + 1,
-            ContentsReservedBytes = options.ContentsReservedBytes,
-            SigDictObjectNumber = sigObjNum
-        };
+        return PdfWriterSwitch.UseLegacy
+            ? await PrepareNewFieldLegacyAsync(inputPdf, outputStream, inputMem, options, logger, pdfALevel, signingTime, documentInfo, cancellationToken).ConfigureAwait(false)
+            : await PrepareNewFieldAsync(outputStream, inputMem, options, logger, pdfALevel, signingTime, documentInfo, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -608,13 +269,11 @@ public sealed partial class PdfSignatureWriter
             update.Add(fontDescriptorObjNum, PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum));
             bool hasImage = options.Appearance.HasBackgroundImage();
             var colorProfiles = AppearanceColorProfiles.For(pdfALevel, appObjNum);
-            byte[] appearanceBytes = SignatureAppearanceRenderer.BuildAppearanceXObject(
+            foreach (var (number, bytes) in SignatureAppearanceRenderer.BuildAppearanceObjects(
                 appObjNum, options, sigNow, appWidth, appHeight,
-                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0, colorProfiles);
-            long appObjOffset = update.Add(appObjNum, appearanceBytes);
-            foreach (var (appendedObjNum, appendedOffset) in FindAppendedObjects(appearanceBytes, appObjOffset, imageObjNum, softMaskObjNum, colorProfiles))
+                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0, colorProfiles))
             {
-                update.Locate(appendedObjNum, appendedOffset);
+                update.Add(number, bytes);
             }
         }
 
@@ -633,8 +292,315 @@ public sealed partial class PdfSignatureWriter
         }
 
         byte[] updated = update.Finish(Math.Max(sigObjNum + 1, update.Offsets.Keys.Max() + 1), catalogObjNum);
+        var byteRange = FillByteRange(updated, values);
+        await WriteAfterOriginalAsync(outputStream, updated, cancellationToken).ConfigureAwait(false);
 
-        // The byte range: everything but the /Contents string, delimiters included.
+        return new PdfSignaturePrepareResult
+        {
+            ByteRange = byteRange,
+            ContentsHexOffset = byteRange.Length1 + 1,
+            ContentsReservedBytes = options.ContentsReservedBytes,
+            SigDictObjectNumber = sigObjNum
+        };
+    }
+
+    /// <summary>
+    /// Adds a new signature field (ADR 0032): the document is read through the PDF object model, so the catalog, the
+    /// AcroForm (inline or its own object), the page (the page tree's, by number) and the document information are the
+    /// objects the cross-reference lists, wherever they are. The update holds, in order, the signature dictionary, the
+    /// field, the AcroForm and the catalog when they change, the appearance, the page with the field in its
+    /// <c>/Annots</c>, and the document information; each existing object keeps every byte but the entries changed.
+    /// </summary>
+    private static async Task<PdfSignaturePrepareResult> PrepareNewFieldAsync(
+        Stream outputStream, Memory<byte> inputMem, SignatureFieldOptions options, ILogger? logger, PdfALevel? pdfALevel,
+        DateTimeOffset? signingTime, IReadOnlyDictionary<string, string>? documentInfo, CancellationToken cancellationToken)
+    {
+        logger ??= NullLogger.Instance;
+        var document = PdfDocument.Open(inputMem);
+        var view = document.View();
+        if (document.RootId is not { } rootId || document.GetObject(rootId) is not { Value: PdfDictionary catalog } catalogObject)
+        {
+            throw new PdfStructureException("The document has no catalog: a signature field cannot be added to it.");
+        }
+
+        int nextObjNum = view.NextObjectNumber;
+        string fieldName = options.FieldName == "Signature1" ? DefaultFieldName(view) : options.FieldName;
+
+        // The page of the widget: the appearance's (or its anchor's), by number in the page tree.
+        bool hasAppearance = options.Appearance is not null;
+        int targetPage = options.Appearance?.Page ?? 1;
+        (float X, float Y)? anchoredAt = null;
+        if (options.Appearance?.Anchor is { } anchor)
+        {
+            var placement = anchor.Locate(inputMem.ToArray());
+            targetPage = placement.Page;
+            anchoredAt = (placement.X, placement.Y);
+        }
+
+        var page = view.Pages.Count >= Math.Max(targetPage, 1) ? view.Pages[Math.Max(targetPage, 1) - 1] : null;
+        int pageObjNum = page?.Id?.Number ?? -1;
+        logger.PdfStructureParsed(nextObjNum, $"{pageObjNum} 0 R");
+        if (hasAppearance && pageObjNum <= 0)
+        {
+            hasAppearance = false;
+        }
+
+        int sigObjNum = nextObjNum;
+        int fieldObjNum = nextObjNum + 1;
+        string fieldRef = $"{fieldObjNum} 0 R";
+        int catalogObjNum = rootId.Number;
+        var acroFormValue = catalog.Get(PdfName.AcroForm);
+        int existingAcroFormObjNum = acroFormValue is PdfReference acroFormReference ? acroFormReference.Id.Number : 0;
+
+        // The AcroForm's object is kept (a new reference in the catalog breaks EU DSS's validation of earlier
+        // signatures), and an inline AcroForm stays inline (moving it out drops /DA, /DR…, and Acrobat then invalidates
+        // earlier signatures) when its /Fields is an array or absent.
+        bool reuseAcroForm = existingAcroFormObjNum > 0;
+        var catalogSource = PdfObjectSource.Of(document, catalogObjNum, catalogObject, keepHeader: true);
+        bool preserveInlineAcroForm = !reuseAcroForm && !catalogSource.Compressed
+            && acroFormValue is PdfDictionary inlineAcroForm && inlineAcroForm.Get(PdfName.Fields) is null or PdfArray;
+        int acroFormObjNum = reuseAcroForm ? existingAcroFormObjNum : nextObjNum + 2;
+        int appObjNum = reuseAcroForm || preserveInlineAcroForm ? nextObjNum + 2 : nextObjNum + 3;
+        int imageObjNum = appObjNum + 1;
+        int fontFileObjNum = appObjNum + 2;
+        int fontDescriptorObjNum = appObjNum + 3;
+        int softMaskObjNum = appObjNum + 4;
+        DateTime sigNow = (signingTime ?? DateTimeOffset.UtcNow).UtcDateTime;
+
+        float appWidth = 0f, appHeight = 0f, appX = 0f, appY = 0f;
+        if (hasAppearance)
+        {
+            var a = options.Appearance!;
+            appWidth = a.ComputeWidth(options.SignerName ?? "Signer", options.Reason, options.Location, sigNow);
+            appHeight = a.ComputeHeight(!string.IsNullOrEmpty(options.Reason), !string.IsNullOrEmpty(options.Location));
+            if (anchoredAt is { } anchored)
+            {
+                (appX, appY) = anchored;
+            }
+            else if (a.AutoPosition)
+            {
+                // The visible region (§8.3.2.2), turned with the page (§8.3.2.4).
+                var box = BoxSize(document, page!.CropBox) ?? BoxSize(document, page.MediaBox);
+                int rotation = ((page.Rotate % 360) + 360) % 360;
+                float effectiveWidth = rotation is 90 or 270 ? box?.Height ?? 792f : box?.Width ?? 612f;
+                (appX, appY) = SignatureAppearance.ComputeAutoPosition(effectiveWidth, 0f, CountVisibleSignatures(document, view), appWidth, appHeight);
+            }
+            else
+            {
+                appX = options.Appearance!.X;
+                appY = options.Appearance.Y;
+            }
+        }
+
+        var update = new PdfIncrementalUpdate(document);
+        var (sigObjOffset, values) = update.Add(
+            sigObjNum, SignatureDictionary(options, options.ContentsReservedBytes, sigNow),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["ByteRange"] = ByteRangePlaceholder });
+        logger.PdfSigDictWritten(sigObjOffset, values["ByteRange"].Start - "/ByteRange ".Length);
+        update.Add(fieldObjNum, PdfObjectSerializer.Write(fieldObjNum, FieldAnnotation(
+            fieldName, sigObjNum, pageObjNum, pdfALevel,
+            hasAppearance ? (appX, appY, appWidth, appHeight, appObjNum) : null)).Bytes);
+
+        if (!preserveInlineAcroForm)
+        {
+            // The AcroForm as an object of its own: the one the catalog points to, or the inline one moved out.
+            var (existing, source) = reuseAcroForm
+                ? document.GetObject(existingAcroFormObjNum) is { Value: PdfDictionary indirect } acroFormObject
+                    ? (indirect, PdfObjectSource.Of(document, existingAcroFormObjNum, acroFormObject).Buffer)
+                    : (null, ReadOnlyMemory<byte>.Empty)
+                : (acroFormValue as PdfDictionary, catalogSource.Buffer);
+            update.Add(acroFormObjNum, PdfFormUpdate.AcroFormObject(document, acroFormObjNum, existing, source, fieldRef));
+        }
+
+        // The catalog only when the AcroForm's reference changes or when certifying: writing it again needlessly makes
+        // EU DSS flag earlier signatures. Certifying drops a stale /Perms.
+        if (!reuseAcroForm || options.CertificationLevel is not null)
+        {
+            var patch = new PdfDictionaryPatch(catalogSource.ObjectBytes);
+            if (options.CertificationLevel is not null)
+            {
+                patch.Remove(PdfKeys.Perms[1..]);
+            }
+
+            if (preserveInlineAcroForm)
+            {
+                patch.AppendToArray([PdfName.AcroForm.Value, PdfName.Fields.Value], fieldRef);
+            }
+            else
+            {
+                patch.Remove(PdfName.AcroForm.Value).Set(PdfName.AcroForm.Value, $"{acroFormObjNum} 0 R");
+            }
+
+            update.Add(catalogObjNum, PdfFormUpdate.WithFinalLineFeed(patch.ToBytes()));
+        }
+
+        if (hasAppearance)
+        {
+            update.Add(fontFileObjNum, PdfFontWriter.BuildFontFileObject(fontFileObjNum));
+            update.Add(fontDescriptorObjNum, PdfFontWriter.BuildFontDescriptorObject(fontDescriptorObjNum, fontFileObjNum));
+            bool hasImage = options.Appearance!.HasBackgroundImage();
+            foreach (var (number, bytes) in SignatureAppearanceRenderer.BuildAppearanceObjects(
+                appObjNum, options, sigNow, appWidth, appHeight,
+                hasImage ? imageObjNum : 0, fontFileObjNum, fontDescriptorObjNum, hasImage ? softMaskObjNum : 0,
+                AppearanceColorProfiles.For(pdfALevel, appObjNum)))
+            {
+                update.Add(number, bytes);
+            }
+        }
+
+        // The widget in the page's /Annots, invisible signatures too: Adobe Reader lists a signature from there.
+        if (page?.Id is { } pageId && document.GetObject(pageId) is { } pageObject)
+        {
+            update.Add(pageObjNum, PdfFormUpdate.WithFinalLineFeed(PdfFormUpdate.PageWithAnnotation(document, pageObjNum, pageObject, fieldRef)));
+        }
+
+        int? infoObjNum = null;
+        if (documentInfo is { Count: > 0 })
+        {
+            infoObjNum = Math.Max(update.Offsets.Keys.Max() + 1, nextObjNum);
+            update.Add(infoObjNum.Value, InfoObject(document, infoObjNum.Value, documentInfo));
+        }
+
+        int objectCount = update.Offsets.Count;
+        byte[] updated = update.Finish(update.Offsets.Keys.Max() + 1, catalogObjNum, info: infoObjNum);
+        var byteRange = FillByteRange(updated, values);
+        await WriteAfterOriginalAsync(outputStream, updated, cancellationToken).ConfigureAwait(false);
+        logger.PdfByteRangeCalculated(byteRange.Offset1, byteRange.Length1, byteRange.Offset2, byteRange.Length2);
+        logger.PdfPrepareCompleted(outputStream.Position, objectCount);
+
+        return new PdfSignaturePrepareResult
+        {
+            ByteRange = byteRange,
+            ContentsHexOffset = byteRange.Length1 + 1,
+            ContentsReservedBytes = options.ContentsReservedBytes,
+            SigDictObjectNumber = sigObjNum
+        };
+    }
+
+    /// <summary>
+    /// The name of a field when none is given: <c>Signature</c> and one more than the AcroForm's top-level fields (its
+    /// signature fields when it has none at the top), the first such name no field has.
+    /// </summary>
+    private static string DefaultFieldName(PdfRevisionView view)
+    {
+        int count = view.RootFields.Count();
+        if (count == 0)
+        {
+            count = view.Fields.Count(f => f.IsSignature);
+        }
+
+        if (count == 0)
+        {
+            return "Signature1";
+        }
+
+        int n = count + 1;
+        while (view.Fields.Any(f => f.FullName == $"Signature{n}"))
+        {
+            n++;
+        }
+
+        return $"Signature{n}";
+    }
+
+    /// <summary>The visible signature widgets (a <c>/Rect</c> other than <c>[0 0 0 0]</c>), for placing a new one beside them.</summary>
+    private static int CountVisibleSignatures(PdfDocument document, PdfRevisionView view) =>
+        view.Fields.Where(f => f.IsSignature)
+            .SelectMany(f => f.Widgets.Select(w => w is null || w == f.Id ? f.Dictionary : document.GetObject(w.Value)?.Value as PdfDictionary))
+            .Count(widget => document.Resolve(widget?.Get("Rect")) is PdfArray rect
+                && rect.Any(v => document.Resolve(v) is PdfInteger { Value: not 0 } or PdfReal { Value: not 0 }));
+
+    /// <summary>A box's width and height (its upper-right corner less its lower-left); null when it is not four numbers or not positive.</summary>
+    private static (float Width, float Height)? BoxSize(PdfDocument document, PdfArray? box)
+    {
+        if (box is not { Count: 4 })
+        {
+            return null;
+        }
+
+        float[] n = [.. box.Select(v => document.Resolve(v) switch
+        {
+            PdfInteger i => i.Value,
+            PdfReal r => (float)r.Value,
+            _ => float.NaN,
+        })];
+        return n.Any(float.IsNaN) || n[2] - n[0] <= 0 ? null : (n[2] - n[0], n[3] - n[1]);
+    }
+
+    /// <summary>
+    /// The document information dictionary written as a new object: the current one (or an empty one) with the entries
+    /// set, each written as before (<c> /Key value</c> before its <c>&gt;&gt;</c>, a printable ASCII value as a literal
+    /// string, any other as UTF-16BE).
+    /// </summary>
+    private static byte[] InfoObject(PdfDocument document, int number, IReadOnlyDictionary<string, string> entries)
+    {
+        string dictionary = "<<\n>>";
+        foreach (var section in document.Revisions.Reverse().SelectMany(r => r.Sections))
+        {
+            if (section.Trailer.Get(PdfName.Info) is PdfReference reference)
+            {
+                if (document.GetObject(reference.Id) is { Value: PdfDictionary { Source: { } range } } info)
+                {
+                    var buffer = PdfObjectSource.Of(document, reference.Id.Number, info).Buffer;
+                    if (range.End <= buffer.Length)
+                    {
+                        dictionary = Encoding.Latin1.GetString(buffer.Span.Slice((int)range.Offset, range.Length));
+                    }
+                }
+
+                break;
+            }
+        }
+
+        var patch = new PdfDictionaryPatch(Encoding.Latin1.GetBytes(string.Create(CultureInfo.InvariantCulture, $"{number} 0 obj\n{dictionary}\nendobj\n")));
+        foreach (var (key, value) in entries)
+        {
+            patch.Remove(key).Set(key, EncodeTextString(value), indent: " ");
+        }
+
+        return patch.ToBytes();
+    }
+
+    /// <summary>
+    /// The signature field and its widget in one dictionary, as the signer has always written it: invisible, a
+    /// <c>/Rect</c> of zeros; visible, its rectangle and its appearance.
+    /// </summary>
+    internal static PdfDictionary FieldAnnotation(
+        string fieldName, int sigObjNum, int pageObjNum, PdfALevel? pdfALevel, (float X, float Y, float Width, float Height, int AppObjNum)? appearance)
+    {
+        var entries = new List<PdfDictionaryEntry>
+        {
+            new(PdfName.Type, PdfName.Of("Annot")),
+            new(PdfName.Subtype, PdfName.Of("Widget")),
+            new(PdfName.FT, PdfName.Sig),
+            new(PdfName.T, PdfObjectSerializer.TextString(fieldName)),
+            new(PdfName.V, new PdfReference(sigObjNum)),
+        };
+        if (pageObjNum > 0)
+        {
+            entries.Add(new(PdfName.Of("P"), new PdfReference(pageObjNum)));
+        }
+
+        entries.Add(new(PdfName.Of("F"), new PdfInteger(pdfALevel is PdfALevel.A1a or PdfALevel.A1b ? 4 : 132)));
+        entries.Add(new(PdfName.Of("Border"), new PdfArray([new PdfInteger(0), new PdfInteger(0), new PdfInteger(0)])));
+        if (appearance is var (x, y, width, height, app))
+        {
+            entries.Add(new(PdfName.Of("Rect"), new PdfArray([
+                PdfObjectSerializer.Coordinate(x), PdfObjectSerializer.Coordinate(y),
+                PdfObjectSerializer.Coordinate(x + width), PdfObjectSerializer.Coordinate(y + height)])));
+            entries.Add(new(PdfName.Of("AP"), new PdfDictionary(("N", new PdfReference(app)))));
+        }
+        else
+        {
+            entries.Add(new(PdfName.Of("Rect"), new PdfArray([new PdfInteger(0), new PdfInteger(0), new PdfInteger(0), new PdfInteger(0)])));
+        }
+
+        return new PdfDictionary(entries);
+    }
+
+    /// <summary>Fills the <c>/ByteRange</c> placeholder: everything but the <c>/Contents</c> string, its delimiters included.</summary>
+    private static PdfByteRange FillByteRange(byte[] updated, IReadOnlyDictionary<string, (long Start, int Length)> values)
+    {
         var (contentsStart, contentsLength) = values["Contents"];
         var byteRange = new PdfByteRange
         {
@@ -645,18 +611,12 @@ public sealed partial class PdfSignatureWriter
         };
         Encoding.Latin1.GetBytes($"[0 {byteRange.Length1} {byteRange.Offset2} {byteRange.Length2}]".PadRight(ByteRangePlaceholder.Length))
             .CopyTo(updated, values["ByteRange"].Start);
-
-        // The original is in the output already (and its final line feed): what follows it is written.
-        await outputStream.WriteAsync(updated.AsMemory((int)outputStream.Position), cancellationToken).ConfigureAwait(false);
-
-        return new PdfSignaturePrepareResult
-        {
-            ByteRange = byteRange,
-            ContentsHexOffset = byteRange.Length1 + 1,
-            ContentsReservedBytes = options.ContentsReservedBytes,
-            SigDictObjectNumber = sigObjNum
-        };
+        return byteRange;
     }
+
+    /// <summary>The original (and its final line feed) is in the output already: what follows it is written.</summary>
+    private static Task WriteAfterOriginalAsync(Stream outputStream, byte[] updated, CancellationToken cancellationToken) =>
+        outputStream.WriteAsync(updated.AsMemory((int)outputStream.Position), cancellationToken).AsTask();
 
     private const string ByteRangePlaceholder = "[0000000000 0000000000 0000000000 0000000000]";
 

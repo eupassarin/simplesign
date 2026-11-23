@@ -82,6 +82,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A new signature field is written through the PDF object model** (ADR 0032): the catalog, the AcroForm, the page
+  and the document information are the objects the cross-reference lists, wherever they are, so signing no longer:
+  - names the field after a count of `/FT /Sig` in the file's text, which gave a name another field already had (20
+    of the golden test's cases); the name is `Signature` and one more than the form's fields, the first one free;
+  - writes `/Rect` and an `/AP` that points to no object when there is no page to draw the appearance on;
+  - draws on the file's first `/Type /Page`, or misses page N of a nested page tree (the signature then went
+    invisible), instead of the page tree's page;
+  - places an automatic stamp after every copy of the visible signatures in the file;
+  - rebuilds the AcroForm with the value of `/Type /AcroForm` as a key, loses its fields when the catalog is in an
+    object stream, or rewrites an older copy of the catalog, AcroForm or page;
+  - turns the CRLF line ends of the catalog, the page or the document information into LF.
+
+  The appearance renderer gives its objects one by one instead of bytes searched for `endobj`. Elsewhere the update
+  is the same, byte for byte: 415 of the 660 cases of the golden test (every document of the writers' corpus,
+  invisible, named, visible, certifying, with document information).
+- **`SimpleSign.PAdES.UseLegacyPdfWriter`** (preview): an `AppContext` switch that takes the signer, the document
+  timestamp writer and the LTV embedder back to the writers before the object model, should one of them write
+  something a viewer refuses. It goes with the old code in the next release.
 - **Signing an existing signature field finds it in the field tree** (`ExistingFieldName`, ADR 0032): the field is
   looked for by its fully qualified name (`Parent.Child`), else its `/T`, through the PDF object model, so a field
   written `/FT/Sig` (no space), one inside an object stream, or one that inherits `/FT` from its parent is found

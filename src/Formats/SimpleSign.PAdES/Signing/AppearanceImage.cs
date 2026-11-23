@@ -98,10 +98,14 @@ internal sealed class AppearanceImage
     /// Writes the image object (and its soft mask object, when present) as indirect objects.
     /// The soft mask is omitted when <paramref name="softMaskObjNum"/> is 0.
     /// </summary>
-    public byte[] BuildObjects(int imageObjNum, int softMaskObjNum)
+    public byte[] BuildObjects(int imageObjNum, int softMaskObjNum) =>
+        [.. BuildObjectParts(imageObjNum, softMaskObjNum).SelectMany(part => part.Bytes)];
+
+    /// <summary>The image object and its soft mask object (when present), each with its number.</summary>
+    public IReadOnlyList<(int Number, byte[] Bytes)> BuildObjectParts(int imageObjNum, int softMaskObjNum)
     {
         bool withMask = _softMaskData is not null && softMaskObjNum > 0;
-        using var ms = new MemoryStream();
+        var parts = new List<(int, byte[])>();
 
         var dict = new StringBuilder();
         dict.Append($"{imageObjNum} 0 obj\n<< /Type /XObject\n   /Subtype /Image\n");
@@ -113,7 +117,7 @@ internal sealed class AppearanceImage
         }
 
         dict.Append($"   /Length {_imageData.Length}\n>>\nstream\n");
-        WriteObject(ms, dict.ToString(), _imageData);
+        parts.Add((imageObjNum, ObjectBytes(dict.ToString(), _imageData)));
 
         if (withMask)
         {
@@ -122,18 +126,14 @@ internal sealed class AppearanceImage
                 $"   /Width {PixelWidth}\n   /Height {PixelHeight}\n" +
                 "   /ColorSpace /DeviceGray\n   /BitsPerComponent 8\n   /Filter /FlateDecode\n" +
                 $"   /Length {_softMaskData!.Length}\n>>\nstream\n";
-            WriteObject(ms, maskDict, _softMaskData);
+            parts.Add((softMaskObjNum, ObjectBytes(maskDict, _softMaskData)));
         }
 
-        return ms.ToArray();
+        return parts;
     }
 
-    private static void WriteObject(MemoryStream ms, string header, byte[] data)
-    {
-        ms.Write(Encoding.Latin1.GetBytes(header));
-        ms.Write(data);
-        ms.Write("\nendstream\nendobj\n"u8);
-    }
+    private static byte[] ObjectBytes(string header, byte[] data) =>
+        [.. Encoding.Latin1.GetBytes(header), .. data, .. "\nendstream\nendobj\n"u8];
 
     // ── JPEG ────────────────────────────────────────────────────────────
 

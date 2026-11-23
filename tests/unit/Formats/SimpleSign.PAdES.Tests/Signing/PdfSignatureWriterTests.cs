@@ -3,6 +3,7 @@ using Shouldly;
 using SimpleSign.PAdES.Signing;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.TestHelpers;
+using SimpleSign.PAdES.Tests.Pdf.Parity;
 using Xunit;
 
 namespace SimpleSign.PAdES.Tests.Signing;
@@ -324,35 +325,13 @@ public sealed class PdfSignatureWriterTests
     /// </summary>
     private static byte[] BuildPdfWithPageInObjStm()
     {
-        string pages = "<< /Type /Pages /Kids [3 0 R] /Count 1 >>";
-        string page = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> >>";
-        string header = $"2 0 3 {pages.Length + 1}\n";
-        byte[] compressed;
-        using (var ms = new MemoryStream())
-        {
-            using (var zlib = new System.IO.Compression.ZLibStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
-            {
-                zlib.Write(Encoding.Latin1.GetBytes(header + pages + " " + page));
-            }
-
-            compressed = ms.ToArray();
-        }
-
-        var pdf = new MemoryStream();
-        void Write(string text) => pdf.Write(Encoding.Latin1.GetBytes(text));
-        Write("%PDF-1.7\n");
-        long catalog = pdf.Position;
-        Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-        long objStm = pdf.Position;
-        Write($"4 0 obj\n<< /Type /ObjStm /N 2 /First {header.Length} /Filter /FlateDecode /Length {compressed.Length} >>\nstream\n");
-        pdf.Write(compressed);
-        Write("\nendstream\nendobj\n");
-        long xref = pdf.Position;
-        Write("xref\n0 2\n0000000000 65535 f \n");
-        Write($"{catalog:D10} 00000 n \n");
-        Write($"4 1\n{objStm:D10} 00000 n \n");
-        Write($"trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
-        return pdf.ToArray();
+        // A cross-reference stream lists the compressed objects (a table cannot).
+        return new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Compressed(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Compressed(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << >> >>")
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { ObjectStreamNumber = 4, XrefStreamNumber = 5 })
+            .ToArray();
     }
 
     /// <summary>
@@ -361,72 +340,17 @@ public sealed class PdfSignatureWriterTests
     /// </summary>
     private static byte[] BuildPdfWithAcroFormInObjStm()
     {
-        var sb = new StringBuilder();
-        sb.Append("%PDF-1.7\n");
-
-        // Object 1: Catalog referencing AcroForm as object 5
-        int obj1Offset = sb.Length;
-        sb.Append("1 0 obj\n<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>\nendobj\n");
-
-        // Object 2: Pages
-        int obj2Offset = sb.Length;
-        sb.Append("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-
-        // Object 3: Page
-        int obj3Offset = sb.Length;
-        sb.Append("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n");
-
-        // Object 4: ObjStm containing objects 5 (AcroForm) and 6 (dummy)
-        string acroFormData = "<< /Type /AcroForm /Fields [10 0 R 20 0 R] /SigFlags 3 >>";
-        string dummyData = "<< /Type /Font /BaseFont /Helvetica >>";
-        string objStmHeader = $"5 0 6 {acroFormData.Length}\n";
-        string uncompressed = objStmHeader + acroFormData + dummyData;
-        byte[] uncompressedBytes = Encoding.Latin1.GetBytes(uncompressed);
-
-        // Compress with zlib
-        byte[] compressed;
-        using (var ms = new MemoryStream())
-        {
-            ms.WriteByte(0x78);
-            ms.WriteByte(0x01);
-            using (var deflate = new System.IO.Compression.DeflateStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
-            {
-                deflate.Write(uncompressedBytes);
-            }
-
-            compressed = ms.ToArray();
-        }
-
-        int obj4Offset = sb.Length;
-        sb.Append($"4 0 obj\n<< /Type /ObjStm /N 2 /First {objStmHeader.Length} /Filter /FlateDecode /Length {compressed.Length} >>\nstream\n");
-        int streamInsertPos = Encoding.Latin1.GetByteCount(sb.ToString());
-
-        string afterStream = "\nendstream\nendobj\n";
-
-        // Build xref
-        int xrefOffset = streamInsertPos + compressed.Length + Encoding.Latin1.GetByteCount(afterStream);
-        var xrefSb = new StringBuilder();
-        xrefSb.Append("xref\n0 5\n");
-        xrefSb.Append("0000000000 65535 f \n");
-        xrefSb.Append($"{obj1Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj2Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj3Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj4Offset:D10} 00000 n \n");
-        xrefSb.Append("trailer\n<< /Size 7 /Root 1 0 R >>\n");
-        xrefSb.Append($"startxref\n{xrefOffset}\n%%EOF\n");
-
-        // Assemble final PDF
-        byte[] beforeStream = Encoding.Latin1.GetBytes(sb.ToString());
-        byte[] afterStreamBytes = Encoding.Latin1.GetBytes(afterStream);
-        byte[] xrefBytes = Encoding.Latin1.GetBytes(xrefSb.ToString());
-
-        var result = new byte[beforeStream.Length + compressed.Length + afterStreamBytes.Length + xrefBytes.Length];
-        beforeStream.CopyTo(result, 0);
-        compressed.CopyTo(result, beforeStream.Length);
-        afterStreamBytes.CopyTo(result, beforeStream.Length + compressed.Length);
-        xrefBytes.CopyTo(result, beforeStream.Length + compressed.Length + afterStreamBytes.Length);
-
-        return result;
+        // A cross-reference stream lists the compressed objects (a table cannot).
+        return new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm 5 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>")
+            .Object(10, "<< /FT /Tx /T (Name) >>")
+            .Object(20, "<< /FT /Tx /T (Email) >>")
+            .Compressed(5, "<< /Type /AcroForm /Fields [10 0 R 20 0 R] /SigFlags 3 >>")
+            .Compressed(6, "<< /Type /Font /BaseFont /Helvetica >>")
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { ObjectStreamNumber = 4, XrefStreamNumber = 7 })
+            .ToArray();
     }
 
     [Fact(DisplayName = "PrepareAsync preserves AcroForm keys whose values contain >>")]
@@ -471,7 +395,7 @@ public sealed class PdfSignatureWriterTests
         await PdfSignatureWriter.PrepareAsync(input, output, DefaultOptions());
 
         string outputText = Encoding.Latin1.GetString(output.ToArray());
-        outputText.ShouldContain("/Annots [11 0 R 6 0 R]");
+        outputText.ShouldMatch(@"/Annots \[11 0 R \d+ 0 R\]");
     }
 
     /// <summary>
@@ -481,65 +405,15 @@ public sealed class PdfSignatureWriterTests
     /// </summary>
     private static byte[] BuildPdfWithCompressedIndirectAnnots()
     {
-        var sb = new StringBuilder();
-        sb.Append("%PDF-1.7\n");
-
-        int obj1Offset = sb.Length;
-        sb.Append("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
-
-        int obj2Offset = sb.Length;
-        sb.Append("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
-
-        int obj3Offset = sb.Length;
-        sb.Append("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots 10 0 R >>\nendobj\n");
-
-        string annotsArray = "[11 0 R]";
-        string dummyData = "<< /Type /Annot >>";
-        string objStmHeader = $"10 0 11 {annotsArray.Length}\n";
-        string uncompressed = objStmHeader + annotsArray + dummyData;
-        byte[] uncompressedBytes = Encoding.Latin1.GetBytes(uncompressed);
-
-        byte[] compressed;
-        using (var ms = new MemoryStream())
-        {
-            ms.WriteByte(0x78);
-            ms.WriteByte(0x01);
-            using (var deflate = new System.IO.Compression.DeflateStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
-            {
-                deflate.Write(uncompressedBytes);
-            }
-
-            compressed = ms.ToArray();
-        }
-
-        int obj4Offset = sb.Length;
-        sb.Append($"4 0 obj\n<< /Type /ObjStm /N 2 /First {objStmHeader.Length} /Filter /FlateDecode /Length {compressed.Length} >>\nstream\n");
-        int streamInsertPos = Encoding.Latin1.GetByteCount(sb.ToString());
-
-        string afterStream = "\nendstream\nendobj\n";
-        int xrefOffset = streamInsertPos + compressed.Length + Encoding.Latin1.GetByteCount(afterStream);
-
-        var xrefSb = new StringBuilder();
-        xrefSb.Append("xref\n0 5\n");
-        xrefSb.Append("0000000000 65535 f \n");
-        xrefSb.Append($"{obj1Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj2Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj3Offset:D10} 00000 n \n");
-        xrefSb.Append($"{obj4Offset:D10} 00000 n \n");
-        xrefSb.Append("trailer\n<< /Size 5 /Root 1 0 R >>\n");
-        xrefSb.Append($"startxref\n{xrefOffset}\n%%EOF\n");
-
-        byte[] beforeStream = Encoding.Latin1.GetBytes(sb.ToString());
-        byte[] afterStreamBytes = Encoding.Latin1.GetBytes(afterStream);
-        byte[] xrefBytes = Encoding.Latin1.GetBytes(xrefSb.ToString());
-
-        var result = new byte[beforeStream.Length + compressed.Length + afterStreamBytes.Length + xrefBytes.Length];
-        beforeStream.CopyTo(result, 0);
-        compressed.CopyTo(result, beforeStream.Length);
-        afterStreamBytes.CopyTo(result, beforeStream.Length + compressed.Length);
-        xrefBytes.CopyTo(result, beforeStream.Length + compressed.Length + afterStreamBytes.Length);
-
-        return result;
+        // A cross-reference stream lists the compressed objects (a table cannot).
+        return new PdfFileBuilder()
+            .Object(1, "<< /Type /Catalog /Pages 2 0 R >>")
+            .Object(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .Object(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots 10 0 R >>")
+            .Compressed(10, "[11 0 R]")
+            .Compressed(11, "<< /Type /Annot >>")
+            .EndRevision(XrefStyle.Stream, new RevisionOptions { ObjectStreamNumber = 4, XrefStreamNumber = 5 })
+            .ToArray();
     }
 
     // ── Helper: non-seekable stream ────────────────────────────────────────────

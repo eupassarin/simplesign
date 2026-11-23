@@ -71,34 +71,10 @@ public sealed class PdfObjectSerializerTests
         var options = new SignatureFieldOptions { Appearance = appearance ? new SignatureAppearance() : null };
         string legacy = LegacyFieldAnnotation(options, "Assinatura do Contratante", 14, 12, 15, 72.5f, 300f, 220.25f, 70f, page, level);
 
-        var entries = new List<PdfDictionaryEntry>
-        {
-            new(PdfName.Type, PdfName.Of("Annot")),
-            new(PdfName.Subtype, PdfName.Of("Widget")),
-            new(PdfName.FT, PdfName.Sig),
-            new(PdfName.T, PdfObjectSerializer.TextString("Assinatura do Contratante")),
-            new(PdfName.V, new PdfReference(12)),
-        };
-        if (page > 0)
-        {
-            entries.Add(new(PdfName.Of("P"), new PdfReference(page)));
-        }
+        var field = PdfSignatureWriter.FieldAnnotation(
+            "Assinatura do Contratante", 12, page, level, appearance ? (72.5f, 300f, 220.25f, 70f, 15) : null);
 
-        entries.Add(new(PdfName.Of("F"), new PdfInteger(level is PdfALevel.A1a or PdfALevel.A1b ? 4 : 132)));
-        entries.Add(new(PdfName.Of("Border"), new PdfArray([new PdfInteger(0), new PdfInteger(0), new PdfInteger(0)])));
-        if (appearance)
-        {
-            entries.Add(new(PdfName.Of("Rect"), new PdfArray([
-                PdfObjectSerializer.Coordinate(72.5f), PdfObjectSerializer.Coordinate(300f),
-                PdfObjectSerializer.Coordinate(72.5f + 220.25f), PdfObjectSerializer.Coordinate(300f + 70f)])));
-            entries.Add(new(PdfName.Of("AP"), new PdfDictionary(("N", new PdfReference(15)))));
-        }
-        else
-        {
-            entries.Add(new(PdfName.Of("Rect"), new PdfArray([new PdfInteger(0), new PdfInteger(0), new PdfInteger(0), new PdfInteger(0)])));
-        }
-
-        Text(PdfObjectSerializer.Write(14, new PdfDictionary(entries))).ShouldBe(legacy);
+        Text(PdfObjectSerializer.Write(14, field)).ShouldBe(legacy);
     }
 
     [Theory]

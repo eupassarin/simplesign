@@ -76,7 +76,8 @@ internal sealed class PdfDictionaryPatch
     /// <summary>Sets a top-level entry to a value written as given.</summary>
     /// <param name="key">The key, without the slash.</param>
     /// <param name="value">The value as it is to be written (<see cref="PdfObjectSerializer.ToText"/>).</param>
-    public PdfDictionaryPatch Set(string key, string value)
+    /// <param name="indent">What precedes an entry inserted before the <c>&gt;&gt;</c>.</param>
+    public PdfDictionaryPatch Set(string key, string value, string indent = "   ")
     {
         string entry = $"/{key} {value}";
 
@@ -88,7 +89,7 @@ internal sealed class PdfDictionaryPatch
         else
         {
             int close = DictionaryClose(Dictionary);
-            _edits.Add((close, close, $"   {entry}\n"));
+            _edits.Add((close, close, $"{indent}{entry}\n"));
         }
 
         return this;

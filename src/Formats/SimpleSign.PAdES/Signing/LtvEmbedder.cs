@@ -482,6 +482,13 @@ public sealed class LtvEmbedder : ILtvEmbedder
         IReadOnlyList<PdfDssArtifact> artifacts,
         TimeProvider? timeProvider = null)
     {
+        if (PdfWriterSwitch.UseLegacy)
+        {
+            return LtvEmbedderLegacy.AppendDssDictionary(
+                signedPdf, crls, ocsps, certs, LtvEmbedderLegacy.ExtractSignatureContentHashes(signedPdf),
+                Validation.DssExtractor.ParseExistingDss(signedPdf), timestampTokenBytes, artifacts, timeProvider);
+        }
+
         var document = PdfDocument.Open(signedPdf);
         var view = document.View();
         if (document.RootId is not { } rootId || document.GetObject(rootId) is not { Value: PdfDictionary } catalogObject)

@@ -96,16 +96,6 @@ internal sealed class PdfIncrementalUpdate
         return offset;
     }
 
-    /// <summary>Records an object written inside bytes already added (an appearance's image after its form, say).</summary>
-    /// <param name="number">Its number.</param>
-    /// <param name="offset">Where it starts.</param>
-    public void Locate(int number, long offset)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThan(offset, OriginalLength);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(offset, Position);
-        _offsets[number] = offset;
-    }
-
     /// <summary>
     /// Writes the cross-reference section and the trailer, and returns the updated document's bytes.
     /// </summary>
@@ -113,7 +103,8 @@ internal sealed class PdfIncrementalUpdate
     /// <param name="root">The catalog's object number.</param>
     /// <param name="style">Table or stream.</param>
     /// <param name="xrefStreamNumber">For a stream, its object number; one more than the largest written when 0.</param>
-    public byte[] Finish(int size, int root, PdfXrefStyle style = PdfXrefStyle.AsTheDocument, int xrefStreamNumber = 0)
+    /// <param name="info">The document information dictionary's object when the update writes a new one; else the trailers' <c>/Info</c> is kept.</param>
+    public byte[] Finish(int size, int root, PdfXrefStyle style = PdfXrefStyle.AsTheDocument, int xrefStreamNumber = 0, int? info = null)
     {
         if (_offsets.Count == 0)
         {
@@ -122,19 +113,21 @@ internal sealed class PdfIncrementalUpdate
 
         long prev = Document.StartXref < 0 ? 0 : Document.StartXref;
         string? id = TrailerId();
-        string? info = Trailers().Select(t => t.Get(PdfName.Info)).OfType<PdfReference>().FirstOrDefault() is { } reference
-            ? string.Create(CultureInfo.InvariantCulture, $"/Info {reference.Id.Number} {reference.Id.Generation} R")
-            : null;
+        string? infoEntry = info is int written
+            ? string.Create(CultureInfo.InvariantCulture, $"/Info {written} 0 R")
+            : Trailers().Select(t => t.Get(PdfName.Info)).OfType<PdfReference>().FirstOrDefault() is { } reference
+                ? string.Create(CultureInfo.InvariantCulture, $"/Info {reference.Id.Number} {reference.Id.Generation} R")
+                : null;
         bool stream = style == PdfXrefStyle.Stream || (style == PdfXrefStyle.AsTheDocument && DocumentUsesXrefStream);
         long xrefOffset = Position;
         if (stream)
         {
             int number = xrefStreamNumber > 0 ? xrefStreamNumber : _offsets.Keys.Max() + 1;
-            _output.Write(XrefStream(number, Math.Max(size, number + 1), root, prev, xrefOffset, id, info));
+            _output.Write(XrefStream(number, Math.Max(size, number + 1), root, prev, xrefOffset, id, infoEntry));
         }
         else
         {
-            _output.Write(XrefTable(size, root, prev, xrefOffset, id, info));
+            _output.Write(XrefTable(size, root, prev, xrefOffset, id, infoEntry));
         }
 
         return _output.WrittenSpan.ToArray();
