@@ -18,16 +18,29 @@ fi
 export SOFTHSM2_MODULE
 echo "-> SoftHSM2 module: $SOFTHSM2_MODULE"
 
-# SoftHSM2 reads its configuration with getenv(), so it must be exported before dotnet starts.
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$WORK/tokens"
-printf 'directories.tokendir = %s\nobjectstore.backend = file\nlog.level = ERROR\n' "$WORK/tokens" > "$WORK/softhsm2.conf"
-export SOFTHSM2_CONF="$WORK/softhsm2.conf"
 
-echo "-> PKCS#11 tests (unit + SoftHSM token)"
-dotnet test tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests -c Release --filter "Category=Pkcs11|Category=Unit" \
-  --logger "console;verbosity=normal"
+# A SoftHSM2 configuration with a token directory of its own, in $WORK/$1.
+softhsm_conf() {
+  mkdir -p "$WORK/$1/tokens"
+  printf 'directories.tokendir = %s\nobjectstore.backend = file\nlog.level = ERROR\n' "$WORK/$1/tokens" > "$WORK/$1/softhsm2.conf"
+  echo "$WORK/$1/softhsm2.conf"
+}
+
+# One run per target framework, each on its own token directory: run together on one directory, a
+# process reading every slot (C_GetTokenInfo) meets a token the other is still writing and gets
+# CKR_GENERAL_ERROR. SoftHSM2 reads its configuration with getenv(), so it is set before dotnet starts.
+PROJECT=tests/unit/Signers/SimpleSign.Signers.Pkcs11.Tests
+dotnet build "$PROJECT" -c Release
+for FRAMEWORK in net8.0 net10.0; do
+  echo "-> PKCS#11 tests (unit + SoftHSM token), $FRAMEWORK"
+  SOFTHSM2_CONF="$(softhsm_conf "$FRAMEWORK")" dotnet test "$PROJECT" -c Release -f "$FRAMEWORK" --no-build \
+    --filter "Category=Pkcs11|Category=Unit" --logger "console;verbosity=normal"
+done
+
+SOFTHSM2_CONF="$(softhsm_conf aot)"
+export SOFTHSM2_CONF
 
 echo "-> Native AOT smoke test with a SoftHSM token"
 softhsm2-util --init-token --free --label aot-smoke --so-pin 0000 --pin 1234 >/dev/null
