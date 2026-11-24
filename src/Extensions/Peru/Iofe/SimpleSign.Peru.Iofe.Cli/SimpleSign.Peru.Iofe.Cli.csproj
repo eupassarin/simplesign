@@ -6,7 +6,7 @@
     <PackageId>SimpleSign.Peru.Iofe.Cli</PackageId>
     <Description>IOFE (Peru) for the SimpleSign CLI, installed with 'simplesign extension install SimpleSign.Peru.Iofe.Cli': --profile iofe (INDECOPI's trusted list and policies), the iofe policy presets and --tsl-profile iofe.</Description>
     <PackageTags>iofe;indecopi;peru;simplesign;cli;extension</PackageTags>
-    <Version>0.16.0</Version>
+    <Version>0.17.0</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <CliExtensionName>iofe</CliExtensionName>
     <CliExtensionType>SimpleSign.Peru.Iofe.Cli.IofeCliExtension</CliExtensionType>

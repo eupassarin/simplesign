@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-24
+
 ### Added
 
 - **Envelope signers who sign outside their field** (ADR 0033 addendum): `EnvelopeSigner.SignsOutsideField`, for a
@@ -18,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The CLI takes `--signer "…;outside"`.
 - **An envelope's title**: `PdfEnvelopeBuilder.WithTitle` and `EnvelopeManifest.Title` (`"title"` in the manifest, optional:
   still version 1), the name shown to people; the CLI takes `envelope prepare --title`.
+
+### Changed (Breaking)
+
+- **`EnvelopeSigner.Placement` is optional** (`EnvelopePlacement?`, no longer `required`): a signer who signs outside
+  their field needs none. Code that sets it compiles as before; code that reads it gets a nullable warning (an error
+  with `TreatWarningsAsErrors`) and must handle `null`:
+
+  ```csharp
+  // 0.16.0
+  var page = signer.Placement.Page;
+  // 0.17.0
+  var page = signer.Placement?.Page;   // null when signer.SignsOutsideField
+  ```
 
 ## [0.16.0] - 2026-11-23
 

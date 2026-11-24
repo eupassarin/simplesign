@@ -217,7 +217,7 @@ From source:
 
 ```bash
 dotnet run --project src/Apps/SimpleSign.Agent
-scripts/package-agent.sh osx-arm64 0.16.0      # "SimpleSign Agent.app" in artifacts/agent (Native AOT)
+scripts/package-agent.sh osx-arm64 0.17.0      # "SimpleSign Agent.app" in artifacts/agent (Native AOT)
 ```
 
 Developer commands of the executable:
