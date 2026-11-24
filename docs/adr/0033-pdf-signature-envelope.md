@@ -140,6 +140,15 @@ updates that keep the bytes they do not change.
   keeps the caller in charge.
 - *Seed values for everything (`/SubFilter`, `/Filter`).* They would make Acrobat refuse ICP-Brasil signatures.
 
+**Addendum — signers who sign outside their field:** the gov.br signer (and other tools of a signing service) makes its
+own signature field and cannot sign `SimpleSign_N`. `EnvelopeSigner.SignsOutsideField` keeps the signer's field (hidden,
+without size: the names, the order and the locks do not change) and counts as theirs the first signature outside the
+envelope's fields whose certificate carries every identifier of theirs (`"signsOutsideField": true` in the manifest, an
+optional key: still version 1). Such a signer needs an identifier, and the envelope can be neither certified nor locked.
+`PdfEnvelopeReader.Read(pdf, readers)` finds the signature with a profile's identity readers;
+`SigningErrorReason.EnvelopeFieldSignedOutside` (37) refuses signing the field itself. *Rejected:* a field the tool could
+fill (the tool decides its own field), and matching by name (not an identity).
+
 **Follow-ups:**
 
 - A reserved page for a completion report.

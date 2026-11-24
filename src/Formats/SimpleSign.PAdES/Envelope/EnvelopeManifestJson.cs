@@ -19,6 +19,7 @@ internal static class EnvelopeManifestJson
         {
             Version = manifest.Version,
             Id = manifest.Id,
+            Title = string.IsNullOrWhiteSpace(manifest.Title) ? null : manifest.Title,
             Order = manifest.Order == EnvelopeOrder.Parallel ? "parallel" : "sequential",
             PreparedAt = manifest.PreparedAt.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture),
             Signers = [.. manifest.Signers.Select(s => new SignerDto
@@ -28,6 +29,7 @@ internal static class EnvelopeManifestJson
                 Role = s.Role,
                 Email = s.Email,
                 External = s.External,
+                SignsOutsideField = s.SignsOutsideField ? true : null,
                 Identifiers = [.. s.Identifiers.Select(i => new IdentifierDto
                 {
                     Type = i.Type,
@@ -91,6 +93,7 @@ internal static class EnvelopeManifestJson
                 Role = s.Role,
                 Email = s.Email,
                 External = s.External,
+                SignsOutsideField = s.SignsOutsideField == true,
                 Identifiers = [.. (s.Identifiers ?? []).Select(i => new EnvelopeIdentifier(
                     i.Type ?? throw new FormatException("An identifier of the envelope's manifest has no type."),
                     i.Value ?? throw new FormatException("An identifier of the envelope's manifest has no value."))
@@ -110,6 +113,7 @@ internal static class EnvelopeManifestJson
         {
             Version = dto.Version,
             Id = dto.Id,
+            Title = string.IsNullOrWhiteSpace(dto.Title) ? null : dto.Title,
             Order = dto.Order switch
             {
                 "sequential" => EnvelopeOrder.Sequential,
@@ -148,6 +152,8 @@ internal sealed class ManifestDto
 
     public string? Id { get; set; }
 
+    public string? Title { get; set; }
+
     public string? Order { get; set; }
 
     public string? PreparedAt { get; set; }
@@ -166,6 +172,8 @@ internal sealed class SignerDto
     public string? Email { get; set; }
 
     public bool External { get; set; }
+
+    public bool? SignsOutsideField { get; set; }
 
     public List<IdentifierDto>? Identifiers { get; set; }
 

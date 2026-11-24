@@ -440,7 +440,7 @@ public sealed partial class PadesSignerBuilder
     /// <list type="bullet">
     /// <item>the field and the turn: <see cref="SigningErrorReason.EnvelopeFieldNotFound"/>,
     /// <see cref="SigningErrorReason.EnvelopeFieldAlreadySigned"/>, <see cref="SigningErrorReason.NotYourTurn"/>,
-    /// <see cref="SigningErrorReason.EnvelopeTampered"/>;</item>
+    /// <see cref="SigningErrorReason.EnvelopeTampered"/>, <see cref="SigningErrorReason.EnvelopeFieldSignedOutside"/>;</item>
     /// <item>the signer: every identifier the manifest gives them, read from the certificate by the profile's identity
     /// readers (<see cref="SigningErrorReason.UnexpectedSigner"/>);</item>
     /// <item>the field's seed values and the level, against how this builder signs (<see cref="SigningErrorReason.TimestampRequired"/>,

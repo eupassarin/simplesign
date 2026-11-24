@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Envelope signers who sign outside their field** (ADR 0033 addendum): `EnvelopeSigner.SignsOutsideField`, for a
+  signer whose tool makes its own signature field (the gov.br signer). Their field is kept, hidden; the first signature
+  outside the envelope's fields whose certificate carries every identifier of theirs counts as theirs, in the reader,
+  `CheckSigner` (turn) and the validator. `PdfEnvelopeReader.Read(pdf, readers)` reads with a profile's identity
+  readers; `EnvelopeFieldInfo.SignatureField` names the field that holds the signature; `SigningErrorReason.EnvelopeFieldSignedOutside`
+  (37) refuses signing that signer's field itself. Certification and the document lock are refused with such a signer.
+  The CLI takes `--signer "…;outside"`.
+- **An envelope's title**: `PdfEnvelopeBuilder.WithTitle` and `EnvelopeManifest.Title` (`"title"` in the manifest, optional:
+  still version 1), the name shown to people; the CLI takes `envelope prepare --title`.
+
 ## [0.16.0] - 2026-11-23
 
 ### Added

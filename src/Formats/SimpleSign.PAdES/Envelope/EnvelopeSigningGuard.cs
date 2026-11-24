@@ -27,9 +27,10 @@ internal static class EnvelopeSigningGuard
     public static EnvelopeManifestSigner Ensure(
         ReadOnlyMemory<byte> pdf, string field, X509Certificate2 certificate, IEnumerable<ISignerIdentityReader> readers, EnvelopeSignatureSettings settings)
     {
-        var envelope = PdfEnvelopeReader.Read(pdf)
+        var list = readers.ToList();
+        var envelope = PdfEnvelopeReader.Read(pdf, list)
             ?? throw new SigningException("The PDF holds no signature envelope.", SigningErrorReason.EnvelopeFieldNotFound);
-        var check = PdfEnvelope.CheckSignerCore(envelope, field, certificate, readers);
+        var check = PdfEnvelope.CheckSignerCore(envelope, field, certificate, list);
         if (check.Reason is { } reason)
         {
             throw new SigningException(check.Message ?? reason.ToString(), reason);

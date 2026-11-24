@@ -61,7 +61,7 @@ internal static class PdfEnvelopeWriter
                 SigningErrorReason.DocumentNotSignable);
         }
 
-        var pages = layout.Signers.Select(s => PageOf(view, s.Placement)).ToList();
+        var pages = layout.Signers.Select(s => PageOf(view, PlacementOf(s))).ToList();
         bool pdfAFlags = pdfA is not PdfALevel.None;
 
         // Object numbers: each field and its appearance, the file specification and the embedded file, a new AcroForm.
@@ -79,7 +79,7 @@ internal static class PdfEnvelopeWriter
         for (int i = 0; i < count; i++)
         {
             var signer = layout.Signers[i];
-            var placement = signer.Placement;
+            var placement = PlacementOf(signer);
             int appearance = fieldNumbers[i] + 1;
             update.Add(fieldNumbers[i], Field(names, i, signer, manifest.Order, layout, pages[i].Id!.Value.Number, appearance, pdfAFlags));
             var form = new PdfDictionary(
@@ -192,6 +192,13 @@ internal static class PdfEnvelopeWriter
         }
     }
 
+    /// <summary>
+    /// Where the field goes: the signer's placement, or, for a signer who signs outside their field, a field of no size
+    /// on the first page (kept for the field's name, the order and the other fields' locks, never signed).
+    /// </summary>
+    private static EnvelopePlacement PlacementOf(EnvelopeSigner signer) =>
+        signer.SignsOutsideField ? new EnvelopePlacement(1, 0, 0, 0, 0) : signer.Placement!;
+
     private static PdfPage PageOf(PdfRevisionView view, EnvelopePlacement placement)
     {
         if (placement.Page < 1 || placement.Page > view.Pages.Count)
@@ -208,7 +215,7 @@ internal static class PdfEnvelopeWriter
     /// <summary>The signature field, merged with its widget: no <c>/V</c>, its seed values and its lock.</summary>
     private static PdfDictionary Field(string[] names, int index, EnvelopeSigner signer, EnvelopeOrder order, PdfEnvelopeLayout layout, int page, int appearance, bool pdfA)
     {
-        var p = signer.Placement;
+        var p = PlacementOf(signer);
         var seedValues = new List<PdfDictionaryEntry> { new(PdfName.Type, PdfName.Of("SV"), null) };
         if (signer.Level.Timestamp && layout.TimestampUrl is { } tsa)
         {

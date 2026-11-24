@@ -135,7 +135,7 @@ public sealed class PdfEnvelopeValidator
     /// <exception cref="SigningException">The document holds no envelope (<see cref="SigningErrorReason.EnvelopeFieldNotFound"/>).</exception>
     public async Task<PdfEnvelopeReport> ValidateAsync(ReadOnlyMemory<byte> pdf, CancellationToken cancellationToken = default)
     {
-        var envelope = PdfEnvelopeReader.Read(pdf)
+        var envelope = PdfEnvelopeReader.Read(pdf, _readers)
             ?? throw new SigningException("The PDF holds no signature envelope.", SigningErrorReason.EnvelopeFieldNotFound);
         byte[] bytes = pdf.ToArray();
         IReadOnlyList<SignatureValidationResult> results;
@@ -164,12 +164,14 @@ public sealed class PdfEnvelopeValidator
                 continue;
             }
 
-            var validation = results.FirstOrDefault(r => r.FieldName == field.Name && !r.IsDocumentTimestamp);
+            // The signature: in the field, or, for a signer who signs outside it, in the field their tool made.
+            string at = field.SignatureField ?? field.Name;
+            var validation = results.FirstOrDefault(r => r.FieldName == at && !r.IsDocumentTimestamp);
             var certificate = validation?.SignerCertificate ?? field.SignerCertificate;
             var identifiers = certificate is null
                 ? []
                 : signer.Identifiers.Select(id => PdfEnvelope.Compare(id, certificate, readers)).ToList();
-            var info = inspection.Signatures.FirstOrDefault(s => s.FieldName == field.Name);
+            var info = inspection.Signatures.FirstOrDefault(s => s.FieldName == at);
             var reached = info is null ? null : Baseline(ConformanceDetector.DetectStructure(info, inspection.Document, inspection.Signatures));
             var problems = LevelProblems(signer.Level, reached, info);
 

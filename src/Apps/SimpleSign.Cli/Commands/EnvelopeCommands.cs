@@ -31,14 +31,15 @@ internal static class EnvelopeLevels
 /// <summary>
 /// Reads a signer as <c>--signer</c> writes it: <c>key=value</c> pairs separated by semicolons
 /// (<c>name=Maria Silva;id=CPF:52998224725;also=RESPONSIBLE-CPF;role=Diretora;email=maria@x.com;level=icp-ad-rt;page=1;rect=72,72,200,50;external</c>).
-/// <c>id=TYPE:VALUE</c> may be repeated; <c>also=TYPE</c> adds a type accepted for the <c>id</c> before it.
+/// <c>id=TYPE:VALUE</c> may be repeated; <c>also=TYPE</c> adds a type accepted for the <c>id</c> before it. <c>outside</c>:
+/// the signer signs outside their field, with a tool that makes its own (the gov.br signer); no <c>rect</c> then.
 /// </summary>
 internal static class EnvelopeSignerSpec
 {
     public static EnvelopeSigner Parse(string spec)
     {
         string? name = null, role = null, email = null;
-        bool external = false;
+        bool external = false, outside = false;
         var level = EnvelopeLevel.Any;
         int page = 1;
         float[]? rect = null;
@@ -65,6 +66,9 @@ internal static class EnvelopeSignerSpec
                     break;
                 case "external":
                     external = eq < 0 || bool.Parse(value);
+                    break;
+                case "outside":
+                    outside = eq < 0 || bool.Parse(value);
                     break;
                 case "level":
                     level = EnvelopeLevels.Find(value) ?? throw new FormatException($"Unknown level '{value}': use {EnvelopeLevels.Names}.");
@@ -99,7 +103,7 @@ internal static class EnvelopeSignerSpec
                     identifiers[^1] = last with { AlsoAccept = [.. last.AlsoAccept, value.ToUpperInvariant()] };
                     break;
                 default:
-                    throw new FormatException($"Unknown signer key '{key}': use name, id, also, role, email, reason, level, page, rect, external.");
+                    throw new FormatException($"Unknown signer key '{key}': use name, id, also, role, email, reason, level, page, rect, external, outside.");
             }
         }
 
@@ -108,7 +112,7 @@ internal static class EnvelopeSignerSpec
             throw new FormatException($"The signer has no name: '{spec}'.");
         }
 
-        if (rect is null)
+        if (rect is null && !outside)
         {
             throw new FormatException($"The signer '{name}' has no rect=x,y,width,height.");
         }
@@ -122,7 +126,8 @@ internal static class EnvelopeSignerSpec
             Level = level,
             Identifiers = identifiers,
             Reasons = reasons,
-            Placement = new EnvelopePlacement(page, rect[0], rect[1], rect[2], rect[3]),
+            SignsOutsideField = outside,
+            Placement = rect is null ? null : new EnvelopePlacement(page, rect[0], rect[1], rect[2], rect[3]),
         };
     }
 }
@@ -146,8 +151,13 @@ internal sealed class EnvelopePrepareCommand : AsyncCommand<EnvelopePrepareComma
 
         /// <summary>The signers, in order.</summary>
         [CommandOption("--signer <SPEC>")]
-        [Description("A signer, in order: \"name=…;id=TYPE:VALUE;also=TYPE;role=…;email=…;reason=…;level=…;page=N;rect=x,y,w,h;external\" (repeat for each)")]
+        [Description("A signer, in order: \"name=…;id=TYPE:VALUE;also=TYPE;role=…;email=…;reason=…;level=…;page=N;rect=x,y,w,h;external;outside\" (repeat for each; outside: signs with a tool that makes its own field, such as gov.br, and needs no rect)")]
         public string[] Signers { get; init; } = [];
+
+        /// <summary>The envelope's title.</summary>
+        [CommandOption("--title <TITLE>")]
+        [Description("The envelope's title, as shown to people")]
+        public string? Title { get; init; }
 
         /// <summary>The order.</summary>
         [CommandOption("--order <ORDER>")]
@@ -204,6 +214,11 @@ internal sealed class EnvelopePrepareCommand : AsyncCommand<EnvelopePrepareComma
         {
             builder = PdfEnvelope.Prepare(await File.ReadAllBytesAsync(settings.InputPath, cancellationToken))
                 .WithOrder(settings.Order == "parallel" ? EnvelopeOrder.Parallel : EnvelopeOrder.Sequential);
+            if (!string.IsNullOrWhiteSpace(settings.Title))
+            {
+                builder = builder.WithTitle(settings.Title);
+            }
+
             foreach (string spec in settings.Signers)
             {
                 builder = builder.AddSigner(EnvelopeSignerSpec.Parse(spec));
@@ -295,6 +310,7 @@ internal sealed class EnvelopeStatusCommand : Command<EnvelopeStatusCommand.Sett
             var output = new EnvelopeStatusOutput
             {
                 Id = envelope.Manifest?.Id,
+                Title = envelope.Manifest?.Title,
                 Status = envelope.Status.ToString(),
                 Order = envelope.Manifest?.Order.ToString(),
                 Next = envelope.Next?.Name,

@@ -331,7 +331,8 @@
             "TimestampRequired",
             "SeedValueViolated",
             "LevelNotMet",
-            "EnvelopeTampered"
+            "EnvelopeTampered",
+            "EnvelopeFieldSignedOutside"
           ]
         },
         "indication": {

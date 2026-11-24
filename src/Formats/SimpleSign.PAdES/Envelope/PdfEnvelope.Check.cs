@@ -33,7 +33,8 @@ public sealed record EnvelopeCheck
     public bool Allowed => Reason is null;
 
     /// <summary>Why it may not: <see cref="SigningErrorReason.EnvelopeFieldNotFound"/>, <see cref="SigningErrorReason.EnvelopeFieldAlreadySigned"/>,
-    /// <see cref="SigningErrorReason.NotYourTurn"/>, <see cref="SigningErrorReason.UnexpectedSigner"/> or <see cref="SigningErrorReason.EnvelopeTampered"/>; null when it may.</summary>
+    /// <see cref="SigningErrorReason.NotYourTurn"/>, <see cref="SigningErrorReason.UnexpectedSigner"/>, <see cref="SigningErrorReason.EnvelopeTampered"/>
+    /// or <see cref="SigningErrorReason.EnvelopeFieldSignedOutside"/>; null when it may.</summary>
     public SigningErrorReason? Reason { get; init; }
 
     /// <summary>What <see cref="Reason"/> means here, for people; null when allowed.</summary>
@@ -67,9 +68,10 @@ public static partial class PdfEnvelope
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(field);
         ArgumentNullException.ThrowIfNull(certificate);
-        var envelope = PdfEnvelopeReader.Read(pdf)
+        var readers = profile?.SignerIdentityReaders ?? [];
+        var envelope = PdfEnvelopeReader.Read(pdf, readers)
             ?? throw new SigningException("The PDF holds no signature envelope.", SigningErrorReason.EnvelopeFieldNotFound);
-        return CheckSignerCore(envelope, field, certificate, profile?.SignerIdentityReaders ?? []);
+        return CheckSignerCore(envelope, field, certificate, readers);
     }
 
     /// <summary>The check of <see cref="CheckSigner(ReadOnlyMemory{byte}, string, X509Certificate2, TrustProfile?)"/> on an envelope already read.</summary>
@@ -91,6 +93,12 @@ public static partial class PdfEnvelope
         if (info.IsSigned)
         {
             return Refused(field, signer, SigningErrorReason.EnvelopeFieldAlreadySigned, $"The field '{field}' is already signed.");
+        }
+
+        if (signer.SignsOutsideField)
+        {
+            return Refused(field, signer, SigningErrorReason.EnvelopeFieldSignedOutside,
+                $"{signer.Name} signs outside the field '{field}', with a tool that makes its own field (such as the gov.br signer): sign the document there.");
         }
 
         var allReaders = readers.Append(DefaultSignerIdentityReader.Instance).Distinct().ToList();
