@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using SimpleSign.Core.Crypto;
+using SimpleSign.Core.Extensions;
 using SimpleSign.PAdES.Pdf;
 using SimpleSign.PAdES.Pdf.Exceptions;
 using SimpleSign.PAdES.Pdf.Model;
@@ -68,8 +69,18 @@ public sealed record EnvelopeFieldInfo
     /// <summary>Its lock; null when it has none.</summary>
     public EnvelopeFieldLock? Lock { get; init; }
 
-    /// <summary>Whether it is signed.</summary>
+    /// <summary>
+    /// Whether it is signed: the field itself, or, for a signer who signs outside their field
+    /// (<see cref="EnvelopeManifestSigner.SignsOutsideField"/>), a signature of the document outside the envelope's fields
+    /// whose certificate carries every identifier of theirs.
+    /// </summary>
     public bool IsSigned { get; init; }
+
+    /// <summary>
+    /// The field that holds the signature: this one, or, for a signer who signs outside their field, the field their
+    /// tool made; null when not signed.
+    /// </summary>
+    public string? SignatureField { get; init; }
 
     /// <summary>The position of its signature among the envelope's signatures, from 1, in the order they were made; null when not signed.</summary>
     public int? SignatureOrder { get; init; }
@@ -115,13 +126,31 @@ public sealed record PdfEnvelopeInfo
 /// <summary>Reads the envelope of a document (ADR 0033): its manifest, its fields, what is signed, and who is next.</summary>
 public static class PdfEnvelopeReader
 {
-    /// <summary>Reads the envelope.</summary>
+    /// <summary>
+    /// Reads the envelope. The signatures of signers who sign outside their field are found with
+    /// <see cref="DefaultSignerIdentityReader"/> only: use <see cref="Read(ReadOnlyMemory{byte}, IEnumerable{ISignerIdentityReader})"/>
+    /// for identifiers a profile reads (CPF, CNPJ…).
+    /// </summary>
     /// <param name="pdf">The document.</param>
     /// <returns>The envelope; null when the document holds none (no manifest and no <c>SimpleSign_</c> field).</returns>
     /// <exception cref="EncryptedPdfException">The document is encrypted.</exception>
     /// <exception cref="PdfStructureException">The document's catalog cannot be read.</exception>
-    public static PdfEnvelopeInfo? Read(ReadOnlyMemory<byte> pdf)
+    public static PdfEnvelopeInfo? Read(ReadOnlyMemory<byte> pdf) => Read(pdf, []);
+
+    /// <summary>
+    /// Reads the envelope, finding the signatures of signers who sign outside their field
+    /// (<see cref="EnvelopeManifestSigner.SignsOutsideField"/>) with these identity readers and <see cref="DefaultSignerIdentityReader"/>:
+    /// the first signature, in the order they were made, outside the envelope's fields, not a document time-stamp, not
+    /// already another signer's, whose certificate carries every identifier of the signer.
+    /// </summary>
+    /// <param name="pdf">The document.</param>
+    /// <param name="readers">The identity readers, such as a trust profile's <see cref="TrustProfile.SignerIdentityReaders"/>.</param>
+    /// <returns>The envelope; null when the document holds none (no manifest and no <c>SimpleSign_</c> field).</returns>
+    /// <exception cref="EncryptedPdfException">The document is encrypted.</exception>
+    /// <exception cref="PdfStructureException">The document's catalog cannot be read.</exception>
+    public static PdfEnvelopeInfo? Read(ReadOnlyMemory<byte> pdf, IEnumerable<ISignerIdentityReader> readers)
     {
+        ArgumentNullException.ThrowIfNull(readers);
         var document = PdfDocument.Open(pdf);
         if (document.IsEncrypted)
         {
@@ -183,6 +212,8 @@ public static class PdfEnvelopeReader
             fields.Add(FieldInfo(view, extra.FullName, null, envelopeFields, signatures, names, problems));
         }
 
+        ClaimOutsideSignatures(fields, signatures, [.. readers.Append(DefaultSignerIdentityReader.Instance).Distinct()]);
+
         if (manifestFile is not null)
         {
             CheckManifestUnchanged(pdf, manifestFile, fields, signatures, problems);
@@ -233,34 +264,9 @@ public static class PdfEnvelopeReader
             }
         }
 
-        int? order = null;
-        X509Certificate2? certificate = null;
-        string? signerName = null;
-        DateTimeOffset? signingTime = null;
-        IReadOnlyList<string> roles = [];
         bool signed = field.Value is not null;
-        int index = signatures.FindIndex(s => s.FieldName == field.PartialName);
-        if (signed && index >= 0)
-        {
-            var signature = signatures[index];
-            order = signatures.Take(index + 1).Count(s => s.FieldName.StartsWith(PdfEnvelopeWriter.FieldPrefix, StringComparison.Ordinal));
-            signerName = signature.SignerName;
-            signingTime = signature.PdfSigningTime;
-            try
-            {
-                var cms = CmsParser.Parse(signature.ContentsBytes);
-                certificate = cms.SignerCertificate;
-                signerName = certificate?.GetNameInfo(X509NameType.SimpleName, false) is { Length: > 0 } cn ? cn : signerName;
-                signingTime = cms.SigningTime ?? signingTime;
-                roles = Core.Validation.Policy.SignedAttributeFacts.FromCms(cms.SignedAttrs)?.ClaimedRoles ?? [];
-            }
-            catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException or InvalidOperationException or ArgumentException)
-            {
-                // The signature cannot be read: the validator says why.
-            }
-        }
-
-        return new EnvelopeFieldInfo
+        var signature = signed ? signatures.FirstOrDefault(s => s.FieldName == field.PartialName) : null;
+        var info = new EnvelopeFieldInfo
         {
             Name = name,
             Signer = signer,
@@ -269,12 +275,99 @@ public static class PdfEnvelopeReader
             SeedValue = SeedValueOf(view, field.SeedValue),
             Lock = fieldLock,
             IsSigned = signed,
+            SignatureField = signed ? name : null,
+        };
+        return signature is null ? info : WithSignature(info, signature, signatures);
+    }
+
+    /// <summary>
+    /// For each signer who signs outside their field and whose field is not signed, the first signature outside the
+    /// envelope's fields, not yet claimed, whose certificate carries every identifier of theirs.
+    /// </summary>
+    private static void ClaimOutsideSignatures(List<EnvelopeFieldInfo> fields, List<PdfSignatureField> signatures, List<ISignerIdentityReader> readers)
+    {
+        if (!fields.Any(f => f.Signer is { SignsOutsideField: true } && f.Exists && !f.IsSigned))
+        {
+            return;
+        }
+
+        var claimed = fields.Where(f => f.SignatureField is not null).Select(f => f.SignatureField!).ToHashSet(StringComparer.Ordinal);
+        var outside = signatures
+            .Where(s => !s.FieldName.StartsWith(PdfEnvelopeWriter.FieldPrefix, StringComparison.Ordinal))
+            .Select(s => (Signature: s, Certificate: CertificateOf(s)))
+            .ToList();
+        for (int i = 0; i < fields.Count; i++)
+        {
+            var field = fields[i];
+            if (field.Signer is not { SignsOutsideField: true, Identifiers.Count: > 0 } signer || !field.Exists || field.IsSigned)
+            {
+                continue;
+            }
+
+            var match = outside.FirstOrDefault(o => o.Certificate is not null && !claimed.Contains(o.Signature.FieldName)
+                && signer.Identifiers.All(id => PdfEnvelope.Compare(id, o.Certificate, readers).Match == EnvelopeIdentifierMatch.Matched));
+            if (match.Signature is null)
+            {
+                continue;
+            }
+
+            claimed.Add(match.Signature.FieldName);
+            fields[i] = WithSignature(field with { IsSigned = true, SignatureField = match.Signature.FieldName }, match.Signature, signatures);
+        }
+
+        // The order of the envelope's signatures counts the ones claimed outside the fields.
+        var order = signatures.Where(s => claimed.Contains(s.FieldName)).Select(s => s.FieldName).ToList();
+        for (int i = 0; i < fields.Count; i++)
+        {
+            if (fields[i].SignatureField is { } at && order.IndexOf(at) is >= 0 and var position)
+            {
+                fields[i] = fields[i] with { SignatureOrder = position + 1 };
+            }
+        }
+    }
+
+    /// <summary>The field with what its signature says: its order among the envelope's signatures, the certificate, the name, the time, the roles.</summary>
+    private static EnvelopeFieldInfo WithSignature(EnvelopeFieldInfo info, PdfSignatureField signature, List<PdfSignatureField> signatures)
+    {
+        int index = signatures.IndexOf(signature);
+        int order = signatures.Take(index + 1).Count(s => s.FieldName.StartsWith(PdfEnvelopeWriter.FieldPrefix, StringComparison.Ordinal));
+        X509Certificate2? certificate = null;
+        string? signerName = signature.SignerName;
+        DateTimeOffset? signingTime = signature.PdfSigningTime;
+        IReadOnlyList<string> roles = [];
+        try
+        {
+            var cms = CmsParser.Parse(signature.ContentsBytes);
+            certificate = cms.SignerCertificate;
+            signerName = certificate?.GetNameInfo(X509NameType.SimpleName, false) is { Length: > 0 } cn ? cn : signerName;
+            signingTime = cms.SigningTime ?? signingTime;
+            roles = Core.Validation.Policy.SignedAttributeFacts.FromCms(cms.SignedAttrs)?.ClaimedRoles ?? [];
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException or InvalidOperationException or ArgumentException)
+        {
+            // The signature cannot be read: the validator says why.
+        }
+
+        return info with
+        {
             SignatureOrder = order,
             SignerCertificate = certificate,
-            SignerName = signed ? signerName : null,
-            SigningTime = signed ? signingTime : null,
+            SignerName = signerName,
+            SigningTime = signingTime,
             ClaimedRoles = roles,
         };
+    }
+
+    private static X509Certificate2? CertificateOf(PdfSignatureField signature)
+    {
+        try
+        {
+            return CmsParser.Parse(signature.ContentsBytes).SignerCertificate;
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or FormatException or InvalidOperationException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -284,7 +377,7 @@ public static class PdfEnvelopeReader
     private static void CheckManifestUnchanged(
         ReadOnlyMemory<byte> pdf, PdfEmbeddedFile current, List<EnvelopeFieldInfo> fields, List<PdfSignatureField> signatures, List<string> problems)
     {
-        var first = signatures.FirstOrDefault(s => fields.Any(f => f.IsSigned && f.Name == s.FieldName));
+        var first = signatures.FirstOrDefault(s => fields.Any(f => f.IsSigned && f.SignatureField == s.FieldName));
         if (first is null)
         {
             return;

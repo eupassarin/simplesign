@@ -24,6 +24,7 @@ internal sealed partial class CliJsonContext : JsonSerializerContext;
 internal sealed class EnvelopeStatusOutput
 {
     public string? Id { get; init; }
+    public string? Title { get; init; }
     public string? Status { get; init; }
     public string? Order { get; init; }
     public string? Next { get; init; }

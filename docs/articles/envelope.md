@@ -93,6 +93,32 @@ An identifier may accept other types: `new EnvelopeIdentifier("CPF", "…") { Al
 the person sign with the e-CNPJ they hold for a company. A signer for a company lists both: the person's CPF and the
 company's CNPJ. Values are compared without case, and, but for an email, without dots, hyphens, slashes and spaces.
 
+### Signers who sign outside their field
+
+Some signers sign with a tool that makes its own signature field, such as the gov.br signer: it cannot sign
+`SimpleSign_N`. Mark them with `SignsOutsideField = true` (no `Placement` needed; at least one identifier is):
+
+```csharp
+.AddSigner(new EnvelopeSigner
+{
+    Name = "Maria Silva",
+    SignsOutsideField = true,
+    Identifiers = [new EnvelopeIdentifier(SignerIdentifierTypes.Cpf, "52998224725")],
+})
+```
+
+- Their field is still written, hidden and without size, so the names, the order and the other fields' locks stay the
+  same; the manifest says `"signsOutsideField": true`.
+- The reader counts as theirs the first signature, in the order they were made, outside the envelope's fields (not a
+  document time-stamp, not already another signer's) whose certificate carries **every** identifier of theirs. Read
+  with the profile's readers — `PdfEnvelopeReader.Read(pdf, profile.SignerIdentityReaders)` — to match a CPF;
+  `Read(pdf)` uses `DefaultSignerIdentityReader` only. `EnvelopeFieldInfo.SignatureField` names the field that holds the
+  signature.
+- `CheckSigner` and `WithEnvelopeField` refuse their field with `EnvelopeFieldSignedOutside`; in a sequential envelope
+  the next signer waits for the signature outside.
+- The validator validates the signature found, with the same checks of identity, level and order.
+- Certification and the document lock are refused when anyone signs outside their field: both forbid the new field.
+
 ## Levels
 
 A level describes itself in the manifest, so checking it needs no package of the framework that defined it. It is
@@ -129,6 +155,7 @@ envelope (`DocumentNotSignable`, `DocumentEncrypted`). A PDF/A-2 document is dec
 {
   "version": 1,
   "id": "5b0c2d1e-…",
+  "title": "Contrato de locação",
   "order": "sequential",
   "preparedAt": "2026-11-23T12:00:00Z",
   "signers": [
@@ -145,7 +172,9 @@ envelope (`DocumentNotSignable`, `DocumentEncrypted`). A PDF/A-2 document is dec
 }
 ```
 
-`EnvelopeManifest.ToJson()` and `EnvelopeManifest.Parse(json)` write and read it.
+`EnvelopeManifest.ToJson()` and `EnvelopeManifest.Parse(json)` write and read it. `title` is optional
+(`PdfEnvelopeBuilder.WithTitle`): the name shown to people, covered by the first signature like the rest of the
+manifest.
 
 ## The validation report
 

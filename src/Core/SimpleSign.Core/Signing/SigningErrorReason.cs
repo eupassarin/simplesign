@@ -153,4 +153,10 @@ public enum SigningErrorReason
     /// envelope's integrity data covers. Used by the PDF signature envelope.
     /// </summary>
     EnvelopeTampered = 36,
+
+    /// <summary>
+    /// The signer of this field of the PDF signature envelope signs outside it, with a tool that makes its own signature
+    /// field (such as the gov.br signer): the field itself is never signed. Used by the PDF signature envelope.
+    /// </summary>
+    EnvelopeFieldSignedOutside = 37,
 }

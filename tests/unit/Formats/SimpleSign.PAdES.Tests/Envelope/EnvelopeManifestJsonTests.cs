@@ -69,4 +69,19 @@ public sealed class EnvelopeManifestJsonTests
     [InlineData("{\"version\": 1, \"id\": \"x\", \"order\": \"sequential\", \"preparedAt\": \"2026-01-01T00:00:00Z\", \"signers\": [{\"field\": \"a\", \"name\": \"b\", \"level\": {\"id\": \"any\", \"baseline\": \"B-X\"}}]}")]
     public void Parse_NotAVersionOneManifest_Throws(string json) =>
         Should.Throw<FormatException>(() => EnvelopeManifestJson.Parse(Encoding.UTF8.GetBytes(json)));
+
+    [Fact]
+    public async Task Title_IsWrittenAndReadBack_AndOptional()
+    {
+        using var certificate = SimpleSign.TestHelpers.TestCertificateFactory.CreateSelfSignedCert("CN=One");
+        var builder = PdfEnvelope.Prepare(EnvelopeTestData.TwoPagePdf()).AddSigner(EnvelopeTestData.Signer("One", certificate));
+
+        builder.BuildManifest().ToJson().ShouldNotContain("\"title\"");
+        byte[] prepared = await builder.WithTitle("  Contrato de locação ").PrepareAsync();
+
+        var manifest = PdfEnvelopeReader.Read(prepared)!.Manifest!;
+        manifest.Title.ShouldBe("Contrato de locação");
+        manifest.ToJson().ShouldContain("\"title\": \"Contrato de loca");
+        EnvelopeManifest.Parse(manifest.ToJson()).Title.ShouldBe("Contrato de locação");
+    }
 }

@@ -177,7 +177,7 @@ var info = PdfEnvelopeReader.Read(prepared);                          // Status,
 var check = PdfEnvelope.CheckSigner(prepared, "SimpleSign_1", cert, profile);   // before the PIN
 await PadesSigner.Document(prepared).WithCertificate(cert).WithProfile(profile).WithEnvelopeField("SimpleSign_1").SignAsync();
 var report = await new PdfEnvelopeValidator(options).ValidateAsync(signed);      // IsComplete, ToJson()
-// Errors: SigningErrorReason 29–36 (EnvelopeFieldNotFound … EnvelopeTampered); CLI: envelope prepare|status, sign --envelope-field, validate --envelope
+// Errors: SigningErrorReason 29–37 (EnvelopeFieldNotFound … EnvelopeFieldSignedOutside); CLI: envelope prepare|status, sign --envelope-field, validate --envelope
 ```
 
 ### Trust profiles

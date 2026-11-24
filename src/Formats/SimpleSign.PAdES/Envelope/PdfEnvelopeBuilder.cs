@@ -45,16 +45,30 @@ public sealed class PdfEnvelopeBuilder
 
     /// <summary>Adds a signer, after those added before: their field is <c>SimpleSign_</c> and their place in the list, from 1.</summary>
     /// <param name="signer">The signer.</param>
-    /// <exception cref="ArgumentException">The signer has no name, a placement of no size, or an identifier without a type or value.</exception>
+    /// <exception cref="ArgumentException">
+    /// The signer has no name, no placement (unless they sign outside their field), a placement of no size, an identifier
+    /// without a type or value, or signs outside their field without identifiers.
+    /// </exception>
     public PdfEnvelopeBuilder AddSigner(EnvelopeSigner signer)
     {
         ArgumentNullException.ThrowIfNull(signer);
         ArgumentException.ThrowIfNullOrWhiteSpace(signer.Name, nameof(signer));
-        ArgumentNullException.ThrowIfNull(signer.Placement, nameof(signer));
         ArgumentNullException.ThrowIfNull(signer.Level, nameof(signer));
-        if (!(signer.Placement.Width > 0 && signer.Placement.Height > 0) || !float.IsFinite(signer.Placement.X) || !float.IsFinite(signer.Placement.Y))
+        if (signer.Placement is null && !signer.SignsOutsideField)
+        {
+            throw new ArgumentException($"'{signer.Name}' needs a placement for their field.", nameof(signer));
+        }
+
+        if (signer.Placement is { } placement
+            && (!(placement.Width > 0 && placement.Height > 0) || !float.IsFinite(placement.X) || !float.IsFinite(placement.Y)))
         {
             throw new ArgumentException($"The placement of '{signer.Name}' needs a finite position and a width and height above zero.", nameof(signer));
+        }
+
+        if (signer.SignsOutsideField && signer.Identifiers.Count == 0)
+        {
+            throw new ArgumentException(
+                $"'{signer.Name}' signs outside their field: they need an identifier, by which their signature is found.", nameof(signer));
         }
 
         if (signer.Identifiers.Any(i => string.IsNullOrWhiteSpace(i.Type) || string.IsNullOrWhiteSpace(i.Value)))
@@ -97,6 +111,17 @@ public sealed class PdfEnvelopeBuilder
         return new(_pdf, _state with { Id = id });
     }
 
+    /// <summary>
+    /// The envelope's title, as shown to people; none by default. It is in the manifest, so the first signature covers it:
+    /// it cannot change afterwards.
+    /// </summary>
+    /// <param name="title">The title.</param>
+    public PdfEnvelopeBuilder WithTitle(string title)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        return new(_pdf, _state with { Title = title.Trim() });
+    }
+
     /// <summary>The clock the preparation date is read from; the system's by default.</summary>
     /// <param name="timeProvider">The clock.</param>
     public PdfEnvelopeBuilder WithTimeProvider(TimeProvider timeProvider)
@@ -106,7 +131,10 @@ public sealed class PdfEnvelopeBuilder
     }
 
     /// <summary>The manifest the envelope will hold, as <see cref="PrepareAsync"/> writes it.</summary>
-    /// <exception cref="InvalidOperationException">No signer was added.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No signer was added, the certification allows no change with more than one signer, or a signer signs outside their
+    /// field in an envelope that is certified or locked.
+    /// </exception>
     public EnvelopeManifest BuildManifest()
     {
         if (_state.Signers.Count == 0)
@@ -119,10 +147,17 @@ public sealed class PdfEnvelopeBuilder
             throw new InvalidOperationException("A certification that allows no change (P1) would refuse every signature after the first one.");
         }
 
+        if (_state.Signers.FirstOrDefault(s => s.SignsOutsideField) is { } outside && (_state.Certification is not null || _state.LockDocument))
+        {
+            throw new InvalidOperationException(
+                $"'{outside.Name}' signs outside their field, in a field their tool adds: a certified or locked envelope forbids that field.");
+        }
+
         var now = _state.TimeProvider.GetUtcNow();
         return new EnvelopeManifest
         {
             Id = _state.Id ?? Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture),
+            Title = _state.Title,
             Order = _state.Order,
             PreparedAt = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, TimeSpan.Zero),
             Signers = [.. _state.Signers.Select((s, i) => new EnvelopeManifestSigner
@@ -134,6 +169,7 @@ public sealed class PdfEnvelopeBuilder
                 External = s.External,
                 Identifiers = s.Identifiers,
                 Level = s.Level,
+                SignsOutsideField = s.SignsOutsideField,
             })],
         };
     }
@@ -141,7 +177,10 @@ public sealed class PdfEnvelopeBuilder
     /// <summary>Writes the envelope.</summary>
     /// <param name="cancellationToken">Cancels the preparation.</param>
     /// <returns>The document with the envelope, its earlier bytes unchanged.</returns>
-    /// <exception cref="InvalidOperationException">No signer was added, or the certification allows no change with more than one signer.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// No signer was added, the certification allows no change with more than one signer, or a signer signs outside their
+    /// field in an envelope that is certified or locked.
+    /// </exception>
     /// <exception cref="SigningException">
     /// The document is encrypted (<see cref="SigningErrorReason.DocumentEncrypted"/>), or is signed, certified, PDF/A-1, or
     /// already holds an envelope (<see cref="SigningErrorReason.DocumentNotSignable"/>).
@@ -168,6 +207,8 @@ public sealed class PdfEnvelopeBuilder
         public bool LockDocument { get; init; }
 
         public string? Id { get; init; }
+
+        public string? Title { get; init; }
 
         public TimeProvider TimeProvider { get; init; } = TimeProvider.System;
     }

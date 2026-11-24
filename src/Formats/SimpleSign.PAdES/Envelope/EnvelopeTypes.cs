@@ -82,8 +82,16 @@ public sealed record EnvelopeSigner
     /// <summary>The signer's name, as shown to people.</summary>
     public required string Name { get; init; }
 
-    /// <summary>Where the signer's field goes.</summary>
-    public required EnvelopePlacement Placement { get; init; }
+    /// <summary>Where the signer's field goes; needed unless <see cref="SignsOutsideField"/>.</summary>
+    public EnvelopePlacement? Placement { get; init; }
+
+    /// <summary>
+    /// Whether the signer signs with a tool that makes its own signature field, such as the gov.br signer: their field is
+    /// kept, hidden and without size, and any signature of the document outside the envelope's fields whose certificate
+    /// carries every one of <see cref="Identifiers"/> counts as theirs. Such a signer needs identifiers, and the envelope
+    /// can then be neither certified nor locked, since both forbid the new field.
+    /// </summary>
+    public bool SignsOutsideField { get; init; }
 
     /// <summary>The identifiers the signer's certificate must carry, every one of them; empty: anyone may sign the field.</summary>
     public IReadOnlyList<EnvelopeIdentifier> Identifiers { get; init; } = [];
@@ -127,6 +135,11 @@ public sealed record EnvelopeManifestSigner
 
     /// <summary>The level the signature must reach.</summary>
     public EnvelopeLevel Level { get; init; } = EnvelopeLevel.Any;
+
+    /// <summary>
+    /// Whether the signer signs outside their field, with a tool that makes its own (<see cref="EnvelopeSigner.SignsOutsideField"/>).
+    /// </summary>
+    public bool SignsOutsideField { get; init; }
 }
 
 /// <summary>
@@ -146,6 +159,9 @@ public sealed record EnvelopeManifest
 
     /// <summary>The envelope's id.</summary>
     public required string Id { get; init; }
+
+    /// <summary>The envelope's title, as shown to people (such as "Contrato de locação"); null when none.</summary>
+    public string? Title { get; init; }
 
     /// <summary>The order the signers sign in.</summary>
     public EnvelopeOrder Order { get; init; }
