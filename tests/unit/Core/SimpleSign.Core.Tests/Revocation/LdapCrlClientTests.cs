@@ -113,7 +113,8 @@ public sealed class LdapCrlClientTests
         var server = ServeOnceAsync(listener, "certificateRevocationList;binary", crl, resultCode: 0);
         var policy = new OutboundHttpPolicy { AllowLdap = true, LoopbackOrigins = [new Uri($"ldap://127.0.0.1:{port}")] };
 
-        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://127.0.0.1:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(5), CancellationToken.None);
+        // The timeout is not what is tested: a Windows CI runner has stalled for 20–30 s, and 5 s canceled the exchange.
+        byte[]? value = await LdapCrlClient.GetCrlAsync($"ldap://127.0.0.1:{port}/cn=CA,c=PE", policy, TimeSpan.FromSeconds(60), CancellationToken.None);
 
         value.ShouldBe(crl);
         (await server).ShouldBe("cn=CA,c=PE");
