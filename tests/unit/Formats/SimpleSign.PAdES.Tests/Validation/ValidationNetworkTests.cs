@@ -34,11 +34,13 @@ public sealed class ValidationNetworkTests
         // The timeout covers the whole network stage, not only the request. The first use of the HTTP pipeline
         // on a slow machine can take longer than it, and then no request is sent at all: validate again until
         // one is, so the assertions below are about a request that was in flight when the time ran out.
+        // The wait only catches a validation that never ends: the platform's chain building, outside the network
+        // timeout, has stalled for 20–30 s on the Windows runners, every test that builds a chain at the same time.
         IReadOnlyList<SignatureValidationResult> results = [];
         for (int attempt = 0; attempt < 5 && handler.Requests == 0; attempt++)
         {
             using var stream = new MemoryStream(signed);
-            results = await validator.ValidateAsync(stream).WaitAsync(TimeSpan.FromSeconds(10));
+            results = await validator.ValidateAsync(stream).WaitAsync(TimeSpan.FromSeconds(60));
         }
 
         handler.Requests.ShouldBeGreaterThan(0);
