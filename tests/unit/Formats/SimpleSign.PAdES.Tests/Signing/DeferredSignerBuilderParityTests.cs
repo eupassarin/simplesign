@@ -184,7 +184,8 @@ public sealed class DeferredSignerBuilderParityTests : IDisposable
             response.Content.Headers.ContentType = new MediaTypeHeaderValue("application/timestamp-reply");
             return response;
         }));
-        var policy = SimpleSign.Core.Policies.SigningPolicy.Default
+        // The token is dated 2024-01-01, before this TSA certificate: only the trust of its chain is checked here.
+        var policy = TestPolicies.SigningWithoutTimestampChecks
             .With("Timestamp/ProspectiveCertificateChain", new SimpleSign.Core.Policies.PolicyConstraint(SimpleSign.Core.Policies.ConstraintLevel.Fail));
         DeferredSigningPrepareResult prepared = await Prepare()
             .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl))))

@@ -112,7 +112,7 @@ public sealed class CadesAugmenter
     /// The checks of each time-stamp the augmenter obtains: the <c>Timestamp</c> constraints of <paramref name="policy"/>
     /// (the TSA certificate chains to a trust anchor, is valid at the genTime and is not revoked), as a signer applies
     /// them. The other constraints of the policy concern the signing certificate and do not apply here. Default:
-    /// <see cref="SigningPolicy.Default"/>, whose <c>Timestamp</c> constraints are IGNORE.
+    /// <see cref="SigningPolicy.Default"/>, which checks the TSA certificate (valid at genTime, not revoked, status known).
     /// <see cref="TimestampOptions.ExpectedTsaCertificate"/> is enforced whatever the policy.
     /// </summary>
     /// <param name="policy">The signing policy.</param>

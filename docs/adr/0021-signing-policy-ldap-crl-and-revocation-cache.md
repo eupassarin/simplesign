@@ -37,3 +37,16 @@ Signature software is expected to make checks the library did not make:
   `SigningPolicy.Minimal` restores the old behaviour for tests and migrations.
 - Strict signing needs the whole chain up to the root, since each certificate is checked against its issuer.
 - LDAP is off by default: it is a new outbound protocol and stays an explicit choice of the deployment.
+
+**Addendum — the TSA certificate is checked by default (#341):** the revocation of the TSA chain is the one network
+check that is on by default. `SigningPolicy.Default` sets `Timestamp/NotExpired`, `Timestamp/NotRevoked` and
+`Timestamp/RevocationDataAvailable` to FAIL; they came at IGNORE in 0.11.0 so that signing would not change. The
+signer's chain stays opt-in: it is checked before the external signer is called, where a network check delays every
+signature, while a timestamp is checked once received and the result is a token that a validator will judge on these
+same grounds — a token whose TSA certificate had expired or was revoked does not prove the time it claims. A token
+rarely carries its root, and most callers give no anchors: the TSA chain is completed for the revocation check through
+AIA caIssuers and the system's root store, which finds issuers without trusting them. A refused TSA
+certificate follows the profile's `SigningLevelFailureBehavior` (with `ReturnLowerLevel` the timestamp is left out and
+the level is lower, `SigningWarning.Reason` saying why); a TSA other than the expected one, or not chaining to the anchors
+the policy requires (`TimestampUntrusted`), still ends the operation: the caller chose that TSA. Each timestamp may cost
+OCSP/CRL requests; a policy lowers the three constraints to WARN or IGNORE to avoid them.

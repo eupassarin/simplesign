@@ -127,6 +127,7 @@ public sealed class CadesAugmenterTests : IDisposable
 
         var result = await CadesAugmenter.Signature(signed, _data)
             .WithTimestamp(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa)) { ExpectedTsaCertificate = expected })
+            .WithSigningPolicy(TestPolicies.SigningWithoutTimestampChecks)
             .ToLevel(AdesBaselineLevel.Timestamped)
             .AugmentAsync();
 

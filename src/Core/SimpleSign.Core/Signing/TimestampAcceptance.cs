@@ -86,7 +86,11 @@ internal sealed class TimestampAcceptance
         var certificates = TimestampValidator.ReadTokenCertificates(token);
         if (certificates is [])
         {
-            throw new SigningException("The timestamp does not carry the TSA certificate, which cannot be checked.", SigningErrorReason.TimestampUntrusted);
+            // Without the certificate the token cannot be checked: untrusted when a TSA was named, otherwise a token to
+            // refuse like one that fails its own checks (a lower level may then be returned).
+            throw new SigningException(
+                "The timestamp does not carry the TSA certificate, which cannot be checked.",
+                expectedTsa is not null ? SigningErrorReason.TimestampUntrusted : SigningErrorReason.TimestampInvalid);
         }
 
         var tsa = certificates[0];
@@ -126,6 +130,12 @@ internal sealed class TimestampAcceptance
 
         var warnings = _warnings ?? new List<SigningWarning>();
         SignerAcceptance.ApplyFindings(findings, warnings, _logger);
+        if (!CertificateFacts.IsSelfSigned(ordered[^1])
+            && (Level("NotRevoked") != ConstraintLevel.Ignore || Level("RevocationDataAvailable") != ConstraintLevel.Ignore))
+        {
+            ordered = await CompleteChainAsync(ordered, cancellationToken).ConfigureAwait(false);
+        }
+
         await SignerAcceptance.CheckChainRevocationAsync(
             ordered, Level("NotRevoked"), Level("RevocationDataAvailable"),
             new ChainRevocationFindings(Prefix, "TSA chain", SigningErrorReason.TimestampCertificateRevoked, SigningErrorReason.TimestampRevocationStatusUnknown),
@@ -137,6 +147,70 @@ internal sealed class TimestampAcceptance
                 _logger.SigningPolicyWarning(warning.Message);
             }
         }
+    }
+
+    /// <summary>
+    /// The TSA chain up to its root, for checking its revocation, when the token does not carry the root and no trust
+    /// anchor completed it: the issuers named by the chain's AIA caIssuers, then the system's root store. Finding an
+    /// issuer this way trusts nothing (trust is <c>Timestamp/ProspectiveCertificateChain</c>); it only gives the
+    /// certificate a CRL or OCSP response of the chain must be checked against. Returns <paramref name="ordered"/> when
+    /// the root is not found, which the revocation check then reports as an unknown status.
+    /// </summary>
+    private async Task<IReadOnlyList<X509Certificate2>> CompleteChainAsync(
+        IReadOnlyList<X509Certificate2> ordered, CancellationToken cancellationToken)
+    {
+        var known = ordered.Skip(1).ToList();
+        try
+        {
+            var aiaWarnings = new List<string>();
+            var downloaded = await CertificateChainUtility.DownloadAiaCertsAsync(
+                _httpClientProvider.GetClient(), ordered[^1], null, aiaWarnings, _httpClientProvider.OutboundPolicy, cancellationToken).ConfigureAwait(false);
+            known.AddRange(downloaded);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.SigningPolicyWarning("The issuers of the TSA chain could not be downloaded: " + ex.Message);
+        }
+
+        var completed = SignerAcceptance.OrderChain(ordered[0], known);
+        return CertificateFacts.IsSelfSigned(completed[^1]) ? completed : WithSystemRoot(completed);
+    }
+
+    /// <summary><paramref name="ordered"/> followed by its root from the system's store, or itself when there is none.</summary>
+    private static IReadOnlyList<X509Certificate2> WithSystemRoot(IReadOnlyList<X509Certificate2> ordered)
+    {
+        using var x509 = new X509Chain();
+        x509.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        x509.ChainPolicy.DisableCertificateDownloads = true;
+        x509.ChainPolicy.VerificationFlags = X509VerificationFlags.AllFlags;
+        x509.ChainPolicy.ExtraStore.AddRange(ordered.Skip(1).ToArray());
+        try
+        {
+            x509.Build(ordered[0]);
+        }
+        catch (CryptographicException)
+        {
+            return ordered;
+        }
+
+        if (x509.ChainElements.Count <= ordered.Count)
+        {
+            return ordered;
+        }
+
+        if (!CertificateFacts.IsSelfSigned(x509.ChainElements[^1].Certificate)
+            || !x509.ChainElements[ordered.Count - 1].Certificate.RawData.AsSpan().SequenceEqual(ordered[^1].RawData))
+        {
+            return ordered;
+        }
+
+        var completed = new List<X509Certificate2>(ordered);
+        for (int i = ordered.Count; i < x509.ChainElements.Count; i++)
+        {
+            completed.Add(x509.ChainElements[i].Certificate);
+        }
+
+        return completed;
     }
 
     private sealed class CheckedTimestampClient(ITimestampClient inner, TimestampAcceptance acceptance, X509Certificate2? expectedTsa) : ITimestampClient

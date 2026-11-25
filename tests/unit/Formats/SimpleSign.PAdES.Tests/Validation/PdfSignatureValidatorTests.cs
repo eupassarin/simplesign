@@ -806,6 +806,7 @@ public sealed class PdfSignatureValidatorTests
             }));
             var result = await PadesAugmenter.Document(signed)
                 .WithTimestamp(new SimpleSign.Core.Signing.TimestampOptions(new Uri("http://tsa.example.com"), new SimpleSign.Core.Http.SingleClientProvider(client)))
+                .WithSigningPolicy(TestPolicies.SigningWithoutTimestampChecks) // these test TSAs publish no revocation data
                 .ToLevel(SimpleSign.Core.Signing.AdesBaselineLevel.Timestamped)
                 .AugmentAsync();
             return result.Document;

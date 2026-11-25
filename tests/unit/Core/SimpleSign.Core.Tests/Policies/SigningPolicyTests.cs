@@ -22,6 +22,18 @@ public sealed class SigningPolicyTests
     }
 
     [Fact]
+    public void Default_ChecksTheTsaCertificateButNotItsTrust()
+    {
+        var policy = SigningPolicy.Default;
+
+        // IGNORE until 0.17.0 (issue #341); the trust of the TSA chain stays a choice of the caller.
+        policy.Find("Timestamp/NotExpired")!.Level.ShouldBe(ConstraintLevel.Fail);
+        policy.Find("Timestamp/NotRevoked")!.Level.ShouldBe(ConstraintLevel.Fail);
+        policy.Find("Timestamp/RevocationDataAvailable")!.Level.ShouldBe(ConstraintLevel.Fail);
+        policy.Find("Timestamp/ProspectiveCertificateChain")!.Level.ShouldBe(ConstraintLevel.Ignore);
+    }
+
+    [Fact]
     public void ToJson_RoundTrip_IsStable()
     {
         string json = SigningPolicy.Default.ToJson();

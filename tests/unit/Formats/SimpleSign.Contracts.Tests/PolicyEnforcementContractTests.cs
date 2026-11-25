@@ -363,6 +363,25 @@ public sealed class PolicyEnforcementContractTests : IDisposable
     [InlineData("pades")]
     [InlineData("cades")]
     [InlineData("xades")]
+    public async Task TimestampByTsaExpiredAtGenTime_IsRefused(string format)
+    {
+        using var tsaCertificate = IssueExpiredTsa();
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => SignWithTsa(format, tsaCertificate, SigningPolicy.Default, crls, genTime: DateTimeOffset.UtcNow));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateNotValid);
+    }
+
+    /// <summary>A TSA certificate of the synthetic PKI that expired an hour ago (the intermediate started a day ago).</summary>
+    private X509Certificate2 IssueExpiredTsa() =>
+        _pki.IssueTimestampingCertificate(notAfter: DateTimeOffset.UtcNow.AddHours(-1));
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
     public async Task TimestampByUntrustedTsa_IsRefused(string format)
     {
         using var other = new SyntheticPki();
@@ -390,6 +409,327 @@ public sealed class PolicyEnforcementContractTests : IDisposable
         ex.Reason.ShouldBe(SigningErrorReason.TimestampUntrusted);
     }
 
+    // ── TSA certificate checked by default, refusal follows the level-failure behavior (#341) ──
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByRevokedTsa_DefaultPolicy_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
+
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => SignWithTsa(format, tsaCertificate, SigningPolicy.Default, crls));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByRevokedTsa_PolicyOmitted_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
+        var profile = AdesBaselineProfile.Timestamped(TsaOptions(tsaCertificate));
+
+        var ex = await Should.ThrowAsync<SigningException>(() => SignExternally(format, profile, crls, policy: null));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampWithUnknownTsaRevocation_DefaultPolicy_IsRefused(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = new HttpClient(new MockHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound))));
+
+        var ex = await Should.ThrowAsync<SigningException>(
+            () => SignWithTsa(format, tsaCertificate, SigningPolicy.Default, crls));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampRevocationStatusUnknown);
+    }
+
+    [Theory]
+    [InlineData("pades", "revoked", SigningErrorReason.TimestampCertificateRevoked)]
+    [InlineData("cades", "revoked", SigningErrorReason.TimestampCertificateRevoked)]
+    [InlineData("xades", "revoked", SigningErrorReason.TimestampCertificateRevoked)]
+    [InlineData("pades", "not-yet-valid", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("cades", "not-yet-valid", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("xades", "not-yet-valid", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("pades", "expired", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("cades", "expired", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("xades", "expired", SigningErrorReason.TimestampCertificateNotValid)]
+    [InlineData("pades", "unknown", SigningErrorReason.TimestampRevocationStatusUnknown)]
+    [InlineData("cades", "unknown", SigningErrorReason.TimestampRevocationStatusUnknown)]
+    [InlineData("xades", "unknown", SigningErrorReason.TimestampRevocationStatusUnknown)]
+    public async Task RefusedSignatureTimestamp_ReturnLowerLevel_ReturnsBasicWithReason(
+        string format, string fault, SigningErrorReason reason)
+    {
+        using var tsaCertificate = fault == "expired" ? IssueExpiredTsa() : _pki.IssueTimestampingCertificate();
+        using var crls = fault switch
+        {
+            "revoked" => CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl()),
+            "unknown" => new HttpClient(new MockHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)))),
+            _ => CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl()),
+        };
+        DateTimeOffset? genTime = fault switch
+        {
+            "not-yet-valid" => tsaCertificate.NotBefore.ToUniversalTime().AddHours(-1),
+            _ => null,
+        };
+        var profile = AdesBaselineProfile.Timestamped(TsaOptions(tsaCertificate, genTime), SigningLevelFailureBehavior.ReturnLowerLevel);
+
+        var (result, signerCalls) = await SignExternally(format, profile, crls, SigningPolicy.Default);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Basic);
+        result.HasSignatureTimestamp.ShouldBeFalse();
+        var refused = result.Warnings.Where(w => w.Code == SigningWarningCode.SignatureTimestampRefused).ShouldHaveSingleItem();
+        refused.Reason.ShouldBe(reason);
+        result.Warnings.ShouldContain(w => w.Code == SigningWarningCode.LevelDowngraded);
+        signerCalls.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task RefusedArchiveTimestamp_ReturnLowerLevel_ReturnsLongTermWithReason(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var archiveTsaCertificate = _pki.IssueTimestampingCertificate("CN=Archive TSA");
+        using var crls = CrlServer(_pki.BuildCrlRevoking(archiveTsaCertificate), _pki.BuildIntermediateCrl());
+        var profile = ArchiveProfile(tsaCertificate, archiveTsaCertificate, crls, SigningLevelFailureBehavior.ReturnLowerLevel);
+
+        var (result, signerCalls) = await SignExternally(format, profile, crls, SigningPolicy.Default);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.LongTerm, string.Join("; ", result.Warnings.Select(w => w.Message)));
+        result.HasSignatureTimestamp.ShouldBeTrue();
+        result.HasArchiveTimestamp.ShouldBeFalse();
+        var refused = result.Warnings.Where(w => w.Code == SigningWarningCode.ArchiveTimestampRefused).ShouldHaveSingleItem();
+        refused.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+        signerCalls.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task RefusedArchiveTimestamp_Throw_KeepsTheReason(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var archiveTsaCertificate = _pki.IssueTimestampingCertificate("CN=Archive TSA");
+        using var crls = CrlServer(_pki.BuildCrlRevoking(archiveTsaCertificate), _pki.BuildIntermediateCrl());
+        var profile = ArchiveProfile(tsaCertificate, archiveTsaCertificate, crls, SigningLevelFailureBehavior.Throw);
+
+        var ex = await Should.ThrowAsync<SigningException>(() => SignExternally(format, profile, crls, SigningPolicy.Default));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task HealthyTimestamps_DifferentArchiveTsa_ReachArchive(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var archiveTsaCertificate = _pki.IssueTimestampingCertificate("CN=Archive TSA");
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+        var profile = ArchiveProfile(tsaCertificate, archiveTsaCertificate, crls, SigningLevelFailureBehavior.Throw);
+
+        var (result, signerCalls) = await SignExternally(format, profile, crls, SigningPolicy.Default);
+
+        result.AchievedLevel.ShouldBe(AdesBaselineLevel.Archive);
+        result.Warnings.ShouldBeEmpty();
+        signerCalls.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task UntrustedTsa_ReturnLowerLevel_IsStillRefused(string format)
+    {
+        using var other = new SyntheticPki();
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var expected = _pki.IssueTimestampingCertificate("CN=Expected TSA");
+        using var crls = CrlServer(_pki.BuildLeafCrl(), _pki.BuildIntermediateCrl());
+        var options = TsaOptions(tsaCertificate);
+        var profile = AdesBaselineProfile.Timestamped(
+            new TimestampOptions(options.Endpoint, options.HttpClientProvider) { ExpectedTsaCertificate = expected },
+            SigningLevelFailureBehavior.ReturnLowerLevel);
+
+        var ex = await Should.ThrowAsync<SigningException>(() => SignExternally(format, profile, crls, SigningPolicy.Default));
+
+        ex.Reason.ShouldBe(SigningErrorReason.TimestampUntrusted);
+    }
+
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task RefusedSignatureTimestamp_Cancellation_Propagates(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
+        var profile = AdesBaselineProfile.Timestamped(TsaOptions(tsaCertificate), SigningLevelFailureBehavior.ReturnLowerLevel);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => SignExternally(format, profile, crls, SigningPolicy.Default, cts.Token));
+    }
+
+    /// <summary>
+    /// The migration from 0.17.0, side by side: the same revoked TSA was accepted under the levels of 0.17.0's default
+    /// (<see cref="TestPolicies.SigningWithoutTimestampChecks"/>) and is refused by today's.
+    /// </summary>
+    [Theory]
+    [InlineData("pades")]
+    [InlineData("cades")]
+    [InlineData("xades")]
+    public async Task TimestampByRevokedTsa_LevelsOf017Accepted_DefaultRefuses(string format)
+    {
+        using var tsaCertificate = _pki.IssueTimestampingCertificate();
+        using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
+        var profile = AdesBaselineProfile.Timestamped(TsaOptions(tsaCertificate));
+
+        var (before, _) = await SignExternally(format, profile, crls, TestPolicies.SigningWithoutTimestampChecks);
+        var now = await Should.ThrowAsync<SigningException>(() => SignExternally(format, profile, crls, SigningPolicy.Default));
+
+        before.AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        before.HasSignatureTimestamp.ShouldBeTrue();
+        before.Warnings.ShouldBeEmpty();
+        now.Reason.ShouldBe(SigningErrorReason.TimestampCertificateRevoked);
+    }
+
+    [Theory]
+    [InlineData(false, null)]
+    [InlineData(true, SigningErrorReason.TimestampCertificateRevoked)]
+    public async Task TsaChainWithoutRoot_NoAnchors_RootFoundThroughAia(bool revoked, SigningErrorReason? reason)
+    {
+        const string rootUrl = "http://198.51.100.1/root.cer";
+        using var pki = new SyntheticPki(
+            crlDistributionPoint: LeafCrlUrl, intermediateCrlDistributionPoint: IntermediateCrlUrl, intermediateCaIssuersUrl: rootUrl);
+        using var tsaCertificate = pki.IssueTimestampingCertificate();
+        byte[] leafCrl = revoked ? pki.BuildCrlRevoking(tsaCertificate) : pki.BuildLeafCrl();
+        byte[] intermediateCrl = pki.BuildIntermediateCrl();
+        using var server = new HttpClient(new MockHttpHandler(request => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+        {
+            LeafCrlUrl => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(leafCrl) },
+            IntermediateCrlUrl => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(intermediateCrl) },
+            rootUrl => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(pki.RootCa.RawData) },
+            _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+        })));
+        // The token carries the TSA and the intermediate, not the root, and the signer is given no trust anchor.
+        using var tsa = TsaClient(new TimestampTokenOptions
+        {
+            TsaCertificate = tsaCertificate,
+            ExtraCertificates = [pki.IntermediateCa],
+            GenTime = DateTimeOffset.UtcNow,
+        });
+        var builder = PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
+            .WithCertificate(pki.Leaf, [pki.IntermediateCa])
+            .WithHttpClientProvider(new SingleClientProvider(server))
+            .WithChainRevocationChecker(new ChainRevocationChecker(server))
+            .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl), new SingleClientProvider(tsa))));
+
+        if (reason is { } expected)
+        {
+            var ex = await Should.ThrowAsync<SigningException>(() => builder.SignWithDetailsAsync());
+            ex.Reason.ShouldBe(expected);
+        }
+        else
+        {
+            (await builder.SignWithDetailsAsync()).AchievedLevel.ShouldBe(AdesBaselineLevel.Timestamped);
+        }
+    }
+
+    private const string ArchiveTsaUrl = "http://198.51.100.1/archive-tsa";
+
+    private TimestampOptions TsaOptions(X509Certificate2 tsaCertificate, DateTimeOffset? genTime = null) =>
+        new(new Uri(TsaUrl), new SingleClientProvider(TsaClient(new TimestampTokenOptions
+        {
+            TsaCertificate = tsaCertificate,
+            ExtraCertificates = [_pki.IntermediateCa],
+            GenTime = genTime ?? DateTimeOffset.UtcNow,
+        })));
+
+    private AdesBaselineProfile ArchiveProfile(
+        X509Certificate2 tsaCertificate, X509Certificate2 archiveTsaCertificate, HttpClient crls, SigningLevelFailureBehavior behavior) =>
+        AdesBaselineProfile.Archive(
+            TsaOptions(tsaCertificate),
+            new LongTermValidationOptions(new SingleClientProvider(crls)),
+            new ArchiveTimestampOptions(new Uri(ArchiveTsaUrl), new SingleClientProvider(TsaClient(new TimestampTokenOptions
+            {
+                TsaCertificate = archiveTsaCertificate,
+                ExtraCertificates = [_pki.IntermediateCa],
+                GenTime = DateTimeOffset.UtcNow,
+            }))),
+            behavior);
+
+    /// <summary>
+    /// Signs through an external signer that counts its calls, with the TSA chain's revocation from <paramref name="crls"/>;
+    /// <paramref name="policy"/> null leaves <c>WithSigningPolicy</c> out.
+    /// </summary>
+    private async Task<(ISigningResult Result, int SignerCalls)> SignExternally(
+        string format, AdesBaselineProfile profile, HttpClient crls, SigningPolicy? policy,
+        CancellationToken cancellationToken = default)
+    {
+        using var key = _pki.Leaf.GetRSAPrivateKey()!;
+        int calls = 0;
+        var remote = new DelegatingExternalSigner(data =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(key.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        });
+        var chain = _pki.IntermediatesAndRoot();
+        var checker = new ChainRevocationChecker(crls);
+        ITrustAnchorProvider[] anchors = [new InMemoryTrustAnchors(_pki.RootCa)];
+        ISigningResult result;
+        switch (format)
+        {
+            case "pades":
+                {
+                    var builder = PadesSigner.Document(TestPdfFactory.CreateMinimalPdf()).WithExternalSigner(_pki.Leaf, remote, chain)
+                        .WithLevel(profile).WithChainRevocationChecker(checker).WithTrustAnchors(anchors);
+                    builder = policy is null ? builder : builder.WithSigningPolicy(policy);
+                    result = await builder.SignWithDetailsAsync(cancellationToken);
+                    break;
+                }
+
+            case "cades":
+                {
+                    var builder = CadesSigner.Document(ContractFixtures.BinaryContent).WithExternalSigner(_pki.Leaf, remote, chain)
+                        .WithLevel(profile).WithChainRevocationChecker(checker).WithTrustAnchors(anchors);
+                    builder = policy is null ? builder : builder.WithSigningPolicy(policy);
+                    result = await builder.SignWithDetailsAsync(cancellationToken);
+                    break;
+                }
+
+            case "xades":
+                {
+                    var builder = XadesSigner.Document(ContractFixtures.XmlDocument).WithExternalSigner(_pki.Leaf, remote, chain)
+                        .WithLevel(profile).WithChainRevocationChecker(checker).WithTrustAnchors(anchors);
+                    builder = policy is null ? builder : builder.WithSigningPolicy(policy);
+                    result = await builder.SignWithDetailsAsync(cancellationToken);
+                    break;
+                }
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(format));
+        }
+
+        return (result, calls);
+    }
+
     [Fact]
     public async Task TimestampByRevokedTsa_TsaIsNotTrusted()
     {
@@ -401,7 +741,7 @@ public sealed class PolicyEnforcementContractTests : IDisposable
             GenTime = DateTimeOffset.UtcNow,
         });
         var profile = AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri(TsaUrl), new SingleClientProvider(tsa)));
-        var signed = await Sign("pades", _pki.Leaf, [_pki.IntermediateCa], SigningPolicy.Default, profile: profile);
+        var signed = await Sign("pades", _pki.Leaf, [_pki.IntermediateCa], TestPolicies.SigningWithoutTimestampChecks, profile: profile);
         using var crls = CrlServer(_pki.BuildCrlRevoking(tsaCertificate), _pki.BuildIntermediateCrl());
 
         var validator = new PdfSignatureValidator(

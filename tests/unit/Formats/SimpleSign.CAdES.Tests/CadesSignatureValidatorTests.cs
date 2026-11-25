@@ -313,6 +313,7 @@ public sealed class CadesSignatureValidatorTests : IDisposable
         byte[] cms = await CadesSigner.Document(_data)
             .WithCertificate(pki.Leaf, [pki.IntermediateCa])
             .WithLevel(AdesBaselineProfile.Timestamped(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa))))
+            .WithSigningPolicy(TestPolicies.SigningWithoutTimestampChecks) // this TSA's chain has no revocation data
             .SignAsync();
         var withdrawal = DateTimeOffset.UtcNow.AddSeconds(1);
         var history = new WithdrawnAt(pki.RootCa, withdrawal);
