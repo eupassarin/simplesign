@@ -306,7 +306,13 @@ public sealed class SyntheticPki : IDisposable
     /// Issues a time-stamping authority certificate under the intermediate CA: critical, exclusive
     /// timeStamping EKU, the leaf's CRL distribution point and OCSP responder. The certificate carries its key.
     /// </summary>
-    public X509Certificate2 IssueTimestampingCertificate(string subject = "CN=SimpleSign Synthetic TSA, O=SimpleSign Tests")
+    /// <param name="subject">The subject.</param>
+    /// <param name="notBefore">Start of validity; default a minute after the intermediate's. Not before the intermediate's.</param>
+    /// <param name="notAfter">End of validity; default two years after <paramref name="notBefore"/> (in the past for an expired TSA).</param>
+    public X509Certificate2 IssueTimestampingCertificate(
+        string subject = "CN=SimpleSign Synthetic TSA, O=SimpleSign Tests",
+        DateTimeOffset? notBefore = null,
+        DateTimeOffset? notAfter = null)
     {
         using var key = RSA.Create(2048);
         var req = new CertificateRequest(subject, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -322,8 +328,8 @@ public sealed class SyntheticPki : IDisposable
 
         byte[] serial = RandomNumberGenerator.GetBytes(16);
         serial[0] &= 0x7F;
-        var notBefore = IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
-        using var cert = req.Create(IntermediateCa, notBefore, notBefore.AddYears(2), serial);
+        var from = notBefore ?? IntermediateCa.NotBefore.ToUniversalTime().AddMinutes(1);
+        using var cert = req.Create(IntermediateCa, from, notAfter ?? from.AddYears(2), serial);
         using var withKey = cert.CopyWithPrivateKey(key);
         return ExportAndReload(withKey);
     }

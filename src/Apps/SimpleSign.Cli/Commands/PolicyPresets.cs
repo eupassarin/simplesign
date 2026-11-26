@@ -26,7 +26,10 @@ internal static class PolicyPresets
                 .WithName("Signing certificate dates only")
                 .With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Ignore))
                 .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
-                .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore)),
+                .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore))
+                .With("Timestamp/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
+                .With("Timestamp/NotRevoked", new PolicyConstraint(ConstraintLevel.Ignore))
+                .With("Timestamp/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore)),
         };
 
     /// <summary>The validation policies by name.</summary>

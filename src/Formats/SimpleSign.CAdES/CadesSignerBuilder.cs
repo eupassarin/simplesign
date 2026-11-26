@@ -658,7 +658,7 @@ public sealed partial class CadesSignerBuilder
             {
                 throw;
             }
-            catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
+            catch (Exception ex) when (BaselineSigning.IsFatalTimestampRefusal(ex, profile))
             {
                 throw;
             }
@@ -673,8 +673,8 @@ public sealed partial class CadesSignerBuilder
                         ex);
                 }
 
-                BaselineSigning.AddDowngradeWarnings(warnings, SigningWarningCode.SignatureTimestampUnavailable,
-                    $"Signature timestamp could not be applied: {ex.Message}");
+                BaselineSigning.AddTimestampDowngradeWarnings(warnings, SigningWarningCode.SignatureTimestampUnavailable,
+                    $"Signature timestamp could not be applied: {ex.Message}", ex);
             }
 
             if (timestampTokenBytes is not null)
@@ -729,6 +729,10 @@ public sealed partial class CadesSignerBuilder
             {
                 throw;
             }
+            catch (Exception ex) when (BaselineSigning.IsFatalTimestampRefusal(ex, profile))
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 const string archiveMessage = "CAdES archiveTimestampV3 could not be applied.";
@@ -738,8 +742,8 @@ public sealed partial class CadesSignerBuilder
                     throw new SigningException(archiveMessage, SigningErrorReason.LevelNotAchievable, ex);
                 }
 
-                BaselineSigning.AddDowngradeWarnings(warnings, SigningWarningCode.ArchiveTimestampUnavailable,
-                    $"{archiveMessage} {ex.Message}");
+                BaselineSigning.AddTimestampDowngradeWarnings(warnings, SigningWarningCode.ArchiveTimestampUnavailable,
+                    $"{archiveMessage} {ex.Message}", ex);
             }
         }
 

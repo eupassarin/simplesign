@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`SigningWarning.Reason`** (`SigningErrorReason?`) and the codes `SigningWarningCode.SignatureTimestampRefused` (7)
+  and `ArchiveTimestampRefused` (8). A timestamp left out under `ReturnLowerLevel` now tells why:
+  `TimestampCertificateNotValid`, `TimestampCertificateRevoked`, `TimestampRevocationStatusUnknown` (the `*Refused`
+  codes), or `TimestampInvalid` / `NetworkFailure` (the `*Unavailable` codes) (#341).
+
+### Changed (Breaking)
+
+- **The TSA certificate is checked by default** (#341). `SigningPolicy.Default` sets `Timestamp/NotExpired`,
+  `Timestamp/NotRevoked` and `Timestamp/RevocationDataAvailable` to FAIL (they were IGNORE since 0.11.0). Every
+  signature and archive timestamp obtained while signing is checked once received and before it is embedded: its
+  TSA certificate valid at the token's genTime, and the TSA chain not revoked with a known status. Omitting
+  `WithSigningPolicy` and passing `SigningPolicy.Default` are the same. The augmenters apply the same checks.
+  - Each timestamp may now cost OCSP/CRL requests for the TSA chain, and a TSA whose certificate has expired, is
+    revoked or has no reachable revocation data is refused where it was accepted.
+  - The revocation check needs the TSA chain up to its root. When the token does not carry the root and no trust
+    anchor completes the chain, the issuers are found through the chain's AIA caIssuers, then in the system's root
+    store (this trusts nothing: trust stays `Timestamp/ProspectiveCertificateChain`). A TSA under a private root that
+    is in neither needs `WithTrustAnchors`, or the constraints lowered.
+  - Profiles built on the default inherit the checks: AATL, Gov.br, the CLI's `default`, `strict`, `sandbox` and
+    `tsl`. ICP-Brasil and IOFE already had them. eIDAS keeps `Timestamp/RevocationDataAvailable` at IGNORE, as before.
+    The `minimal` presets (CLI, TestBench) turn them off, as their name says.
+  - To go back, lower them in your policy:
+    `SigningPolicy.Default.With("Timestamp/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore))`
+    (or WARN to be told), likewise `Timestamp/NotRevoked` and `Timestamp/NotExpired`.
+  - `Timestamp/ProspectiveCertificateChain` (the TSA chaining to a trust anchor) stays IGNORE.
+- **A refused TSA certificate follows `SigningLevelFailureBehavior`** (#341). With `Throw` (the default) the
+  operation still fails with the refusal's reason. With `ReturnLowerLevel` the refused timestamp is left out and the
+  lower level is returned, with a `SignatureTimestampRefused` / `ArchiveTimestampRefused` warning: B-B when the
+  signature timestamp is refused, B-LT when the archive timestamp is. The external signer is not called again. Until
+  now these refusals always failed the operation.
+  - `TimestampUntrusted` (a TSA other than `ExpectedTsaCertificate`, or one that does not chain to the anchors
+    `Timestamp/ProspectiveCertificateChain` asks for) still fails the operation in both modes.
+  - CAdES and XAdES archive timestamps now behave as PAdES: with `Throw` a refusal keeps its reason (it was
+    `LevelNotAchievable`), and `TimestampUntrusted` is no longer downgraded.
+  - A token without the TSA certificate is `TimestampInvalid` (it was `TimestampUntrusted`), unless an expected
+    TSA was named.
+
 ## [0.17.0] - 2026-11-24
 
 ### Added

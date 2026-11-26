@@ -750,7 +750,7 @@ public sealed partial class PadesSignerBuilder
             {
                 throw;
             }
-            catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
+            catch (Exception ex) when (BaselineSigning.IsFatalTimestampRefusal(ex, profile))
             {
                 throw;
             }
@@ -764,9 +764,9 @@ public sealed partial class PadesSignerBuilder
                         ex);
                 }
 
-                BaselineSigning.AddDowngradeWarnings(
+                BaselineSigning.AddTimestampDowngradeWarnings(
                     warnings, SigningWarningCode.SignatureTimestampUnavailable,
-                    $"Signature timestamp could not be applied: {ex.Message}");
+                    $"Signature timestamp could not be applied: {ex.Message}", ex);
             }
 
             if (timestampTokenBytes is not null)
@@ -1261,7 +1261,7 @@ public sealed partial class PadesSignerBuilder
         {
             throw;
         }
-        catch (Exception ex) when (BaselineSigning.IsTimestampRefusal(ex))
+        catch (Exception ex) when (BaselineSigning.IsFatalTimestampRefusal(ex, profile))
         {
             throw;
         }
@@ -1275,9 +1275,9 @@ public sealed partial class PadesSignerBuilder
                     ex);
             }
 
-            BaselineSigning.AddDowngradeWarnings(
+            BaselineSigning.AddTimestampDowngradeWarnings(
                 warnings, SigningWarningCode.ArchiveTimestampUnavailable,
-                $"Archive timestamp could not be applied: {ex.Message}");
+                $"Archive timestamp could not be applied: {ex.Message}", ex);
             return false;
         }
     }

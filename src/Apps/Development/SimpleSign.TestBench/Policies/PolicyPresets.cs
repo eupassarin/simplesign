@@ -37,7 +37,10 @@ internal static class PolicyPresets
         .WithName("Signing certificate dates only")
         .With("SigningCertificate/KeyUsage", new PolicyConstraint(ConstraintLevel.Ignore))
         .With("CACertificate/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
-        .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore));
+        .With("Cryptographic", new PolicyConstraint(ConstraintLevel.Ignore))
+        .With("Timestamp/NotExpired", new PolicyConstraint(ConstraintLevel.Ignore))
+        .With("Timestamp/NotRevoked", new PolicyConstraint(ConstraintLevel.Ignore))
+        .With("Timestamp/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore));
 
     /// <summary>The library's default validation policy, with time-stamps out of order and an unavailable signature policy failing.</summary>
     internal static ValidationPolicy StrictValidation { get; } = ValidationPolicy.Default

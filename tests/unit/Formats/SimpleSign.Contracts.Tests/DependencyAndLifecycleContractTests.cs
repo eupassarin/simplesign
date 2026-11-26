@@ -210,21 +210,27 @@ public sealed class DependencyAndLifecycleContractTests
     private static async Task<ISigningResult> SignWithBuilderWideProviderAsync(
         string format, X509Certificate2 cert, AdesBaselineProfile profile, IHttpClientProvider provider)
     {
+        // The builder-wide provider carries the revocation requests of the TSA chain (public, unauthenticated):
+        // without the TSA checks, the only requests are the TSA's, which must go to the scoped provider.
+        var policy = TestPolicies.SigningWithoutTimestampChecks;
         return format switch
         {
             "pades" => await PadesSigner.Document(TestPdfFactory.CreateMinimalPdf())
                 .WithCertificate(cert)
                 .WithLevel(profile)
+                .WithSigningPolicy(policy)
                 .WithHttpClientProvider(provider)
                 .SignWithDetailsAsync(),
             "cades" => await CadesSigner.Document(ContractFixtures.BinaryContent)
                 .WithCertificate(cert)
                 .WithLevel(profile)
+                .WithSigningPolicy(policy)
                 .WithHttpClientProvider(provider)
                 .SignWithDetailsAsync(),
             "xades" => await XadesSigner.Document(ContractFixtures.XmlDocument)
                 .WithCertificate(cert)
                 .WithLevel(profile)
+                .WithSigningPolicy(policy)
                 .WithHttpClientProvider(provider)
                 .SignWithDetailsAsync(),
             _ => throw new ArgumentOutOfRangeException(nameof(format))

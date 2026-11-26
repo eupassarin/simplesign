@@ -166,6 +166,7 @@ public sealed class PadesAugmenterTests : IDisposable
 
         var result = await PadesAugmenter.Document(signed)
             .WithTimestamp(new TimestampOptions(new Uri("http://tsa.example.com"), new SingleClientProvider(tsa)) { ExpectedTsaCertificate = expected })
+            .WithSigningPolicy(TestPolicies.SigningWithoutTimestampChecks)
             .ToLevel(AdesBaselineLevel.Timestamped)
             .AugmentAsync();
 

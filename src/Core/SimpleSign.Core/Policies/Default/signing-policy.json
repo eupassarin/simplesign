@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/signing-policy.schema.json",
   "SigningConstraints": {
     "Name": "SimpleSign default",
-    "Description": "Checks made before signing: validity of the chain, key usage of the signing certificate, key and digest algorithms. Set NotRevoked and RevocationDataAvailable to FAIL to also check the revocation of the chain (network).",
+    "Description": "Checks made before signing: validity of the chain, key usage of the signing certificate, key and digest algorithms. Set NotRevoked and RevocationDataAvailable to FAIL to also check the revocation of the chain (network). Each timestamp obtained while signing is checked once received: its TSA certificate valid at the timestamp's time, and the TSA chain not revoked, with its revocation status known (network).",
     "SigningCertificate": {
       "NotExpired": { "Level": "FAIL" },
       "RevocationDataAvailable": { "Level": "IGNORE" },
@@ -19,9 +19,9 @@
     },
     "Timestamp": {
       "ProspectiveCertificateChain": { "Level": "IGNORE" },
-      "NotExpired": { "Level": "IGNORE" },
-      "NotRevoked": { "Level": "IGNORE" },
-      "RevocationDataAvailable": { "Level": "IGNORE" }
+      "NotExpired": { "Level": "FAIL" },
+      "NotRevoked": { "Level": "FAIL" },
+      "RevocationDataAvailable": { "Level": "FAIL" }
     },
     "Cryptographic": {
       "Level": "FAIL",

@@ -30,10 +30,20 @@ public static class TestPolicies
         .With("Timestamp/ProspectiveCertificateChain", Fail).With("Timestamp/NotExpired", Fail)
         .With("Timestamp/NotRevoked", Fail).With("Timestamp/RevocationDataAvailable", Fail);
 
+    /// <summary>
+    /// The default signing policy as it was until 0.17.0: <c>Timestamp/NotExpired</c>, <c>Timestamp/NotRevoked</c> and
+    /// <c>Timestamp/RevocationDataAvailable</c> at IGNORE (issue #341). The reference of the migration, and the policy of
+    /// tests whose TSA has no chain to a root or no revocation data and that are not about those checks.
+    /// </summary>
+    public static SigningPolicy SigningWithoutTimestampChecks { get; } = SigningPolicy.Default
+        .WithName("Default without TSA checks")
+        .With("Timestamp/NotExpired", Ignore).With("Timestamp/NotRevoked", Ignore).With("Timestamp/RevocationDataAvailable", Ignore);
+
     /// <summary>A signing policy that checks only the dates of the signing certificate.</summary>
     public static SigningPolicy SigningDatesOnly { get; } = SigningPolicy.Default
         .WithName("Signing certificate dates only")
-        .With("SigningCertificate/KeyUsage", Ignore).With("CACertificate/NotExpired", Ignore).With("Cryptographic", Ignore);
+        .With("SigningCertificate/KeyUsage", Ignore).With("CACertificate/NotExpired", Ignore).With("Cryptographic", Ignore)
+        .With("Timestamp/NotExpired", Ignore).With("Timestamp/NotRevoked", Ignore).With("Timestamp/RevocationDataAvailable", Ignore);
 
     /// <summary>The path of a constraint of the signature's signing certificate in a validation policy.</summary>
     public static string SigningCertificate(string constraint) =>

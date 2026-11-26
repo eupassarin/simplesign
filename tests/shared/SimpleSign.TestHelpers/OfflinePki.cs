@@ -29,7 +29,8 @@ public sealed class OfflinePki : IDisposable
         // others): validation refuses revocation data older than the certificate it is about (EN 319 102-1).
         byte[] leafCrl = Pki.BuildLeafCrl(DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow.AddDays(30));
         byte[] intermediateCrl = Pki.BuildIntermediateCrl();
-        var tokens = new TimestampTokenOptions { TsaCertificate = Tsa, ExtraCertificates = [Pki.IntermediateCa] };
+        // The whole TSA chain in the token: the default signing policy checks its revocation, up to the root.
+        var tokens = new TimestampTokenOptions { TsaCertificate = Tsa, ExtraCertificates = [Pki.IntermediateCa, Pki.RootCa] };
         _http = new HttpClient(new MockHttpHandler(async request =>
         {
             if (request.Method == HttpMethod.Post)

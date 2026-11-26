@@ -202,6 +202,29 @@ level; an explicit `ReturnLowerLevel` profile permits enrichment failures to ret
 a lower level with structured warnings. Base-signature failures and cancellation
 still fail, and byte-only `SignAsync` accepts strict profiles only.
 
+Each timestamp obtained while signing is checked once received, before it is embedded: the default signing policy
+refuses a TSA certificate that is not valid at the token's genTime (`Timestamp/NotExpired`), a revoked TSA chain
+(`Timestamp/NotRevoked`) and one whose revocation status cannot be established (`Timestamp/RevocationDataAvailable`),
+which may cost OCSP/CRL requests. The TSA chain is completed up to its root for that check — from the token, the
+trust anchors, the chain's AIA caIssuers, then the system's root store; a private TSA root needs `WithTrustAnchors`. With `Throw` the refusal fails the operation with its reason
+(`TimestampCertificateNotValid`, `TimestampCertificateRevoked`, `TimestampRevocationStatusUnknown`). With
+`ReturnLowerLevel` the timestamp is left out and the lower level returned — B-B for a refused signature timestamp,
+B-LT for a refused archive timestamp — without calling the external signer again:
+
+```csharp
+var result = await PadesSigner.Document(pdf).WithExternalSigner(cert, signer, chain)
+    .WithLevel(AdesBaselineProfile.Archive(tsa, ltv, failureBehavior: SigningLevelFailureBehavior.ReturnLowerLevel))
+    .SignWithDetailsAsync();
+foreach (var w in result.Warnings.Where(w => w.Code is SigningWarningCode.SignatureTimestampRefused
+             or SigningWarningCode.ArchiveTimestampRefused))
+{
+    Console.WriteLine($"{w.Code}: {w.Reason}");   // e.g. ArchiveTimestampRefused: TimestampCertificateRevoked
+}
+```
+
+A TSA other than `TimestampOptions.ExpectedTsaCertificate`, or one that does not chain to the anchors
+`Timestamp/ProspectiveCertificateChain` asks for, is `TimestampUntrusted` and fails the operation in both modes.
+
 Embedded-evidence checks authenticate OCSP/CRL signatures, certificate association,
 responder authorization, and usable validity bounds. Signer-chain trust and TSA
 trust depend on validation anchors and policy. Evaluate them with detailed results:
