@@ -105,8 +105,30 @@ public sealed record CadesValidationResult
     /// <summary>How revocation was established (<see cref="RevocationSource.CertificateChain"/>) or why it was not.</summary>
     public RevocationSource RevocationSource { get; init; }
 
+    /// <summary>
+    /// The region of the trust framework whose chain validation took the signer (<c>BR</c> for ICP-Brasil), when
+    /// <see cref="ValidationOptions.Profile"/> has one. Set by <c>ValidateAsync</c> only: the provider is asked for its data,
+    /// without revocation (checked by this validator) and without changing the verdict; its errors are warnings.
+    /// </summary>
+    public string? ChainValidationRegion { get; init; }
+
+    /// <summary>The certificate type or level the trust framework reads (e.g. ICP-Brasil A1, A3), from <c>ValidateAsync</c>.</summary>
+    public string? PolicyLevel { get; init; }
+
+    /// <summary>The signer's identifier the trust framework reads (a CPF, a CNPJ…), from <c>ValidateAsync</c>.</summary>
+    public string? SignerId { get; init; }
+
+    /// <summary>The type of <see cref="SignerId"/> (CPF, CNPJ…).</summary>
+    public string? SignerIdType { get; init; }
+
+    /// <summary>What else the trust framework's chain validation read (<c>BR.*</c> keys for ICP-Brasil), from <c>ValidateAsync</c>.</summary>
+    public IReadOnlyDictionary<string, string>? ChainValidationMetadata { get; init; }
+
     /// <summary>What the validation found, for the revocation step of <c>ValidateAsync</c>.</summary>
     internal ValidationFacts? Facts { get; init; }
+
+    /// <summary>The signer and what the signature carries, for the trust framework's chain validation of <c>ValidateAsync</c>.</summary>
+    internal ChainValidationContext? ChainContext { get; init; }
 
     /// <summary>The certificates that may complete the signer and TSA chains (embedded certificates, trust anchors).</summary>
     internal IReadOnlyList<X509Certificate2> ChainCandidates { get; init; } = [];
@@ -248,7 +270,8 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         CancellationToken cancellationToken)
     {
         var report = ValidateAll(cmsBytes, originalData, trustAnchors?.ToList());
-        if (!_options.ChecksRevocation)
+        // Without revocation there is still the data of the trust frameworks' chain validation to ask for.
+        if (!_options.ChecksRevocation && _options.AllChainValidationProviders.Count == 0)
         {
             return report;
         }
@@ -278,7 +301,34 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
         };
     }
 
-    private async Task<CadesValidationResult> WithRevocationAsync(CadesValidationResult result, CancellationToken cancellationToken)
+    private async Task<CadesValidationResult> WithRevocationAsync(CadesValidationResult result, CancellationToken cancellationToken) =>
+        await WithChainDataAsync(await WithRevocationCoreAsync(result, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// The data of the profile's chain validation (ICP-Brasil: the certificate type, the CPF/CNPJ, the BR.* metadata,
+    /// the Lei 14.063 level): asked without revocation, which this validator checks, and without changing the verdict.
+    /// </summary>
+    private async Task<CadesValidationResult> WithChainDataAsync(CadesValidationResult result, CancellationToken cancellationToken)
+    {
+        if (result.ChainContext is not { } context || _options.AllChainValidationProviders is not { Count: > 0 } providers)
+        {
+            return result;
+        }
+
+        var warnings = new List<string>();
+        var chain = await ChainValidationProviderRunner.RunAsync(providers, context, warnings, warnings, null, cancellationToken).ConfigureAwait(false);
+        return chain is null && warnings.Count == 0 ? result : result with
+        {
+            ChainValidationRegion = chain?.RegionCode,
+            PolicyLevel = chain?.PolicyLevel,
+            SignerId = chain?.SignerId,
+            SignerIdType = chain?.SignerIdType,
+            ChainValidationMetadata = chain?.Metadata,
+            Warnings = [.. result.Warnings, .. warnings],
+        };
+    }
+
+    private async Task<CadesValidationResult> WithRevocationCoreAsync(CadesValidationResult result, CancellationToken cancellationToken)
     {
         // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
         if (result.Facts is null
@@ -655,6 +705,18 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             }
         }
 
+        // The signer as the profile's chain validation sees it: for its policy verdict here, and its data in ValidateAsync.
+        var chainContext = new ChainValidationContext
+        {
+            Certificate = cmsData.SignerCertificate!,
+            Certificates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            ValidationTime = provenTime,
+            IsValidationTimeFromTimestamp = provenTime is not null,
+            EmbeddedCrls = embedded.Crls,
+            EmbeddedOcsps = embedded.Ocsps,
+            CheckRevocation = false,
+            Signature = cmsData,
+        };
         var facts = new ValidationFacts
         {
             IsIntegrityValid = integrityValid,
@@ -681,17 +743,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             PolicyDocumentAvailable = _options.PolicyDocumentFound(cmsData.SignaturePolicyOid),
             // The rules of the signature policy the signer names, as the profile's chain validation provider knows them
             // (the ICP-Brasil PAs): breaking them is SignatureConstraints/PolicyRules, not a chain failure.
-            SignaturePolicyErrors = _options.CheckSignaturePolicy(new ChainValidationContext
-            {
-                Certificate = cmsData.SignerCertificate!,
-                Certificates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
-                ValidationTime = provenTime,
-                IsValidationTimeFromTimestamp = provenTime is not null,
-                EmbeddedCrls = embedded.Crls,
-                EmbeddedOcsps = embedded.Ocsps,
-                CheckRevocation = false,
-                Signature = cmsData,
-            }, warnings),
+            SignaturePolicyErrors = _options.CheckSignaturePolicy(chainContext, warnings),
         }.WithCms(cmsData, _options.TrustedRoots);
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -710,6 +762,7 @@ public sealed class CadesSignatureValidator : ICadesSignatureValidator
             BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             ChainCandidates = [.. cmsData.Certificates, .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            ChainContext = cmsData.SignerCertificate is null ? null : chainContext,
             EmbeddedCrls = embedded.Crls,
             EmbeddedOcsps = embedded.Ocsps,
             SignatureTimestampToken = cmsData.SignatureTimestampToken,

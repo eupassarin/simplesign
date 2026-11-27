@@ -1,6 +1,8 @@
+using SimpleSign.CAdES;
 using SimpleSign.Core.Signing;
 using SimpleSign.PAdES;
 using SimpleSign.PAdES.Signing;
+using SimpleSign.XAdES;
 
 namespace SimpleSign.Cli.Extensibility;
 
@@ -53,14 +55,38 @@ public sealed record CliSignOptions
     public bool Visible { get; init; }
 }
 
+/// <summary>The standard signing command an extension's command runs (<see cref="CliSignRequest.Command"/>).</summary>
+public enum CliSignCommand
+{
+    /// <summary><c>simplesign sign</c>: a PDF (PAdES); the extension adds through <see cref="CliSignRequest.Configure"/>.</summary>
+    Sign = 0,
+
+    /// <summary><c>simplesign cades sign</c>; the extension adds through <see cref="CliSignRequest.ConfigureCades"/>.</summary>
+    CadesSign = 1,
+
+    /// <summary><c>simplesign xades sign</c>; the extension adds through <see cref="CliSignRequest.ConfigureXades"/>.</summary>
+    XadesSign = 2,
+
+    /// <summary><c>simplesign xmldsig sign</c>: a plain XML-DSig signature; the extension adds through <see cref="CliSignRequest.ConfigureXmlDsig"/>.</summary>
+    XmlDsigSign = 3,
+}
+
 /// <summary>
-/// A run of the standard <c>simplesign sign</c> on behalf of an extension's command: its arguments, and what the
-/// extension adds to the signature.
+/// A run of a standard signing command (<c>simplesign sign</c> by default, see <see cref="Command"/>) on behalf of an
+/// extension's command: its arguments, and what the extension adds to the signature.
 /// </summary>
 public sealed record CliSignRequest
 {
-    /// <summary>The arguments of <c>simplesign sign</c>, as the user typed them: the input, <c>--cert</c>, <c>--output</c>…</summary>
+    /// <summary>The arguments of the standard command, as the user typed them: the input, <c>--cert</c>, <c>--output</c>…</summary>
     public required IReadOnlyList<string> Arguments { get; init; }
+
+    /// <summary>
+    /// The standard command that runs (default: <c>simplesign sign</c>). This member and <see cref="ConfigureCades"/>,
+    /// <see cref="ConfigureXades"/>, <see cref="ConfigureXmlDsig"/> and <see cref="SignAll"/> came after contract 1 was
+    /// first published: a command of an extension that sets them needs a CLI that has them (the extension's
+    /// <c>minCliVersion</c>), and fails on an older one.
+    /// </summary>
+    public CliSignCommand Command { get; init; }
 
     /// <summary>
     /// Checks the standard options against the extension's own, before anything is read or signed: the message that
@@ -73,6 +99,27 @@ public sealed record CliSignRequest
     /// before its appearance, signing policy and audit sink are.
     /// </summary>
     public Func<PadesSignerBuilder, CliSignOptions, CancellationToken, ValueTask<PadesSignerBuilder>>? Configure { get; init; }
+
+    /// <summary>
+    /// Adds to the CAdES signer of <c>cades sign</c>, after the standard options were applied to it and before its signing
+    /// policy and audit sink are.
+    /// </summary>
+    public Func<CadesSignerBuilder, CliSignOptions, CancellationToken, ValueTask<CadesSignerBuilder>>? ConfigureCades { get; init; }
+
+    /// <summary>
+    /// Adds to the XAdES signer of <c>xades sign</c>, after the standard options were applied to it and before its signing
+    /// policy and audit sink are.
+    /// </summary>
+    public Func<XadesSignerBuilder, CliSignOptions, CancellationToken, ValueTask<XadesSignerBuilder>>? ConfigureXades { get; init; }
+
+    /// <summary>
+    /// Adds to the XML-DSig signer of <c>xmldsig sign</c>, last: after the standard options, the signing policy and the
+    /// trust anchors (a fiscal layout sets the element, the hash and its own policy).
+    /// </summary>
+    public Func<XmlDsigSignerBuilder, CancellationToken, ValueTask<XmlDsigSignerBuilder>>? ConfigureXmlDsig { get; init; }
+
+    /// <summary>For <c>xmldsig sign</c>: sign every element the signer designates that is not signed yet (a batch), as <c>--all</c> does.</summary>
+    public bool SignAll { get; init; }
 
     /// <summary>Changes the appearance of a visible signature, after the standard options built it.</summary>
     public Func<SignatureAppearance, CliSignOptions, SignatureAppearance>? ConfigureAppearance { get; init; }

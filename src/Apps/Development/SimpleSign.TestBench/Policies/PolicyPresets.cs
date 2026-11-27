@@ -56,6 +56,7 @@ internal static class PolicyPresets
         (PolicyViewer.Validation, "strict", () => StrictValidation.ToJson(), StrictValidation.Name),
         (PolicyViewer.Validation, "iofe", () => IofePolicies.Validation.ToJson(), IofePolicies.Validation.Name),
         (PolicyViewer.Signing, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Signing.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Signing.Name),
+        (PolicyViewer.Signing, "fiscal-sefaz", () => Brazil.Fiscal.FiscalPolicies.Sefaz.ToJson(), Brazil.Fiscal.FiscalPolicies.Sefaz.Name),
         (PolicyViewer.Validation, "icp-brasil", () => Brazil.IcpBrasil.IcpBrasilPolicies.Validation.ToJson(), Brazil.IcpBrasil.IcpBrasilPolicies.Validation.Name),
         (PolicyViewer.Validation, "govbr", () => Brazil.GovBr.GovBrPolicies.Validation.ToJson(), Brazil.GovBr.GovBrPolicies.Validation.Name),
         (PolicyViewer.Signing, "eidas", () => Europe.Eidas.EidasPolicies.Signing.ToJson(), Europe.Eidas.EidasPolicies.Signing.Name),
@@ -70,7 +71,7 @@ internal static class PolicyPresets
     private static string? FrameworkOf(string name) => name switch
     {
         "iofe" => "Iofe",
-        "icp-brasil" => "IcpBrasil",
+        "icp-brasil" or "fiscal-sefaz" => "IcpBrasil",
         "govbr" => "GovBr",
         "eidas" => "Eidas",
         _ => null,

@@ -15,6 +15,15 @@ public enum XadesKind
 {
     Baseline,
     CustomPolicy,
+
+    /// <summary>An ICP-Brasil signature policy (DOC-ICP-15.03: AD-RB, AD-RT, AD-RV, AD-RC, AD-RA), which sets the level itself.</summary>
+    IcpBrasil,
+
+    /// <summary>
+    /// Not XAdES: the plain XML-DSig signature of a Brazilian fiscal layout (NF-e, CT-e, MDF-e, events, NFS-e, eSocial,
+    /// EFD-Reinf), with SimpleSign.Brazil.Fiscal. The layout sets the element, the hash and the placement.
+    /// </summary>
+    Fiscal,
 }
 
 /// <summary><c>XadesExtendedForm</c>: XAdES-C/X, X-L and A.</summary>
@@ -43,6 +52,12 @@ public sealed record XmlOptions
     public bool DetachedBinary { get; init; }
 
     public XadesKind Kind { get; init; } = XadesKind.Baseline;
+
+    /// <summary>The ICP-Brasil signature policy when <see cref="Kind"/> is <see cref="XadesKind.IcpBrasil"/>.</summary>
+    public SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy IcpPolicy { get; init; } = SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb;
+
+    /// <summary>The fiscal layout when <see cref="Kind"/> is <see cref="XadesKind.Fiscal"/>: a key of <c>FiscalDocumentProfile.ByName</c>.</summary>
+    public string FiscalLayout { get; init; } = "nfe";
 
     public BaselineLevel Level { get; init; } = BaselineLevel.BB;
 

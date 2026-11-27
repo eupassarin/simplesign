@@ -89,6 +89,18 @@ public sealed class ValidationOptions
     public Extensions.TrustProfile? Profile { get; init; }
 
     /// <summary>
+    /// The chain validation of trust frameworks to use beside <see cref="Profile"/>'s (an application, a CLI extension).
+    /// The PAdES validator adds them to its own; the CAdES and XAdES validators, in <c>ValidateAsync</c>, ask them (and the
+    /// profile's) for what they read of the signer — the region, the certificate type, the signer's identifier, the
+    /// metadata — without revocation and without changing the verdict. Null: none.
+    /// </summary>
+    public IReadOnlyList<Extensions.IChainValidationProvider>? ChainValidationProviders { get; init; }
+
+    /// <summary><see cref="ChainValidationProviders"/>, then the providers of <see cref="Profile"/>.</summary>
+    internal IReadOnlyList<Extensions.IChainValidationProvider> AllChainValidationProviders =>
+        [.. ChainValidationProviders ?? [], .. Profile?.ChainValidationProviders ?? []];
+
+    /// <summary>
     /// The qualifiers that give each validated signature its qualification under a legal framework
     /// (<see cref="SignatureValidationResult.Qualification"/>); a <see cref="Profile"/>'s are added. Null or empty: none.
     /// </summary>

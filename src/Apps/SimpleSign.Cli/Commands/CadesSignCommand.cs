@@ -295,8 +295,22 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
                 return ValidationResult.Error($"Invalid content type: {ContentType}. Valid: detached, enveloped");
             }
 
-            return ValidationResult.Success();
+            // What an extension's command that is running this one has to say about these options.
+            return Extensions.SignScope.Current?.Validate?.Invoke(ExtensionOptions) is { } extensionError
+                ? ValidationResult.Error(extensionError)
+                : ValidationResult.Success();
         }
+
+        /// <summary>The standard options an extension's command reads (<c>CliSignOptions</c>).</summary>
+        internal SimpleSign.Cli.Extensibility.CliSignOptions ExtensionOptions => new()
+        {
+            Timestamp = TsaUrl is null ? null : Timestamp(TsaUrl),
+            LongTerm = Level?.ToLowerInvariant() is "longterm" or "b-lt" or "archive" or "b-lta",
+            Archival = Level?.ToLowerInvariant() is "archive" or "b-lta" || ExtendedForm is not null,
+            PolicyOid = PolicyOid,
+            PolicyUri = PolicyUri,
+            Commitment = Commitment,
+        };
     }
 
     public override async Task<int> ExecuteAsync(
@@ -374,6 +388,12 @@ internal sealed class CadesSignCommand : AsyncCommand<CadesSignCommand.Settings>
         else if (token is not null && extraChain.Count > 0)
         {
             builder = builder.WithExternalSigner(token.Certificate, token.Signer, [.. token.Chain, .. extraChain]);
+        }
+
+        // What an extension's command adds (an ICP-Brasil policy…): after the certificate and its chain, which it reads.
+        if (Extensions.SignScope.Current?.ConfigureCades is { } configure)
+        {
+            builder = await configure(builder, settings.ExtensionOptions, cancellationToken);
         }
 
         if (settings.OperationId is not null)

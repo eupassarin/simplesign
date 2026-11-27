@@ -163,6 +163,15 @@ internal static partial class Program
                     .WithDescription("Validate a signed XAdES XML document");
             });
 
+            config.AddBranch("xmldsig", xmldsig =>
+            {
+                xmldsig.SetDescription("Sign and validate XML documents with plain enveloped XML-DSig signatures (no XAdES properties)");
+                xmldsig.AddCommand<XmlDsigSignCommand>("sign")
+                    .WithDescription("Sign an element of an XML document by its Id, or the whole document");
+                xmldsig.AddCommand<XmlDsigValidateCommand>("validate")
+                    .WithDescription("Validate the XML-DSig signatures of an XML document");
+            });
+
             config.AddBranch("policy", policy =>
             {
                 policy.SetDescription("Validation and signing policy files: export the defaults or their JSON Schema");

@@ -1,0 +1,233 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "schema": 2,
+  "id": "icp-brasil-cades",
+  "title": "ICP-Brasil CAdES (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA)",
+  "description": "CAdES signatures under the ICP-Brasil signature policies (DOC-ICP-15.03: AD-RB, AD-RT, AD-RV, AD-RC and AD-RA) with the icp-brasil trust profile and its signing and validation policies, through the library and the CLI ('simplesign brasil cades sign --icp-policy'). The Sandbox stands in for ICP-Brasil: its trust is added to the profile's (trustProfiles: Sandbox), so its certificates and its TSA play the part of an AC and an ACT; the first section shows that the profile alone trusts only the AC Raiz roots. It complements icp-brasil-pades: only what the policies change in CAdES is here.",
+  "defaults": {
+    "engine": "both",
+    "format": "cades",
+    "options": {
+      "common": {
+        "credentialId": "sandbox:rsa-2048",
+        "kind": "IcpBrasil",
+        "icpPolicy": "AdRb",
+        "timestamp": {
+          "provider": "Sandbox"
+        },
+        "signingPolicyId": "preset:signing:icp-brasil",
+        "signingControls": {
+          "profile": "IcpBrasil",
+          "trustProfiles": [
+            "Sandbox"
+          ]
+        },
+        "attemptRefused": true,
+        "validation": {
+          "trust": [],
+          "profile": "IcpBrasil",
+          "trustProfiles": [
+            "Sandbox"
+          ],
+          "policyId": "preset:validation:icp-brasil"
+        }
+      },
+      "cades": {
+        "dataId": "cades-sample:text"
+      }
+    }
+  },
+  "sections": [
+    {
+      "id": "profile",
+      "title": "The ICP-Brasil profile",
+      "description": "Its anchors are the AC Raiz roots; a certificate that does not chain to them is refused before signing. The Sandbox's trust, added to the profile, lets the rest of the playbook sign with test certificates.",
+      "steps": [
+        {
+          "id": "profile-roots-only",
+          "title": "Profile alone: a certificate outside ICP-Brasil is refused",
+          "tags": [
+            "DOC-ICP-15.03",
+            "trust"
+          ],
+          "description": "Only the AC Raiz roots are anchors: the Sandbox's chain is not trusted, and the signer refuses (UntrustedRoot).",
+          "options": {
+            "signingControls": {
+              "profile": "IcpBrasil",
+              "trustProfiles": []
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          }
+        }
+      ]
+    },
+    {
+      "id": "policies",
+      "title": "The policies",
+      "description": "Each policy writes its identifier and hash (the newest version that accepts the signer's root) and sets the level: AD-RT a signature timestamp from an ACT, AD-RV the complete references, AD-RC the validation values, AD-RA an archive timestamp.",
+      "steps": [
+        {
+          "id": "ad-rb",
+          "title": "AD-RB: the policy identifier",
+          "tags": [
+            "AD-RB",
+            "DOC-ICP-15.03"
+          ],
+          "description": "The policy's identifier and hash, the newest version that accepts the signer's root; no timestamp (B-B).",
+          "expect": {
+            "outcome": "signed",
+            "level": "B-B",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "ad-rt",
+          "title": "AD-RT: a signature timestamp from the ACT",
+          "tags": [
+            "AD-RT",
+            "DOC-ICP-15.03"
+          ],
+          "description": "AD-RB plus a signature timestamp from the ACT (B-T).",
+          "options": {
+            "icpPolicy": "AdRt"
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "ad-rv",
+          "title": "AD-RV: the complete references to the validation data",
+          "tags": [
+            "AD-RV",
+            "DOC-ICP-15.03"
+          ],
+          "description": "AD-RT plus the complete references to the certificates and revocation data (the -C extended form).",
+          "options": {
+            "icpPolicy": "AdRv"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "ad-rc",
+          "title": "AD-RC: the validation values, protected by a timestamp",
+          "tags": [
+            "AD-RC",
+            "DOC-ICP-15.03"
+          ],
+          "description": "AD-RV plus the validation values themselves, protected by a timestamp (the -X-L extended form).",
+          "options": {
+            "icpPolicy": "AdRc"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        },
+        {
+          "id": "ad-ra",
+          "title": "AD-RA: an archive timestamp",
+          "tags": [
+            "AD-RA",
+            "DOC-ICP-15.03"
+          ],
+          "description": "AD-RC plus an archive timestamp (the -A extended form).",
+          "options": {
+            "icpPolicy": "AdRa"
+          },
+          "expect": {
+            "outcome": "signed"
+          }
+        }
+      ]
+    },
+    {
+      "id": "modes",
+      "title": "Two phases",
+      "description": "The server prepares with the public certificate, the key signs elsewhere (an A3 token behind the SimpleSign Agent) and the server completes the policy's level.",
+      "steps": [
+        {
+          "id": "ad-rt-deferred",
+          "title": "AD-RT in two phases",
+          "tags": [
+            "AD-RT",
+            "two-phase"
+          ],
+          "description": "AD-RT prepared with the public certificate, signed outside, and completed: the timestamp is added in the second phase.",
+          "options": {
+            "icpPolicy": "AdRt",
+            "twoPhases": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "level": "B-T",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "validation",
+      "title": "Validation",
+      "description": "The icp-brasil validation policy checks the policy each signature declares: its hash, its period and, from AD-RT, the timestamp.",
+      "steps": [
+        {
+          "id": "v-ad-rb",
+          "kind": "validate",
+          "title": "AD-RB validates under the icp-brasil profile",
+          "tags": [
+            "AD-RB",
+            "validation"
+          ],
+          "description": "Validates the AD-RB file with the ICP-Brasil profile and policy.",
+          "options": {
+            "fileId": "step:ad-rb",
+            "settings": {
+              "trust": [],
+              "profile": "IcpBrasil",
+              "trustProfiles": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:icp-brasil"
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "v-ad-rt",
+          "kind": "validate",
+          "title": "AD-RT validates under the icp-brasil profile",
+          "tags": [
+            "AD-RT",
+            "validation"
+          ],
+          "description": "Validates the AD-RT file, its signature time-stamp included.",
+          "options": {
+            "fileId": "step:ad-rt",
+            "settings": {
+              "trust": [],
+              "profile": "IcpBrasil",
+              "trustProfiles": [
+                "Sandbox"
+              ],
+              "policyId": "preset:validation:icp-brasil"
+            }
+          },
+          "expect": {
+            "outcome": "valid",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    }
+  ]
+}

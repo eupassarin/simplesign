@@ -294,6 +294,10 @@ internal sealed class CadesValidateOutput
 /// <summary>One signer of a CAdES signature, or one of its countersignatures.</summary>
 internal sealed class CadesSignerDto
 {
+    /// <summary>What the extensions in use add about the signature (the Brazilian one: <c>lei14063</c>, <c>brasil</c>), as properties of this object.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; } // set, not init: see ValidateSignatureDto
+
     public string Id { get; init; } = string.Empty;
     public int Index { get; init; }
     public bool IsValid { get; init; }
@@ -363,6 +367,10 @@ internal sealed class XadesValidateOutput
 /// <summary>One XAdES signature, or one of its countersignatures.</summary>
 internal sealed class XadesSignatureDto
 {
+    /// <summary>What the extensions in use add about the signature (the Brazilian one: <c>lei14063</c>, <c>brasil</c>), as properties of this object.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? Extensions { get; set; } // set, not init: see ValidateSignatureDto
+
     public string? Id { get; init; }
     public bool IsValid { get; init; }
     public string Indication { get; init; } = "Indeterminate";

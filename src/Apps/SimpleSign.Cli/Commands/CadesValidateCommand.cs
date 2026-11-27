@@ -1,12 +1,13 @@
-using SimpleSign.Cli.Rendering;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using SimpleSign.CAdES;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Cli.Json;
+using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Validation;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -96,6 +97,8 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
                 TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
                 ConstrainedTrustAnchors = settings.LoadedConstrainedAnchors.Count > 0 ? settings.LoadedConstrainedAnchors : null,
                 SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
+                // The trust frameworks of the extensions in use: what they read of each signer, for their annotations.
+                ChainValidationProviders = CliExtensions.ChainValidationProviders(_httpClientProvider.GetClient(), null),
             },
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
 
@@ -151,6 +154,7 @@ internal sealed class CadesValidateCommand : AsyncCommand<CadesValidateCommand.S
             }
 
             WriteText(signer.Result, settings.Spanish);
+            ExtensionAnnotations.Write(ExtensionAnnotations.Facts(signer.Result));
         }
 
         return report.IsValid ? 0 : 1;

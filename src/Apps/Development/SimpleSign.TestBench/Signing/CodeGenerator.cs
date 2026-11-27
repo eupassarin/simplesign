@@ -226,6 +226,27 @@ internal static class CodeGenerator
     /// </summary>
     private static string[] SignCommand(SigningOptions o) => o.Kind == SignatureKind.IcpBrasil ? ["brasil", "sign"] : ["sign"];
 
+    /// <summary>
+    /// The level of an ICP-Brasil policy on the command line of <c>brasil sign</c>, <c>brasil cades sign</c> or
+    /// <c>brasil xades sign</c>: the TSA (an ACT) from AD-RT up, and <c>--icp-policy</c>. The policy sets the level.
+    /// </summary>
+    internal static void IcpPolicy(CliLine line, SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy policy, TimestampChoice timestamp, PlanContext context)
+    {
+        if (policy != SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb)
+        {
+            context.CliTimestamp(line, timestamp);
+        }
+
+        line.Add("--icp-policy", policy switch
+        {
+            SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb => "ad-rb",
+            SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRt => "ad-rt",
+            SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRv => "ad-rv",
+            SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRc => "ad-rc",
+            _ => "ad-ra",
+        });
+    }
+
     internal static bool HasTsaCredentials(TimestampChoice choice) =>
         choice.Provider == TsaProvider.SandboxAuthenticated || choice.Auth != TsaAuth.None || !string.IsNullOrEmpty(choice.ClientCertificateUploadId);
 
@@ -235,18 +256,7 @@ internal static class CodeGenerator
         if (o.Kind == SignatureKind.IcpBrasil)
         {
             // The policy sets the level (and the sub-filter): the TSA (an ACT) from AD-RT up.
-            if (o.IcpPolicy != SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb)
-            {
-                context.CliTimestamp(line, o.Timestamp);
-            }
-
-            line.Add("--icp-policy", o.IcpPolicy switch
-            {
-                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb => "ad-rb",
-                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRt => "ad-rt",
-                SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRc => "ad-rc",
-                _ => "ad-ra",
-            });
+            IcpPolicy(line, o.IcpPolicy, o.Timestamp, context);
             return;
         }
 

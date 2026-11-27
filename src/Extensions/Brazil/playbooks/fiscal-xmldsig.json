@@ -1,0 +1,183 @@
+{
+  "$schema": "https://raw.githubusercontent.com/eupassarin/SimpleSign/main/docs/schemas/playbook.schema.json",
+  "schema": 2,
+  "id": "fiscal-xmldsig",
+  "title": "Fiscal XML (NF-e, CT-e, eSocial…): XML-DSig under ICP-Brasil",
+  "description": "The plain enveloped XML-DSig signature of the Brazilian fiscal layouts (SimpleSign.Brazil.Fiscal), through the library and the CLI ('simplesign brasil fiscal sign --layout'). Each layout sets the element signed by its Id (or the whole document), the hash and where the signature goes; the SEFAZ layouts sign with RSA-SHA1, which only the fiscal-sefaz policy (the ICP-Brasil signing policy with SHA-1 accepted) allows. The Sandbox stands in for ICP-Brasil: its trust is added to the icp-brasil profile (trustProfiles: Sandbox), so its certificates play the part of an e-CNPJ. The documents are synthetic: they are not valid against the SEFAZ schemas, and a real NF-e must still be sent to the SEFAZ homologation environment.",
+  "defaults": {
+    "engine": "both",
+    "format": "xades",
+    "options": {
+      "common": {
+        "credentialId": "sandbox:rsa-2048",
+        "signingPolicyId": "preset:signing:fiscal-sefaz",
+        "signingControls": {
+          "profile": "IcpBrasil",
+          "trustProfiles": [
+            "Sandbox"
+          ]
+        },
+        "attemptRefused": true,
+        "validation": {
+          "trust": [],
+          "profile": "IcpBrasil",
+          "trustProfiles": [
+            "Sandbox"
+          ],
+          "policyId": "preset:validation:icp-brasil"
+        }
+      },
+      "xades": {
+        "dataId": "xades-sample:nfe",
+        "kind": "Fiscal",
+        "fiscalLayout": "nfe"
+      }
+    }
+  },
+  "sections": [
+    {
+      "id": "profile",
+      "title": "The ICP-Brasil profile",
+      "description": "The fiscal layouts sign under ICP-Brasil: a certificate that does not chain to an AC Raiz is refused before anything is signed. The Sandbox's trust, added to the profile, lets the rest of the playbook sign with test certificates.",
+      "steps": [
+        {
+          "id": "profile-roots-only",
+          "title": "Profile alone: a certificate outside ICP-Brasil is refused",
+          "tags": [
+            "NF-e",
+            "trust"
+          ],
+          "description": "Only the AC Raiz roots are anchors: the Sandbox's chain is not trusted, and the signer refuses (UntrustedRoot).",
+          "options": {
+            "signingControls": {
+              "profile": "IcpBrasil",
+              "trustProfiles": []
+            }
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "UntrustedRoot"
+          }
+        }
+      ]
+    },
+    {
+      "id": "layouts",
+      "title": "The layouts",
+      "description": "One document of each family: the signature references the layout's element by its Id (eSocial: the whole document), with the layout's hash, and is checked after signing (digest, signature value, the layout, the chain).",
+      "steps": [
+        {
+          "id": "nfe",
+          "title": "NF-e: infNFe, RSA-SHA1, after infNFe",
+          "tags": [
+            "NF-e",
+            "SHA-1"
+          ],
+          "description": "The NF-e layout of the MOC 4.00: infNFe by its Id, RSA-SHA1, the Signature right after infNFe, the signer certificate in KeyInfo.",
+          "expect": {
+            "outcome": "signed",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "evento",
+          "title": "NF-e event: infEvento, RSA-SHA1",
+          "tags": [
+            "NF-e",
+            "event",
+            "SHA-1"
+          ],
+          "description": "A cancellation event of an envEvento batch: infEvento by its Id.",
+          "options": {
+            "dataId": "xades-sample:nfe-evento",
+            "fiscalLayout": "evento"
+          },
+          "expect": {
+            "outcome": "signed",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "cte",
+          "title": "CT-e: infCte, RSA-SHA1",
+          "tags": [
+            "CT-e",
+            "SHA-1"
+          ],
+          "description": "The CT-e 4.00 layout: infCte by its Id.",
+          "options": {
+            "dataId": "xades-sample:cte",
+            "fiscalLayout": "cte"
+          },
+          "expect": {
+            "outcome": "signed",
+            "indication": "TOTAL_PASSED"
+          }
+        },
+        {
+          "id": "esocial",
+          "title": "eSocial: the whole document, RSA-SHA256",
+          "tags": [
+            "eSocial"
+          ],
+          "description": "The eSocial layout signs the whole document (URI=\"\") with SHA-256, the Signature as the last child of eSocial: the ICP-Brasil signing policy is enough.",
+          "options": {
+            "dataId": "xades-sample:esocial",
+            "fiscalLayout": "esocial",
+            "signingPolicyId": "preset:signing:icp-brasil"
+          },
+          "expect": {
+            "outcome": "signed",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    },
+    {
+      "id": "sha1",
+      "title": "SHA-1",
+      "description": "SimpleSign refuses SHA-1 everywhere but in the SEFAZ layouts, and only under the fiscal-sefaz policy.",
+      "steps": [
+        {
+          "id": "nfe-icp-policy",
+          "title": "NF-e under the plain ICP-Brasil policy is refused",
+          "tags": [
+            "NF-e",
+            "SHA-1"
+          ],
+          "description": "The ICP-Brasil signing policy accepts SHA-2 and SHA-3 only: the RSA-SHA1 of the NF-e layout is refused before signing (AlgorithmNotPermitted).",
+          "options": {
+            "signingPolicyId": "preset:signing:icp-brasil"
+          },
+          "expect": {
+            "outcome": "refused",
+            "reason": "AlgorithmNotPermitted"
+          }
+        }
+      ]
+    },
+    {
+      "id": "modes",
+      "title": "Two phases",
+      "description": "The server prepares with the public certificate, the key signs the canonical SignedInfo elsewhere (an A3 token behind the SimpleSign Agent, which takes SHA-1 for an rsa-sha1 SignedInfo only) and the server completes it.",
+      "steps": [
+        {
+          "id": "nfe-deferred",
+          "title": "NF-e in two phases",
+          "tags": [
+            "NF-e",
+            "two-phase"
+          ],
+          "description": "FiscalXmlSigner.Deferred, then XmlDsigDeferredSigner.Resume; through the CLI, brasil fiscal sign --prepare and deferred complete.",
+          "options": {
+            "twoPhases": true
+          },
+          "expect": {
+            "outcome": "signed",
+            "indication": "TOTAL_PASSED"
+          }
+        }
+      ]
+    }
+  ]
+}

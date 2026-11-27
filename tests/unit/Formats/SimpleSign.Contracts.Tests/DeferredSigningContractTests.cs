@@ -37,12 +37,14 @@ public sealed class DeferredSigningContractTests
         [typeof(PadesSignerBuilder)] = ["WithExternalSigner", "WithCertificateFile"],
         [typeof(CadesSignerBuilder)] = ["WithExternalSigner"],
         [typeof(XadesSignerBuilder)] = ["WithExternalSigner"],
+        [typeof(XmlDsigSignerBuilder)] = ["WithExternalSigner"],
     };
 
     [Theory]
     [InlineData(typeof(PadesSignerBuilder), typeof(DeferredSignerBuilder))]
     [InlineData(typeof(CadesSignerBuilder), typeof(CadesDeferredSignerBuilder))]
     [InlineData(typeof(XadesSignerBuilder), typeof(XadesDeferredSignerBuilder))]
+    [InlineData(typeof(XmlDsigSignerBuilder), typeof(XmlDsigDeferredSignerBuilder))]
     public void DeferredBuilder_TakesEveryOptionOfTheOneCallBuilder(Type oneCall, Type deferred)
     {
         var deferredOptions = Options(deferred).Select(Signature).ToHashSet(StringComparer.Ordinal);

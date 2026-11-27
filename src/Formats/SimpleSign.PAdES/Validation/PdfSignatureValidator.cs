@@ -97,7 +97,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
         _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
-        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.AllChainValidationProviders];
     }
 
     /// <param name="options">Validation options. If null, uses <see cref="ValidationOptions.Default"/>.</param>
@@ -153,7 +153,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
         _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
-        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.AllChainValidationProviders];
 
     }
 
@@ -218,7 +218,7 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
         // A profile's providers come too: its intermediates complete chains, its chain validation enriches the result.
         _trustAnchorProviders = [.. trustAnchorProviders ?? [], .. _options.Profile?.TrustAnchorProviders ?? []];
         _constrainedTrustAnchors = [.. _options.ConstrainedTrustAnchors ?? [], .. ConstrainedTrust.From(_trustAnchorProviders)];
-        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.Profile?.ChainValidationProviders ?? []];
+        _chainValidationProviders = [.. chainValidationProviders ?? [], .. _options.AllChainValidationProviders];
 
     }
 
@@ -1337,54 +1337,8 @@ public sealed class PdfSignatureValidator : IPdfSignatureValidator
             Pdf = pdfFacts,
         };
 
-        foreach (var provider in _chainValidationProviders)
-        {
-            if (!provider.CanValidate(signerCert))
-            {
-                continue;
-            }
-
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var result = await provider.ValidateAsync(context, cancellationToken).ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!result.IsTrusted)
-                {
-                    if (result.Errors is not null)
-                    {
-                        foreach (var error in result.Errors)
-                        {
-                            errors.Add($"[{result.RegionCode}] {error}");
-                        }
-                    }
-                }
-                else
-                {
-                    if (result.Errors is not null)
-                    {
-                        foreach (var error in result.Errors)
-                        {
-                            warnings.Add($"[{result.RegionCode}] {error}");
-                        }
-                    }
-                }
-
-                return result;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.ChainProviderError(ex, provider.GetType().Name);
-                warnings.Add($"Chain validation provider '{provider.GetType().Name}' failed: {ex.Message}");
-            }
-        }
-
-        return null;
+        return await ChainValidationProviderRunner.RunAsync(
+            _chainValidationProviders, context, errors, warnings, (ex, name) => _logger.ChainProviderError(ex, name), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>The document time-stamps in revisions after <paramref name="field"/>'s: each covers it.</summary>

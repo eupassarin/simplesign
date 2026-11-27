@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Http;
+using SimpleSign.Core.Signing;
 
 namespace SimpleSign.Signers.Cloud.Psc;
 
@@ -220,7 +221,7 @@ public sealed class PscClient
                 [Wire.HashIdField] = hash.Id,
                 [Wire.HashAliasField] = hash.Alias ?? hash.Id,
                 [Wire.HashField] = Encode(hash.Hash.Span, Wire.HashEncoding),
-                [Wire.HashAlgorithmField] = CmsSignatureBuilder.GetDigestOid(hash.HashAlgorithm),
+                [Wire.HashAlgorithmField] = ExternalSigningDigest.OidOfComputedHash(hash.HashAlgorithm),
                 [Wire.SignatureFormatField] = Wire.SignatureFormat,
             });
         }

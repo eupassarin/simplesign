@@ -38,7 +38,7 @@ internal static class Pkcs11SignatureEncoder
     internal static Pkcs11SigningPlan Prepare(ExternalSigningRequest request, Pkcs11KeyAlgorithm keyAlgorithm, CkLayout layout)
     {
         ArgumentNullException.ThrowIfNull(request);
-        byte[] hash = CmsSignatureBuilder.ComputeHash(request.DataToSign.Span, request.HashAlgorithm);
+        byte[] hash = ExternalSigningDigest.Compute(request);
         string oid = request.SignatureAlgorithmOid;
 
         if (IsRsaPkcs1(oid))

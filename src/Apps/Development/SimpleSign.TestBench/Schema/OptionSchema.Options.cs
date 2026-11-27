@@ -80,23 +80,26 @@ public static partial class OptionSchema
         V("AdRb", "AD-RB", "Basic reference: the signature and the policy identifier (B-B).", standards: R("DOC-ICP-15.03|AD-RB"), api: "IcpBrasilPolicy.AdRb"),
         V("AdRt", "AD-RT", "Time reference: adds a signature timestamp from an ACT (B-T).", standards: R("DOC-ICP-15.03|AD-RT"), api: "IcpBrasilPolicy.AdRt"),
         .. pades ? Array.Empty<SchemaValue>() : [V("AdRv", "AD-RV", "Validation references: AD-RT plus the references to the certificates and revocation data (C).", standards: R("DOC-ICP-15.03|AD-RV"), api: "IcpBrasilPolicy.AdRv")],
-        V("AdRc", "AD-RC", "Complete references: the validation data themselves, protected by a timestamp (B-LTA in PAdES, X-L in CAdES).", standards: R("DOC-ICP-15.03|AD-RC"), api: "IcpBrasilPolicy.AdRc"),
+        V("AdRc", "AD-RC", "Complete references: the validation data themselves, protected by a timestamp (B-LTA in PAdES, X-L in CAdES and XAdES).", standards: R("DOC-ICP-15.03|AD-RC"), api: "IcpBrasilPolicy.AdRc"),
         V("AdRa", "AD-RA", "Archival references: AD-RC plus an archive timestamp; in PAdES, the policy (PA, LPA) embedded too.", standards: R("DOC-ICP-15.03|AD-RA"), api: "IcpBrasilPolicy.AdRa"),
     ];
 
     private static List<SchemaOption> LevelOptions()
     {
-        // SimpleSign signs under the ICP-Brasil signature policies in PAdES and CAdES: XAdES has the baseline levels and an explicit policy.
-        SchemaValue[] kinds(string custom, bool icpBrasil = true) =>
+        SchemaValue[] kinds(string custom, bool fiscal = false) =>
         [
-            .. new[]
-            {
             V("Baseline", "Baseline", "The ETSI baseline levels: B-B, B-T, B-LT, B-LTA.", standards: R("ETSI EN 319 102-1|Annex B Signature classes"), api: "WithLevel(AdesBaselineProfile.…)"),
             V("CustomPolicy", "Explicit signature policy", "A baseline signature that also names a signature policy (OID and hash of the policy document).",
                 standards: R(custom), api: "WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))"),
-            },
-            .. icpBrasil ? new[] { V("IcpBrasil", "ICP-Brasil signature policy", "A signature under an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA): its identifier and hash, and the level it sets. For real ICP-Brasil certificates.",
-                standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy)") } : [],
+            V("IcpBrasil", "ICP-Brasil signature policy", "A signature under an ICP-Brasil signature policy (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA): its identifier and hash, and the level it sets. For real ICP-Brasil certificates.",
+                standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy)"),
+            .. fiscal
+                ? new[]
+                {
+                    V("Fiscal", "Fiscal XML (NF-e, CT-e, eSocial…)", "Not XAdES: the plain enveloped XML-DSig signature a Brazilian fiscal layout requires (one Reference by Id, enveloped-signature and C14N, RSA, the certificate in KeyInfo), under ICP-Brasil. The layout sets the element, the hash (SHA-1 in the SEFAZ layouts) and where the signature goes.",
+                        standards: R("W3C XMLDSig Core 1.1|§6.6.4 Enveloped Signature Transform", "MOC NF-e 4.00|Assinatura digital"), api: "FiscalXmlSigner.Document(xml, FiscalDocumentProfile.NFe)"),
+                }
+                : [],
         ];
 
         SchemaValue[] levels(string b, string t, string lt, string lta) =>
@@ -122,7 +125,20 @@ public static partial class OptionSchema
             O("cades.kind", "level", s_cades, "choice", "kind", "Signature type", "Baseline levels, or a signature policy.",
                 standards: R("ETSI EN 319 122-1|§6 CAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 122-1|§5.2.9 signature-policy-identifier")),
             O("xades.kind", "level", s_xades, "choice", "kind", "Signature type", "Baseline levels, or a signature policy.",
-                standards: R("ETSI EN 319 132-1|§6 XAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 132-1|§5.2.9 SignaturePolicyIdentifier", icpBrasil: false)),
+                standards: R("ETSI EN 319 132-1|§6 XAdES baseline signatures"), valueStateKey: "kind", values: kinds("ETSI EN 319 132-1|§5.2.9 SignaturePolicyIdentifier", fiscal: true)),
+            O("xades.fiscalLayout", "level", s_xades, "choice", "fiscalLayout", "Fiscal layout", "The layout of the fiscal XML: the element signed by its Id (or the whole document), the hash and where the signature goes. The SEFAZ layouts sign with RSA-SHA1, under the ICP-Brasil policy with SHA-1 accepted (FiscalPolicies.Sefaz).",
+                standards: R("MOC NF-e 4.00|Assinatura digital"), api: "FiscalDocumentProfile", stateKey: "fiscalLayout",
+                values:
+                [
+                    V("nfe", "NF-e / NFC-e", "infNFe by its Id, RSA-SHA1, the signature after infNFe.", api: "FiscalDocumentProfile.NFe"),
+                    V("evento", "Event (NF-e, CT-e, MDF-e)", "infEvento by its Id, RSA-SHA1.", api: "FiscalDocumentProfile.Evento"),
+                    V("inutilizacao", "Number voiding (inutilização)", "infInut by its Id, RSA-SHA1.", api: "FiscalDocumentProfile.Inutilizacao"),
+                    V("cte", "CT-e", "infCte by its Id, RSA-SHA1.", api: "FiscalDocumentProfile.CTe"),
+                    V("mdfe", "MDF-e", "infMDFe by its Id, RSA-SHA1.", api: "FiscalDocumentProfile.MDFe"),
+                    V("nfse", "NFS-e Nacional (DPS)", "infDPS by its Id, RSA-SHA256.", api: "FiscalDocumentProfile.NFSeDps"),
+                    V("esocial", "eSocial", "The whole document, RSA-SHA256, the signature as the last child of eSocial.", api: "FiscalDocumentProfile.ESocial"),
+                    V("reinf", "EFD-Reinf", "The event by its lowercase id, RSA-SHA256, the signature as the last child of Reinf.", api: "FiscalDocumentProfile.Reinf"),
+                ], when: When("kind", "Fiscal")),
 
             O("pades.level", "level", s_pades, "choice", "level", "Baseline level", "Each level adds what a validator needs later.",
                 standards: R("ETSI EN 319 142-1|§6.2 Signature levels", "ETSI EN 319 142-1|§6.3 Requirements"), api: "WithLevel(AdesBaselineProfile)", valueStateKey: "level",
@@ -166,7 +182,7 @@ public static partial class OptionSchema
             O("pades.icpPolicy", "level", s_pades, "choice", "icpPolicy", "ICP-Brasil policy", "The ICP-Brasil signature policy: it writes the policy's identifier and hash, the PBAD.PAdES sub-filter the policies mandate, and the level it needs. The newest version that accepts the signer's root is chosen.",
                 standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, IcpBrasilPadesOptions)", stateKey: "icpPolicy",
                 values: IcpPolicies(pades: true), when: When("kind", "IcpBrasil")),
-            O("cades.icpPolicy", "level", s_cades, "choice", "icpPolicy", "ICP-Brasil policy", "The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen.",
+            O("cx.icpPolicy", "level", s_cadesXades, "choice", "icpPolicy", "ICP-Brasil policy", "The ICP-Brasil signature policy: it writes the policy's identifier and hash, and the level and extended form it needs. The newest version that accepts the signer's root is chosen.",
                 standards: R("DOC-ICP-15.03|Signature policies of ICP-Brasil"), api: "WithIcpBrasilPolicy(IcpBrasilPolicy, TimestampOptions)", stateKey: "icpPolicy",
                 values: IcpPolicies(pades: false), when: When("kind", "IcpBrasil")),
 

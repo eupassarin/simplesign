@@ -38,12 +38,27 @@ public static class Lei14063
     public static Lei14063SignatureLevel? Classify(SignatureValidationResult result, ReadOnlySpan<byte> manifestJson = default)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (result.Indication != SignatureIndication.Valid || result.IsDocumentTimestamp)
+        return result.IsDocumentTimestamp ? null : Classify(result.Indication, result.ChainValidationMetadata, manifestJson);
+    }
+
+    /// <summary>
+    /// The Lei 14.063 level of a validated signature of any format (a PDF's, a CAdES or XAdES one): from its indication
+    /// and the metadata the Brasil chain validation wrote (<c>CadesValidationResult.ChainValidationMetadata</c>,
+    /// <c>XadesValidationResult.ChainValidationMetadata</c>), and the advanced-signature manifest when it has one.
+    /// </summary>
+    /// <param name="indication">The signature's indication.</param>
+    /// <param name="chainMetadata">The metadata of the chain validation, or null.</param>
+    /// <param name="manifestJson">The signature's manifest, if any.</param>
+    /// <returns>The level, or <see langword="null"/> when the signature is not valid.</returns>
+    public static Lei14063SignatureLevel? Classify(
+        SignatureIndication indication, IReadOnlyDictionary<string, string>? chainMetadata, ReadOnlySpan<byte> manifestJson = default)
+    {
+        if (indication != SignatureIndication.Valid)
         {
             return null;
         }
 
-        if (result.ChainValidationMetadata is { } metadata
+        if (chainMetadata is { } metadata
             && metadata.TryGetValue(MetadataKey, out string? value)
             && Enum.TryParse(value, out Lei14063SignatureLevel level))
         {

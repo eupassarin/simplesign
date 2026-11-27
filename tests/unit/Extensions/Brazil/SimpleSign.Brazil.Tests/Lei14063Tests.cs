@@ -24,6 +24,21 @@ public sealed class Lei14063Tests
     public void Classify_ProviderMetadata_IsUsed(string value, Lei14063SignatureLevel expected) =>
         Lei14063.Classify(Valid(new Dictionary<string, string> { [Lei14063.MetadataKey] = value })).ShouldBe(expected);
 
+    [Theory]
+    [InlineData(null, Lei14063SignatureLevel.Simples)]
+    [InlineData("Qualificada", Lei14063SignatureLevel.Qualificada)]
+    public void Classify_IndicationAndMetadata_IsTheSameAsForAPdfResult(string? value, Lei14063SignatureLevel expected)
+    {
+        var metadata = value is null ? null : new Dictionary<string, string> { [Lei14063.MetadataKey] = value };
+
+        Lei14063.Classify(SignatureIndication.Valid, metadata).ShouldBe(expected);
+        Lei14063.Classify(Valid(metadata)).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Classify_IndicationNotValid_IsNull() =>
+        Lei14063.Classify(SignatureIndication.Indeterminate, new Dictionary<string, string> { [Lei14063.MetadataKey] = "Qualificada" }).ShouldBeNull();
+
     [Fact]
     public void Classify_NoProvider_IsSimples() =>
         Lei14063.Classify(Valid()).ShouldBe(Lei14063SignatureLevel.Simples);
