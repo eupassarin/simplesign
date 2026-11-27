@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-27
+
 ### Added
 
 - **Plain XML-DSig signatures in `SimpleSign.XAdES`** (ADR 0034): `XmlDsigSigner` signs an element by its Id
@@ -32,7 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI extension contract** (still version 1): `CliSignRequest.Command` names the standard command a pass-through
   command runs (`sign`, `cades sign`, `xades sign`, `xmldsig sign`), configured with `ConfigureCades`,
   `ConfigureXades` or `ConfigureXmlDsig`; `SignAll` signs a batch. An extension that sets them needs a CLI that has
-  them. `SimpleSign.Cli.Extensibility` now depends on `SimpleSign.CAdES`.
+  them. `SimpleSign.Cli.Extensibility` now depends on `SimpleSign.CAdES`. `SimpleSign.Brazil.Cli` uses them, so its
+  `minCliVersion` is 0.18.0 (the other extensions keep 0.13.0).
 - **SHA-1 for an XML-DSig `SignedInfo` only**: `Pkcs11Signer`, `CscSigner` and `PscSigner` hash it with SHA-1 when asked
   (CMS signed attributes are still refused), and the Agent's `/api/sign` takes `hashAlgorithm: SHA1` for a `SignedInfo`
   whose SignatureMethod is rsa-sha1 with an RSA key, and nothing else.
