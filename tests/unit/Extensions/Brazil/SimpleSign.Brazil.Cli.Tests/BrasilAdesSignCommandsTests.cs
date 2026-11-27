@@ -73,6 +73,28 @@ public sealed class BrasilAdesSignCommandsTests : IDisposable
     [Theory]
     [InlineData("cades")]
     [InlineData("xades")]
+    public async Task Validate_SelfSignedChain_HasNoBrazilianNotes(string format)
+    {
+        // The notes are for a signature validated under the Brazilian framework: a self-signed chain gets none.
+        string input = Write($"{format}-notes.xml", "<doc/>");
+        string output = Path.Combine(_tempDir, $"{format}-notes-signed");
+        string cer = Path.Combine(_tempDir, "cert.cer");
+        await File.WriteAllBytesAsync(cer, _cert.Export(X509ContentType.Cert));
+        (await BrasilCli.RunAsync("brasil", format, "sign", input, "--cert", _pfxPath, "--password", Password, "--output", output, "--icp-policy", "ad-rb")).Exit.ShouldBe(0);
+
+        string[] validate = format == "cades"
+            ? ["cades", "validate", output, "--data", input, "--trust", cer, "--json"]
+            : ["xades", "validate", output, "--trust", cer, "--json"];
+        var (exit, json) = await BrasilCli.RunAsync(validate);
+
+        exit.ShouldBe(0, json);
+        json.ShouldNotContain("\"lei14063\"");
+        json.ShouldNotContain("\"brasil\"");
+    }
+
+    [Theory]
+    [InlineData("cades")]
+    [InlineData("xades")]
     public async Task Sign_AdRtWithoutTsa_IsRefused(string format)
     {
         string input = Write($"{format}-rt.xml", "<doc/>");

@@ -1,9 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SimpleSign.Brazil.IcpBrasil;
+using SimpleSign.Brazil.IcpBrasil.Xades;
 using SimpleSign.Brazil.Signing;
 using SimpleSign.Cli.Extensibility;
-using SimpleSign.Core.Validation;
 
 namespace SimpleSign.Brazil.Cli;
 
@@ -20,7 +21,7 @@ internal static class BrasilAnnotations
     internal static IReadOnlyList<CliSignatureAnnotation> For(CliSignatureFacts signature)
     {
         var manifest = signature.ManifestJson.IsEmpty ? null : SignatureManifest.FromJsonUtf8(signature.ManifestJson.Span);
-        if (signature.Validation is not { } result)
+        if (Validated.From(signature) is not { } result)
         {
             // inspect: the manifest, in full.
             return manifest is null ? [] : [Manifest(manifest)];
@@ -29,7 +30,7 @@ internal static class BrasilAnnotations
         // Lei 14.063 is Brazilian: only for a signature validated under the Brazilian framework, or one carrying an
         // advanced-signature (AEA) manifest, which is Brazilian too. Classify falls through to Simples for any valid
         // signature, so without this guard a Peruvian (IOFE) one would get a Brazilian level.
-        bool brazilianChain = result.ChainValidationRegion == Region;
+        bool brazilianChain = result.Region == Region;
         if (!brazilianChain && manifest is null)
         {
             return [];
@@ -41,8 +42,38 @@ internal static class BrasilAnnotations
             annotations.Add(Aea(manifest, signature.CommitmentTypeOid));
         }
 
-        annotations.Add(Brasil(result, signature.ManifestJson.Span, brazilianChain));
+        annotations.Add(Brasil(result, signature.ManifestJson.Span, brazilianChain, XmlPolicy(signature)));
         return annotations;
+    }
+
+    /// <summary>
+    /// A validated signature of any format, as the Brazilian notes read it: a PDF's from its
+    /// <see cref="CliSignatureFacts.Validation"/>, a CAdES or XAdES one from its indication and chain facts.
+    /// </summary>
+    private sealed record Validated(
+        SimpleSign.Core.Validation.SignatureIndication Indication, bool IsDocumentTimestamp, string? Region, string? PolicyLevel,
+        string? SignerId, string? SignerIdType, IReadOnlyDictionary<string, string>? Metadata)
+    {
+        public static Validated? From(CliSignatureFacts signature) => signature switch
+        {
+            { Validation: { } v } => new(v.Indication, v.IsDocumentTimestamp, v.ChainValidationRegion, v.PolicyLevel, v.SignerId, v.SignerIdType,
+                v.ChainValidationMetadata),
+            { Indication: { } indication } => new(indication, false, signature.Chain?.Region, signature.Chain?.PolicyLevel,
+                signature.Chain?.SignerId, signature.Chain?.SignerIdType, signature.Chain?.Metadata),
+            _ => null,
+        };
+    }
+
+    /// <summary>The rules of the ICP-Brasil XML policy a XAdES signature declares, checked; null for another signature.</summary>
+    private static IcpBrasilPolicyValidationResult? XmlPolicy(CliSignatureFacts signature)
+    {
+        if (signature.Xades is not { } xades || signature.SignedXml.IsEmpty)
+        {
+            return null;
+        }
+
+        var check = IcpBrasilXadesPolicyValidator.Validate(signature.SignedXml.ToArray(), xades);
+        return check.Status is IcpBrasilPolicyStatus.Valid or IcpBrasilPolicyStatus.Invalid ? check : null;
     }
 
     private static CliSignatureAnnotation Manifest(SignatureManifest manifest)
@@ -110,10 +141,11 @@ internal static class BrasilAnnotations
         };
     }
 
-    private static CliSignatureAnnotation Brasil(SignatureValidationResult result, ReadOnlySpan<byte> manifestJson, bool brazilianChain)
+    private static CliSignatureAnnotation Brasil(
+        Validated result, ReadOnlySpan<byte> manifestJson, bool brazilianChain, IcpBrasilPolicyValidationResult? xmlPolicy)
     {
-        var level = Lei14063.Classify(result, manifestJson);
-        var metadata = result.ChainValidationMetadata ?? new Dictionary<string, string>();
+        var level = result.IsDocumentTimestamp ? null : Lei14063.Classify(result.Indication, result.Metadata, manifestJson);
+        var metadata = result.Metadata ?? new Dictionary<string, string>();
         var registrations = metadata
             .Where(m => m.Key.StartsWith(RegistrationPrefix, StringComparison.Ordinal))
             .ToDictionary(m => m.Key[RegistrationPrefix.Length..], m => m.Value);
@@ -135,7 +167,13 @@ internal static class BrasilAnnotations
         }
 
         lines.AddRange(registrations.Select(r => new CliAnnotationLine("Registration", $"{r.Key.ToUpperInvariant()} {r.Value}")));
-        if (metadata.TryGetValue("BR.SignaturePolicy", out string? policy))
+        if (xmlPolicy is not null)
+        {
+            // XAdES: the rules of the XML PA (mandated properties, algorithm, key size), checked here.
+            lines.Add(new("Policy", $"{xmlPolicy.Policy?.Oid ?? xmlPolicy.Reference?.Oid} {xmlPolicy.Status}".TrimStart()));
+            lines.AddRange(xmlPolicy.Errors.Select(e => new CliAnnotationLine("Policy rule", e)));
+        }
+        else if (metadata.TryGetValue("BR.SignaturePolicy", out string? policy))
         {
             lines.Add(new("Policy", $"{policy} {metadata.GetValueOrDefault("BR.SignaturePolicyStatus")}".TrimEnd()));
         }
@@ -159,8 +197,9 @@ internal static class BrasilAnnotations
                 CertificateType = result.PolicyLevel,
                 SignerId = result.SignerId,
                 SignerIdType = result.SignerIdType,
-                SignaturePolicy = metadata.GetValueOrDefault("BR.SignaturePolicy"),
-                SignaturePolicyStatus = metadata.GetValueOrDefault("BR.SignaturePolicyStatus"),
+                SignaturePolicy = xmlPolicy is null ? metadata.GetValueOrDefault("BR.SignaturePolicy") : xmlPolicy.Policy?.Oid ?? xmlPolicy.Reference?.Oid,
+                SignaturePolicyStatus = xmlPolicy is null ? metadata.GetValueOrDefault("BR.SignaturePolicyStatus") : xmlPolicy.Status.ToString(),
+                SignaturePolicyErrors = xmlPolicy is { Errors.Count: > 0 } ? [.. xmlPolicy.Errors] : null,
                 RevocationStatus = metadata.GetValueOrDefault("BR.RevocationStatus"),
                 Registrations = registrations,
             }, BrasilJsonContext.Default.BrasilJson);
@@ -194,6 +233,7 @@ internal sealed class BrasilJson
     public string? SignaturePolicy { get; init; }
     public string? SignaturePolicyStatus { get; init; }
     public string? RevocationStatus { get; init; }
+    public List<string>? SignaturePolicyErrors { get; init; }
     public Dictionary<string, string> Registrations { get; init; } = [];
 }
 

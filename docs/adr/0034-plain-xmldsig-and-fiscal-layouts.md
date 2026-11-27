@@ -68,5 +68,10 @@ changed since:
 - The TestBench's XML page has a Fiscal XML type next to XAdES: it is a kind of the page (the samples, the profile menu
   and the playbooks are the page's) with its own plan and runner, since the steps of a XAdES plan transform a
   `XadesSignerBuilder`.
-- The CLI's `validate` annotations of the `brasil` extension (Lei 14.063, the ICP-Brasil data) are still shown for PDF
-  signatures only: the CAdES and XAdES validators do not produce the chain region and data they read.
+- The CAdES and XAdES validators, in `ValidateAsync`, now ask the trust frameworks' chain validation (the profile's,
+  and `ValidationOptions.ChainValidationProviders`) for what it reads of the signer: the region, the certificate type,
+  the signer's identifier, the `BR.*` metadata with the Lei 14.063 level. They ask without revocation, which they check
+  themselves, and the provider's errors are warnings: no CAdES or XAdES verdict changes (in a PDF the provider still
+  decides). The loop is `ChainValidationProviderRunner`, shared with PAdES. So `cades validate` and `xades validate`
+  show the `brasil` extension's notes as `validate` does for a PDF (`CliSignatureFacts.Format`, `Indication`, `Chain`),
+  and for a XAdES signature under an ICP-Brasil XML policy the rules of the PA (`IcpBrasilXadesPolicyValidator`).

@@ -18,6 +18,14 @@ internal static class JsonMapper
     private static readonly HashSet<string> s_validateNames =
         new(CliJsonContext.Default.ValidateSignatureDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The names the JSON of a CAdES signer already has.</summary>
+    private static readonly HashSet<string> s_cadesNames =
+        new(CliJsonContext.Default.CadesSignerDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The names the JSON of a XAdES signature already has.</summary>
+    private static readonly HashSet<string> s_xadesNames =
+        new(CliJsonContext.Default.XadesSignatureDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The names the JSON of an inspected signature already has.</summary>
     private static readonly HashSet<string> s_inspectNames =
         new(CliJsonContext.Default.InspectSignatureDto.Properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
@@ -82,6 +90,7 @@ internal static class JsonMapper
         var report = ValidationReportRenderer.ToDto(r.SubIndication, r.Constraints, r.SignerCertificate);
         return new CadesSignerDto
         {
+            Extensions = ExtensionAnnotations.Json(ExtensionAnnotations.Facts(r), s_cadesNames),
             Id = id,
             Index = signer.Index,
             IsValid = signer.IsValid,
@@ -115,11 +124,12 @@ internal static class JsonMapper
     }
 
     /// <summary>One XAdES signature with its countersignatures.</summary>
-    public static XadesSignatureDto MapXadesSignature(XadesValidationResult r)
+    public static XadesSignatureDto MapXadesSignature(XadesValidationResult r, byte[] signedXml)
     {
         var report = ValidationReportRenderer.ToDto(r.SubIndication, r.Constraints, r.SignerCertificate);
         return new XadesSignatureDto
         {
+            Extensions = ExtensionAnnotations.Json(ExtensionAnnotations.Facts(r, signedXml), s_xadesNames),
             Id = r.SignatureId,
             IsValid = r.IsValid,
             Indication = r.Indication.ToString(),
@@ -149,7 +159,7 @@ internal static class JsonMapper
             SigningTime = r.SigningTime,
             Errors = [.. r.Errors],
             Warnings = [.. r.Warnings],
-            CounterSignatures = [.. r.CounterSignatures.Select(MapXadesSignature)],
+            CounterSignatures = [.. r.CounterSignatures.Select(c => MapXadesSignature(c, signedXml))],
         };
     }
 

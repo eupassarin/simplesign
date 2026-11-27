@@ -20,6 +20,7 @@ What it adds:
 | `--signing-policy fiscal-sefaz` | The ICP-Brasil signing policy with SHA-1 accepted, as the SEFAZ layouts mandate |
 | `simplesign brasil timestamp verify` | A `.tst` checked against the ICP-Brasil roots: its authority must be an ACT |
 | `validate`, `validate-dir`, `inspect` | The ICP-Brasil and Gov.br chain validation and roots for every signature, the Lei 14.063 level, the certificate's data (hierarchy, CPF/CNPJ, registrations) and the manifest of an advanced signature — in the text and in `--json` (`lei14063`, `brasil`, `manifest`) |
+| `cades validate`, `xades validate` | The same notes for CAdES and XAdES signatures (`lei14063`, `brasil`), and for XAdES under an ICP-Brasil XML policy the rules of the PA (`brasil.signaturePolicyErrors`) |
 
 ```bash
 simplesign brasil sign contrato.pdf --cert assinante.pfx --icp-policy ad-rt --tsa https://act.example/

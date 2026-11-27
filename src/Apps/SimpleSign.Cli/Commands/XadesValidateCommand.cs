@@ -1,13 +1,14 @@
-using SimpleSign.Cli.Rendering;
 using System.ComponentModel;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
+using SimpleSign.Cli.Extensions;
 using SimpleSign.Cli.Json;
+using SimpleSign.Cli.Rendering;
 using SimpleSign.Core.Signing;
 using SimpleSign.Core.Validation;
 using SimpleSign.XAdES;
-using Spectre.Console;
 using Spectre.Console.Cli;
+using Spectre.Console;
 
 namespace SimpleSign.Cli.Commands;
 
@@ -115,6 +116,8 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 TimedTrustAnchors = settings.LoadedTimedAnchors.Count > 0 ? settings.LoadedTimedAnchors : null,
                 ConstrainedTrustAnchors = settings.LoadedConstrainedAnchors.Count > 0 ? settings.LoadedConstrainedAnchors : null,
                 SignatureQualifiers = settings.LoadedQualifiers.Count > 0 ? settings.LoadedQualifiers : null,
+                // The trust frameworks of the extensions in use: what they read of each signer, for their annotations.
+                ChainValidationProviders = CliExtensions.ChainValidationProviders(_httpClientProvider.GetClient(), null),
             },
             logger: null,
             chainRevocationChecker: settings.RevocationCheckerFor(_httpClientProvider));
@@ -178,7 +181,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
                 DetectedLevel = result.DetectedLevel.ToString(),
                 Errors = [.. result.Errors],
                 Warnings = [.. result.Warnings],
-                Signatures = [.. results.Select(JsonMapper.MapXadesSignature)],
+                Signatures = [.. results.Select(r => JsonMapper.MapXadesSignature(r, signedXml))],
             };
             Console.WriteLine(JsonSerializer.Serialize(output, CliJsonContext.Default.XadesValidateOutput));
             return allValid ? 0 : 1;
@@ -192,6 +195,7 @@ internal sealed class XadesValidateCommand : AsyncCommand<XadesValidateCommand.S
             }
 
             WriteText(signature, settings.Spanish);
+            ExtensionAnnotations.Write(ExtensionAnnotations.Facts(signature, signedXml));
         }
 
         return allValid ? 0 : 1;

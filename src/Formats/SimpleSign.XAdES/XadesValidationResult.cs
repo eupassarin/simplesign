@@ -181,6 +181,29 @@ public sealed record XadesValidationResult
     /// <summary>What the validation found, for the revocation step of <c>ValidateAsync</c>.</summary>
     internal ValidationFacts? Facts { get; init; }
 
+    /// <summary>The signer and what the signature carries, for the trust framework's chain validation of <c>ValidateAsync</c>.</summary>
+    internal SimpleSign.Core.Extensions.ChainValidationContext? ChainContext { get; init; }
+
+    /// <summary>
+    /// The region of the trust framework whose chain validation took the signer (<c>BR</c> for ICP-Brasil), when
+    /// <see cref="SimpleSign.Core.Validation.ValidationOptions.Profile"/> has one. Set by <c>ValidateAsync</c> and
+    /// <c>ValidateAllAsync</c> only: the provider is asked for its data, without revocation (checked by the validator) and
+    /// without changing the verdict; its errors are warnings.
+    /// </summary>
+    public string? ChainValidationRegion { get; init; }
+
+    /// <summary>The certificate type or level the trust framework reads (e.g. ICP-Brasil A1, A3), from <c>ValidateAsync</c>.</summary>
+    public string? PolicyLevel { get; init; }
+
+    /// <summary>The signer's identifier the trust framework reads (a CPF, a CNPJ…), from <c>ValidateAsync</c>.</summary>
+    public string? SignerId { get; init; }
+
+    /// <summary>The type of <see cref="SignerId"/> (CPF, CNPJ…).</summary>
+    public string? SignerIdType { get; init; }
+
+    /// <summary>What else the trust framework's chain validation read (<c>BR.*</c> keys for ICP-Brasil), from <c>ValidateAsync</c>.</summary>
+    public IReadOnlyDictionary<string, string>? ChainValidationMetadata { get; init; }
+
     /// <summary>The certificates that may complete the signer and TSA chains (embedded certificates, trust anchors).</summary>
     internal IReadOnlyList<X509Certificate2> ChainCandidates { get; init; } = [];
 

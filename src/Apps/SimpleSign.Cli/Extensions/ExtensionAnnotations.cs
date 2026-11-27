@@ -12,7 +12,7 @@ internal static class ExtensionAnnotations
         CliExtensions.Active.Count == 0 ? [] : [.. CliExtensions.Active.SelectMany(e => e.Annotate(signature))];
 
     /// <summary>Adds a node per annotation under <paramref name="parent"/>, its lines under it.</summary>
-    internal static void AddNodes(TreeNode parent, CliSignatureFacts signature)
+    internal static void AddNodes(IHasTreeNodes parent, CliSignatureFacts signature)
     {
         foreach (var annotation in Of(signature))
         {
@@ -26,6 +26,40 @@ internal static class ExtensionAnnotations
             }
         }
     }
+
+    /// <summary>The annotations of a CAdES or XAdES signature, as a tree of their own under the command's table; nothing when there are none.</summary>
+    internal static void Write(CliSignatureFacts signature)
+    {
+        if (Of(signature).Count == 0)
+        {
+            return;
+        }
+
+        var tree = new Tree("[bold]Trust framework[/]");
+        AddNodes(tree, signature);
+        AnsiConsole.Write(tree);
+    }
+
+    /// <summary>A CAdES signature as the extensions annotate it.</summary>
+    internal static CliSignatureFacts Facts(SimpleSign.CAdES.CadesValidationResult result) => new()
+    {
+        Format = "cades",
+        Indication = result.Indication,
+        Chain = Chain(result.ChainValidationRegion, result.PolicyLevel, result.SignerId, result.SignerIdType, result.ChainValidationMetadata),
+    };
+
+    /// <summary>A XAdES signature as the extensions annotate it, with the signed XML (an XML policy's rules need it).</summary>
+    internal static CliSignatureFacts Facts(SimpleSign.XAdES.XadesValidationResult result, byte[] signedXml) => new()
+    {
+        Format = "xades",
+        Indication = result.Indication,
+        Chain = Chain(result.ChainValidationRegion, result.PolicyLevel, result.SignerId, result.SignerIdType, result.ChainValidationMetadata),
+        Xades = result,
+        SignedXml = signedXml,
+    };
+
+    private static CliChainFacts? Chain(string? region, string? level, string? id, string? idType, IReadOnlyDictionary<string, string>? metadata) =>
+        region is null && metadata is null ? null : new(region, level, id, idType, metadata);
 
     /// <summary>
     /// The JSON properties of the annotations, the first of a name kept and none of <paramref name="own"/> (the names

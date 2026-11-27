@@ -156,7 +156,8 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
     private async Task<IReadOnlyList<XadesValidationResult>> WithRevocationAsync(
         IReadOnlyList<XadesValidationResult> results, CancellationToken cancellationToken)
     {
-        if (!_options.ChecksRevocation)
+        // Without revocation there is still the data of the trust frameworks' chain validation to ask for.
+        if (!_options.ChecksRevocation && _options.AllChainValidationProviders.Count == 0)
         {
             return results;
         }
@@ -171,7 +172,34 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
         return checkedResults;
     }
 
-    private async Task<XadesValidationResult> WithRevocationAsync(XadesValidationResult result, CancellationToken cancellationToken)
+    private async Task<XadesValidationResult> WithRevocationAsync(XadesValidationResult result, CancellationToken cancellationToken) =>
+        await WithChainDataAsync(await WithRevocationCoreAsync(result, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// The data of the profile's chain validation (ICP-Brasil: the certificate type, the CPF/CNPJ, the BR.* metadata,
+    /// the Lei 14.063 level): asked without revocation, which this validator checks, and without changing the verdict.
+    /// </summary>
+    private async Task<XadesValidationResult> WithChainDataAsync(XadesValidationResult result, CancellationToken cancellationToken)
+    {
+        if (result.ChainContext is not { } context || _options.AllChainValidationProviders is not { Count: > 0 } providers)
+        {
+            return result;
+        }
+
+        var warnings = new List<string>();
+        var chain = await Core.Extensions.ChainValidationProviderRunner.RunAsync(providers, context, warnings, warnings, null, cancellationToken).ConfigureAwait(false);
+        return chain is null && warnings.Count == 0 ? result : result with
+        {
+            ChainValidationRegion = chain?.RegionCode,
+            PolicyLevel = chain?.PolicyLevel,
+            SignerId = chain?.SignerId,
+            SignerIdType = chain?.SignerIdType,
+            ChainValidationMetadata = chain?.Metadata,
+            Warnings = [.. result.Warnings, .. warnings],
+        };
+    }
+
+    private async Task<XadesValidationResult> WithRevocationCoreAsync(XadesValidationResult result, CancellationToken cancellationToken)
     {
         // An untrusted chain is not checked unless asked (VerifierOptions.CheckRevocationForUntrustedChains).
         if (result.Facts is null
@@ -565,6 +593,21 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             }
         }
         var (claimedRoles, attributeCertificates, signedAssertions) = ReadSignerRoles(sigElement, ns, warnings);
+        // The signer as the profile's chain validation sees it: for its policy verdict here, and its data in ValidateAsync.
+        var chainContext = signerCert is null ? null : new Core.Extensions.ChainValidationContext
+        {
+            Certificate = signerCert,
+            Certificates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            ValidationTime = provenTime,
+            IsValidationTimeFromTimestamp = provenTime is not null,
+            CheckRevocation = false,
+            Xml = new Core.Extensions.XmlSignatureFacts
+            {
+                SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
+                SigningTime = extraction.SigningTime,
+                HasSignatureTimestamp = extraction.HasSignatureTimeStamp,
+            },
+        };
         var facts = new ValidationFacts
         {
             IsIntegrityValid = referencesValid,
@@ -610,20 +653,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             Timestamps = XadesTimestampTokens(sigElement, ns, tsValid, tsaTrusted, archiveTsValid, trustAnchors, dataTsValid),
             // The rules of the signature policy the signer names, as the profile's chain validation provider knows them
             // (the ICP-Brasil XML PAs): breaking them is SignatureConstraints/PolicyRules, not a chain failure.
-            SignaturePolicyErrors = signerCert is null ? null : _options.CheckSignaturePolicy(new Core.Extensions.ChainValidationContext
-            {
-                Certificate = signerCert,
-                Certificates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
-                ValidationTime = provenTime,
-                IsValidationTimeFromTimestamp = provenTime is not null,
-                CheckRevocation = false,
-                Xml = new Core.Extensions.XmlSignatureFacts
-                {
-                    SignaturePolicy = ReadSignaturePolicy(sigElement, ns),
-                    SigningTime = extraction.SigningTime,
-                    HasSignatureTimestamp = extraction.HasSignatureTimeStamp,
-                },
-            }, warnings),
+            SignaturePolicyErrors = chainContext is null ? null : _options.CheckSignaturePolicy(chainContext, warnings),
         };
         var evaluation = ValidationPolicyEvaluator.Evaluate(facts, _options.PolicyFor(facts.SignaturePolicyOid));
         warnings.AddRange(evaluation.Warnings);
@@ -638,6 +668,7 @@ public sealed class XadesSignatureValidator : IXadesSignatureValidator
             BestSignatureTime = evaluation.BestSignatureTime,
             Facts = facts,
             ChainCandidates = [.. KeyInfoCertificates(sigElement, ns), .. trustAnchors ?? [], .. _options.TrustedRoots ?? []],
+            ChainContext = chainContext,
             EmbeddedCrls = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "CRLValues", "EncapsulatedCRLValue") : [],
             EmbeddedOcsps = _options.ValidatesLongTermData ? EmbeddedValues(sigElement, ns, "OCSPValues", "EncapsulatedOCSPValue") : [],
             SignatureTimestampToken = SignatureTimeStampToken(sigElement, ns),

@@ -417,7 +417,10 @@ alone (`IChainValidationProvider.CheckSignaturePolicy`), at the time of a truste
 else the claimed signing time. A `.p7s` declaring AD-RB without signing-certificate-v2 is then
 INDETERMINATE as a PDF would be. For XAdES the provider checks what the reference allows (hash,
 period, timestamp, XAdES format, accepted root), not the attribute and algorithm rules of the XML PA.
-These validators do not run the provider's chain validation and report no `BR.*` metadata.
+In `ValidateAsync` they also ask the provider for what it reads of the signer, without revocation (they check it
+themselves) and without changing the verdict, whose errors become warnings: `ChainValidationRegion`, `PolicyLevel`,
+`SignerId`, `SignerIdType` and the `BR.*` `ChainValidationMetadata` (the Lei 14.063 level:
+`Lei14063.Classify(result.Indication, result.ChainValidationMetadata)`). The synchronous `Validate` does not.
 
 ```csharp
 var icp = IcpBrasilProfile.Create();

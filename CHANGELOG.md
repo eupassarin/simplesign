@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SHA-1 for an XML-DSig `SignedInfo` only**: `Pkcs11Signer`, `CscSigner` and `PscSigner` hash it with SHA-1 when asked
   (CMS signed attributes are still refused), and the Agent's `/api/sign` takes `hashAlgorithm: SHA1` for a `SignedInfo`
   whose SignatureMethod is rsa-sha1 with an RSA key, and nothing else.
+- **The Brazilian notes in `cades validate` and `xades validate`**: the Lei 14.063 level, the hierarchy and certificate
+  type, the CPF/CNPJ, the registrations, the declared policy (for XAdES, the rules of the ICP-Brasil XML PA, checked by
+  `IcpBrasilXadesPolicyValidator`), in the text and in `--json` (`lei14063`, `brasil`), as `validate` shows them for a
+  PDF. For that, `CadesSignatureValidator` and `XadesSignatureValidator` (`ValidateAsync`) ask the trust frameworks'
+  chain validation for its data, without revocation and without changing the verdict, and their results carry
+  `ChainValidationRegion`, `PolicyLevel`, `SignerId`, `SignerIdType` and `ChainValidationMetadata`;
+  `ValidationOptions.ChainValidationProviders` gives providers beside the profile's; `Lei14063.Classify(indication,
+  metadata)` classifies any format; `CliSignatureFacts` gains `Format`, `Indication`, `Chain`, `Xades` and `SignedXml`.
 - **TestBench**: the XML page signs under an ICP-Brasil policy again, and the ICP-Brasil types of the XML and CAdES pages
   run through the CLI too (`brasil xades sign`, `brasil cades sign`). The XML page has a **Fiscal XML** signature type
   (the layout to choose, NF-e, event, CT-e and eSocial samples, the `fiscal-sefaz` signing policy preset), signed through
