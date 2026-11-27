@@ -24,6 +24,10 @@ XadesValidationResult result = await new XadesSignatureValidator(
 Console.WriteLine($"{result.Indication} {result.SubIndication}");
 ```
 
+Plain enveloped XML-DSig signatures (no XAdES properties), as the Brazilian fiscal layouts require:
+`XmlDsigSigner.Document(xml).WithSignedElement("infNFe")…SignAsync()`, in two phases with `XmlDsigDeferredSigner`,
+checked by `XmlDsigValidator`.
+
 Also reads ETSI trusted lists (TS 119 612 / TS 102 231 v3) after checking their signature:
 `TrustedList.Load(xml, new TrustedListOptions { SignerCertificates = [schemeOperator] })` is an
 `ITrustAnchorProvider`.

@@ -149,6 +149,28 @@ simplesign cades validate document.pdf.p7s --data document.pdf --trust root-ca.p
 `signer-2`…, each with its `counterSignatures`: `signer-1.1`…); the top-level fields are those of the first signer.
 The exit code is 0 only when all are valid.
 
+## Plain XML-DSig Signatures
+
+A plain enveloped XML-DSig signature (no XAdES properties): an element by its Id, or the whole document. The fiscal
+layouts of Brazil (NF-e…) come with the `brasil` extension: `simplesign brasil fiscal sign nfe.xml --layout nfe`.
+
+```bash
+# The whole document (URI=""), the signature at the end of the root
+simplesign xmldsig sign order.xml --cert mycert.pfx
+
+# An element by its Id; every element of a batch not signed yet
+simplesign xmldsig sign batch.xml --cert mycert.pfx --element doc --all
+
+# Two phases: the data to sign (the canonical SignedInfo) for a key that is elsewhere
+simplesign xmldsig sign order.xml --cert mycert.cer --element doc --id D1 --prepare --session-key env:KEY
+simplesign deferred complete order.xml.session --session-key env:KEY --signature order.xml.sig --output signed.xml
+
+simplesign xmldsig validate order.xml.signed.xml --profile icp-brasil
+```
+
+`--hash` takes SHA-1 only when the signing policy accepts it (`--signing-policy fiscal-sefaz`, from the `brasil`
+extension).
+
 ## XAdES Signatures
 
 ```bash

@@ -285,13 +285,48 @@ revocation settings for the DSS (`LongTermValidation`) and a specific `Version` 
 (refused when it is not in force or does not accept the signer's root). The catalog also holds the 45 XAdES policies of
 `LPA_XAdES.xml` (version 2), with their rules.
 
-#### XAdES
+#### XAdES (SimpleSign.Brazil.IcpBrasil.Xades)
 
-SimpleSign signs under the ICP-Brasil policies in PAdES and CAdES. For XAdES there is no `WithIcpBrasilPolicy`: a
-XAdES signature can name an ICP-Brasil XML policy with `WithSignaturePolicy` (the catalog holds them:
-`IcpBrasilSignaturePolicies.Current(policy, IcpBrasilPolicyFormat.Xades).ToReference()`) and take the extended forms
-of SimpleSign.XAdES (`WithExtendedValidationData`), and its policy reference can be checked as shown under
-[Check a signature against its policy](#check-a-signature-against-its-policy) below; the attribute rules of the XML PAs are not enforced.
+```bash
+dotnet add package SimpleSign.Brazil.IcpBrasil.Xades
+```
+
+```csharp
+using SimpleSign.Brazil.IcpBrasil.Xades;
+
+await XadesSigner.Document(xml).WithCertificate(cert)
+    .WithIcpBrasilPolicy(IcpBrasilPolicy.AdRc, new TimestampOptions(new Uri(actUrl)))
+    .SignAsync();
+```
+
+The XML PAs mandate the XAdES 1.3.2 `SigningCertificate` (not `SigningCertificateV2`) and, per
+policy, these unsigned properties (ETSI TS 101 903 v1.3.2):
+
+| Policy | Unsigned properties |
+|--------|---------------------|
+| AD-RB | none |
+| AD-RT | SignatureTimeStamp |
+| AD-RV | SignatureTimeStamp, CompleteCertificateRefs, CompleteRevocationRefs, SigAndRefsTimeStamp |
+| AD-RC | AD-RV plus CertificateValues and RevocationValues |
+| AD-RA | SignatureTimeStamp, references, values and ArchiveTimeStamp |
+
+`WithIcpBrasilPolicy` (on `XadesSignerBuilder` and on `XadesDeferredSignerBuilder`) writes them all: it picks the newest
+XML PA that accepts the signer's AC Raiz, sets `WithSigningCertificateForm(XadesSigningCertificateForm.V1)`, the policy
+reference and `WithExtendedValidationData(XadesExtendedForm…)`. Validate the rules of the PA with:
+
+```csharp
+var result = new XadesSignatureValidator().Validate(signedXml);   // HasValidSigAndRefsTimeStamp, HasValidCompleteReferences
+var policy = IcpBrasilXadesPolicyValidator.Validate(signedXml, result);
+```
+
+`IcpBrasilXadesPolicyValidator` checks the hash, signing period, accepted roots, the mandated
+properties and the signature algorithm and key size. `IcpBrasilXadesPolicies.RefreshAsync` downloads
+`LPA_XAdES.xml`, verifies its ITI XML signature and applies new policies and revocations. The ITI
+signs the list in a way .NET's `SignedXml` rejects (an enveloped-signature transform on KeyInfo),
+so the verification is done by a strict verifier that accepts only that shape and refuses any
+element smuggled into the signature.
+
+Fiscal XML (NF-e, CT-e, eSocial…) is not XAdES: it takes a plain XML-DSig signature, see [Fiscal XML](fiscal-xml.md).
 
 #### Accepted roots
 
@@ -402,7 +437,8 @@ and unsigned attributes are present, and the signature algorithm and key size ar
 ICP-Brasil provider passes the root it found. CAdES escTimeStamp and archive-time-stamp v2 imprints
 are verified by `CadesSignatureValidator`.
 
-For XAdES, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
+For XAdES, `IcpBrasilXadesPolicyValidator` (SimpleSign.Brazil.IcpBrasil.Xades, above) checks the rules of the XML PA
+too. Without that package, `IcpBrasilPolicyValidator.Validate(xades.SignaturePolicy, time, hasSignatureTimestamp, IcpBrasilPolicyFormat.Xades)`
 checks the hash, signing period, timestamp and format; `XadesSignatureValidator` does it for you under the
 ICP-Brasil profile (above).
 
@@ -637,6 +673,18 @@ simplesign brasil sign recibo.pdf --cert cert.pfx --aea --cpf 12345678901 --sign
 
 `simplesign icp-brasil sign` is the same command. Without the extension, `simplesign sign --icp-policy …` is refused
 with the command that installs it; it is never signed without the policy.
+
+CAdES and XAdES are signed the same way: `brasil cades sign` is `cades sign` and `brasil xades sign` is `xades sign`,
+every option of them, plus `--icp-policy ad-rb|ad-rt|ad-rv|ad-rc|ad-ra` (AD-RV exists in CAdES and XAdES). The policy
+sets the level and the extended form: no `--level longterm|archive`, `--extended-form` or `--policy-oid` with it, and
+all but `ad-rb` need `--tsa`.
+
+```bash
+simplesign brasil cades sign contrato.txt --cert cert.pfx --icp-policy ad-rt --tsa https://act.example/tsa
+simplesign brasil xades sign documento.xml --cert cert.pfx --icp-policy ad-rc --tsa https://act.example/tsa
+```
+
+Fiscal XML: `simplesign brasil fiscal sign nfe.xml --layout nfe --cert empresa.pfx` ([Fiscal XML](fiscal-xml.md)).
 
 Standalone timestamps:
 

@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Plain XML-DSig signatures in `SimpleSign.XAdES`** (ADR 0034): `XmlDsigSigner` signs an element by its Id
+  (`WithSignedElement`) or the whole document with an enveloped W3C XML Signature, no XAdES properties, the signature
+  after the element or at the end of the root (`WithPlacement`), `SignAllAsync` for a batch. The signing policy, the
+  trust anchors and the audit sink apply as in XAdES. `XmlDsigDeferredSigner` makes it in two phases (ADR 0028), and
+  `XmlDsigValidator` checks digests, signature values, duplicate Ids (signature wrapping) and, with a trust profile, the
+  signer chain.
+- **`SimpleSign.Brazil.Fiscal` is back**, on `XmlDsigSigner` (removed in 0.13.0; the last version with it was 0.12.0):
+  NF-e/NFC-e, events, inutilização, CT-e, MDF-e, NFS-e DPS, eSocial and EFD-Reinf. `FiscalXmlSigner.Document(xml,
+  FiscalDocumentProfile.NFe)` returns a builder set for the layout, the ICP-Brasil anchors and the layout's signing
+  policy; `FiscalXmlSigner.Deferred` makes it in two phases; `FiscalXmlValidator` checks the signatures, the layout, the
+  ICP-Brasil chain and the CNPJ/CPF. `FiscalPolicies.Sefaz` is the ICP-Brasil signing policy with SHA-1 accepted as the
+  signature digest, as the SEFAZ layouts mandate. Unlike 0.12.0, the certificate is checked against the policy before
+  signing, and the API is a builder (`FiscalXmlSigner.Sign(xml, profile, cert)` is gone).
+- **`SimpleSign.Brazil.IcpBrasil.Xades` is back** (removed in 0.13.0): `WithIcpBrasilPolicy` on `XadesSignerBuilder` and
+  `XadesDeferredSignerBuilder` (AD-RB, AD-RT, AD-RV, AD-RC, AD-RA), `IcpBrasilXadesPolicyValidator` (the rules of the
+  XML PAs) and `IcpBrasilXadesPolicies.RefreshAsync` (the verified `LPA_XAdES.xml`).
+- **CLI**: `simplesign xmldsig sign|validate`; `deferred complete` completes an XML-DSig session. The `brasil` extension
+  adds `brasil fiscal sign --layout nfe|cte|…` and `brasil fiscal validate`, `brasil cades sign` and `brasil xades sign`
+  with `--icp-policy`, and the `fiscal-sefaz` signing policy preset.
+- **CLI extension contract** (still version 1): `CliSignRequest.Command` names the standard command a pass-through
+  command runs (`sign`, `cades sign`, `xades sign`, `xmldsig sign`), configured with `ConfigureCades`,
+  `ConfigureXades` or `ConfigureXmlDsig`; `SignAll` signs a batch. An extension that sets them needs a CLI that has
+  them. `SimpleSign.Cli.Extensibility` now depends on `SimpleSign.CAdES`.
+- **SHA-1 for an XML-DSig `SignedInfo` only**: `Pkcs11Signer`, `CscSigner` and `PscSigner` hash it with SHA-1 when asked
+  (CMS signed attributes are still refused), and the Agent's `/api/sign` takes `hashAlgorithm: SHA1` for a `SignedInfo`
+  whose SignatureMethod is rsa-sha1 with an RSA key, and nothing else.
+- **TestBench**: the XML page signs under an ICP-Brasil policy again, and the ICP-Brasil types of the XML and CAdES pages
+  run through the CLI too (`brasil xades sign`, `brasil cades sign`). Playbooks `icp-brasil-cades` and
+  `icp-brasil-xades`.
+
 - **`SigningWarning.Reason`** (`SigningErrorReason?`) and the codes `SigningWarningCode.SignatureTimestampRefused` (7)
   and `ArchiveTimestampRefused` (8). A timestamp left out under `ReturnLowerLevel` now tells why:
   `TimestampCertificateNotValid`, `TimestampCertificateRevoked`, `TimestampRevocationStatusUnknown` (the `*Refused`

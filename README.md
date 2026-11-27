@@ -30,6 +30,7 @@ SimpleSign creates and validates **PAdES** (ETSI EN 319 142), **CAdES** (ETSI EN
 dotnet add package SimpleSign                  # PAdES + CAdES + XAdES
 dotnet add package SimpleSign.Brazil.IcpBrasil # ICP-Brasil, Lei 14.063
 dotnet add package SimpleSign.Brazil.GovBr     # Gov.br
+dotnet add package SimpleSign.Brazil.Fiscal    # NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf (XML-DSig)
 dotnet add package SimpleSign.Peru.Iofe        # IOFE (Peru), INDECOPI policies
 dotnet add package SimpleSign.Europe.Eidas     # eIDAS (EU), qualification from the EU LOTL
 dotnet add package SimpleSign.Adobe.Aatl       # the Adobe Approved Trust List: what Acrobat trusts
@@ -47,6 +48,8 @@ dotnet tool install -g SimpleSign.Cli          # command line
 | `SimpleSign.Core` | CMS, TSA, OCSP, CRL (HTTP; LDAP opt-in), signing and validation policies, trust store (used by the above) |
 | `SimpleSign.Brazil.IcpBrasil` | ICP-Brasil chain, roots and policies, Lei 14.063 |
 | `SimpleSign.Brazil.GovBr` | Gov.br chain and assurance level, Lei 14.063 |
+| `SimpleSign.Brazil.IcpBrasil.Xades` | XAdES under the ICP-Brasil XML policies (AD-RB to AD-RA) |
+| `SimpleSign.Brazil.Fiscal` | XML-DSig of NF-e, NFC-e, CT-e, MDF-e (and events), NFS-e, eSocial and EFD-Reinf |
 | `SimpleSign.Brazil` | Shared: CPF/CNPJ, Lei 14.063 levels, AEA manifest (pulled in by both) |
 | `SimpleSign.Peru.Iofe` | IOFE (Ley 27269): anchors from INDECOPI's signed trusted list, INDECOPI signing and validation policies |
 | `SimpleSign.Peru.Iofe.Cli` | IOFE for the `simplesign` command line, as an extension: `simplesign extension install SimpleSign.Peru.Iofe.Cli` |
@@ -136,7 +139,7 @@ var signedPdf = await PadesSigner.Document(pdfBytes)
 | [PKCS#11](docs/articles/pkcs11.md) / [Cloud signing](docs/articles/cloud-signing.md) | Tokens, HSMs and cloud certificates |
 | [Observability](docs/articles/observability.md) | Traces and metrics (`ActivitySource`/`Meter` named `SimpleSign`) |
 | [HTML to PDF](docs/articles/html-to-pdf.md) | The layout engine |
-| [ICP-Brasil](src/Extensions/Brazil/docs/icp-brasil.md) | Brazilian PKI: chain validation, roots, policies, ACT time-stamps |
+| [ICP-Brasil](src/Extensions/Brazil/docs/icp-brasil.md) / [Fiscal XML](src/Extensions/Brazil/docs/fiscal-xml.md) | Brazilian PKI: chain validation, roots, policies, ACT time-stamps; NF-e/eSocial signing |
 | [A trusted list as a profile](docs/articles/inspection-validation.md#a-trusted-list-as-a-trust-profile) | Any ETSI TS 119 612 list, kept current, as the whole trust of a validation |
 | [AATL](src/Extensions/Adobe/Aatl/docs/aatl.md) | The Adobe Approved Trust List as a trust profile: whom Acrobat trusts, and its certificate policy restrictions |
 | [eIDAS (EU)](src/Extensions/Europe/Eidas/docs/eidas.md) | The EU list of trusted lists, and the qualification of a signature (QESig, QESeal, AdESig-QC…) |

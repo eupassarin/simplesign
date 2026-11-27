@@ -30,6 +30,8 @@ dotnet test tests/integration/SimpleSign.EtsiChecker.Tests --framework net10.0
 dotnet test tests/unit/Formats/SimpleSign.PAdES.Tests
 dotnet test tests/unit/Core/SimpleSign.Core.Tests
 dotnet test tests/unit/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Tests
+dotnet test tests/unit/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades.Tests
+dotnet test tests/unit/Extensions/Brazil/Fiscal/SimpleSign.Brazil.Fiscal.Tests
 dotnet test tests/unit/Extras/SimpleSign.HtmlToPdf.Tests
 dotnet test tests/unit/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Tests
 
@@ -67,20 +69,25 @@ src/
 │   │                           (serializer, dictionary patch, cross-reference); PdfEmbeddedFiles reads attachments;
 │   │                           Envelope/ = the signature envelope (ADR 0033: PdfEnvelope, PdfEnvelopeReader, PdfEnvelopeValidator)
 │   ├── SimpleSign.CAdES/       standalone CMS/PKCS#7 signing & validation
-│   ├── SimpleSign.XAdES/       XML signatures; ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
+│   ├── SimpleSign.XAdES/       XML signatures; plain XML-DSig (XmlDsigSigner, XmlDsigDeferredSigner, XmlDsigValidator: ADR 0034);
+│   │                           ETSI trusted lists (TrustedList; TrustedListSource keeps one current, TrustedListProfile makes it a profile)
 │   └── SimpleSign/             Meta-package
 ├── Extensions/                 trust frameworks and what goes with each (code, CLI extension, docs, playbooks, tools; ADR 0030)
 │   ├── CliExtension.targets                  what makes a project a CLI extension (manifest, packaging), imported by the three *.Cli projects
 │   ├── Brazil/                               everything of ICP-Brasil, Gov.br and Lei 14.063 lives here
 │   │   ├── SimpleSign.Brazil/                  shared: CPF/CNPJ, Lei 14.063, AEA manifest, VALIDAR
 │   │   ├── IcpBrasil/
-│   │   │   └── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
+│   │   │   ├── SimpleSign.Brazil.IcpBrasil/        ICP-Brasil: chain validation, roots, policies, ACT timestamps
+│   │   │   └── SimpleSign.Brazil.IcpBrasil.Xades/  XAdES under the ICP-Brasil XML PAs (WithIcpBrasilPolicy, the PA rules, LPA_XAdES refresh)
+│   │   ├── Fiscal/
+│   │   │   └── SimpleSign.Brazil.Fiscal/           NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf: layouts on XmlDsigSigner, the SEFAZ policy (SHA-1)
 │   │   ├── GovBr/
 │   │   │   └── SimpleSign.Brazil.GovBr/            Gov.br: chain validation, assurance level
 │   │   ├── SimpleSign.Brazil.Cli/              the CLI extension (one for both): --profile icp-brasil|gov-br, their policies, `simplesign brasil sign`
-│   │   │                                       (sign + --icp-policy, --aea, --health-document), `brasil timestamp verify`, Lei 14.063 in validate/inspect
-│   │   ├── docs/                               icp-brasil.md, icp-brasil-validar-check.md
-│   │   ├── playbooks/                          icp-brasil-pades.json, govbr-pades.json
+│   │   │                                       (sign + --icp-policy, --aea, --health-document), `brasil cades|xades sign` (+ --icp-policy),
+│   │   │                                       `brasil fiscal sign|validate` (xmldsig sign + --layout), `brasil timestamp verify`, Lei 14.063 in validate/inspect
+│   │   ├── docs/                               icp-brasil.md, icp-brasil-validar-check.md, fiscal-xml.md
+│   │   ├── playbooks/                          icp-brasil-pades.json, icp-brasil-cades.json, icp-brasil-xades.json, govbr-pades.json
 │   │   └── tools/update-icp-intermediates.sh   refreshes the bundled intermediates
 │   ├── Europe/Eidas/                         everything of eIDAS lives here
 │   │   ├── SimpleSign.Europe.Eidas/            eIDAS (EU): anchors from the EU LOTL (pivots followed), qualification (QESig, AdESig-QC…), policies
@@ -146,6 +153,12 @@ var prepared = await builder.PrepareAsync();
 var signedPdf = await DeferredSigner.Resume(prepared.SessionData, sessionIntegrityKey)
     .CompleteAsync(signature);
 // Same shape for CAdES and XAdES: CadesDeferredSigner / XadesDeferredSigner (.Document → PrepareAsync, .Resume → CompleteAsync)
+// and for plain XML-DSig: XmlDsigDeferredSigner
+
+// Plain XML-DSig (ADR 0034) and the Brazilian fiscal layouts on it (SHA-1 only under FiscalPolicies.Sefaz)
+await XmlDsigSigner.Document(xml).WithSignedElement("infNFe").WithCertificate(cert).SignAsync();   // or WithWholeDocument()
+await FiscalXmlSigner.Document(nfe, FiscalDocumentProfile.NFe).WithCertificate(eCnpj).SignAsync();  // .SignAllAsync() for a batch
+var fiscal = await new FiscalXmlValidator().ValidateAsync(signedNfe, FiscalDocumentProfile.NFe);
 
 // Batch
 var batch = BatchSigner.Create(cert)
@@ -205,7 +218,8 @@ var list = await TrustedListProfile.LoadAsync(new TrustedListSourceOptions { Loc
 - `IChainRevocationChecker` / `IRevocationCache` — revocation of a whole chain, CRL cache
 - `ICountryExtension` — country packages (ICP-Brasil, Gov.br, IOFE, eIDAS)
 - `ICliExtension` (`SimpleSign.Cli.Extensibility`) — what a package adds to the CLI once installed: commands, `--profile`, policy presets, `--tsl-profile`;
-  and, with defaults, a command that runs the standard `sign` with options of its own (`PassThroughCommands`, `CliExtensionContext.SignAsync(CliSignRequest)`),
+  and, with defaults, a command that runs a standard signing command with options of its own (`PassThroughCommands`, `CliExtensionContext.SignAsync(CliSignRequest)`;
+  `CliSignRequest.Command`: `sign`, `cades sign`, `xades sign` or `xmldsig sign`, configured by `Configure`/`ConfigureCades`/`ConfigureXades`/`ConfigureXmlDsig`),
   services, chain validation and notes about a signature in `validate`/`inspect` (`ConfigureServices`, `CreateChainValidationProviders`, `Annotate`) (ADR 0030)
 - `ISignatureQualifier` — the qualification of a validated signature under a framework (eIDAS's `EidasQualifier`)
 - `ISignatureAuditSink` — a record of every signature made or refused (`AuditChain`, `JsonLinesAuditSink`)
@@ -257,6 +271,10 @@ SimpleSign.Brazil (shared Brazilian building blocks)
 SimpleSign.Brazil.IcpBrasil / SimpleSign.Brazil.GovBr (one ICountryExtension each)
   └── depend on SimpleSign.Brazil only, never on each other
 
+SimpleSign.Brazil.Fiscal / SimpleSign.Brazil.IcpBrasil.Xades
+  └── depend on SimpleSign.Brazil.IcpBrasil + SimpleSign.XAdES — public API only, except the LPA_XAdES refresh of
+      IcpBrasil.Xades (InternalsVisibleTo from IcpBrasil: download, ITI signer check, apply)
+
 SimpleSign.Peru.Iofe / SimpleSign.Europe.Eidas (one ICountryExtension each)
   └── depend on SimpleSign.Core + SimpleSign.XAdES — public API only
 
@@ -264,7 +282,7 @@ SimpleSign.Adobe.Aatl (the Adobe Approved Trust List; one ICountryExtension)
   └── depends on SimpleSign.Core + SimpleSign.PAdES — public API only; downloads Adobe's list at run time, bundles only the Adobe root
 
 SimpleSign.Cli.Extensibility (the contract of CLI extensions)
-  └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + Spectre.Console.Cli
+  └── depends on SimpleSign.Core + SimpleSign.XAdES + SimpleSign.PAdES + SimpleSign.CAdES + Spectre.Console.Cli
 
 SimpleSign.Peru.Iofe.Cli / SimpleSign.Brazil.Cli / SimpleSign.Europe.Eidas.Cli / SimpleSign.Adobe.Aatl.Cli
 (CLI extensions, not libraries: each package carries cli-extension/)

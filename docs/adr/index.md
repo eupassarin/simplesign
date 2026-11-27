@@ -36,3 +36,4 @@ SimpleSign, including their rationale, consequences, and alternatives.
 - [ADR 0031: Generic Trust Sources — the AATL, a Trusted List as a Profile, and Anchors with Conditions](0031-generic-trust-sources.md)
 - [ADR 0032: A PDF Object Model for Reading and Incremental Writing](0032-pdf-object-model.md)
 - [ADR 0033: A Signature Envelope Inside the PDF](0033-pdf-signature-envelope.md) (proposed)
+- [ADR 0034: Plain XML-DSig in SimpleSign.XAdES, and the Fiscal Layouts on Top of It](0034-plain-xmldsig-and-fiscal-layouts.md)

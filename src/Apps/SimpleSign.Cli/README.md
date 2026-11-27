@@ -14,7 +14,7 @@ multi-target net8.0 and net10.0.
 ## Commands
 
 `sign` · `sign-dir` · `validate` · `validate-dir` · `inspect` · `extract` · `augment` ·
-`deferred prepare|complete` · `cades sign|validate` · `xades sign|validate` ·
+`deferred prepare|complete` · `cades sign|validate` · `xades sign|validate` · `xmldsig sign|validate` ·
 `timestamp create|verify` · `policy export|schema` · `audit verify` · `pkcs11 list|drivers` ·
 `psc certificates` · `csc list` · `profiles` · `explain` · `html-to-pdf`
 
@@ -27,7 +27,8 @@ simplesign augment signed.pdf --level BLTA --tsa http://timestamp.digicert.com
 A whole trust framework comes from one flag, `--profile NAME`, which sets the trust anchors and the policies together.
 The CLI's own profile is `sandbox`; the trust frameworks are extensions, installed into the CLI
 ([CLI extensions](../../../docs/articles/cli-extensions.md)): `simplesign extension install SimpleSign.Brazil.Cli` adds
-`--profile icp-brasil`, `gov-br` and `simplesign brasil sign …`, `SimpleSign.Europe.Eidas.Cli` adds `--profile eidas`,
+`--profile icp-brasil`, `gov-br`, `simplesign brasil sign|cades sign|xades sign …` and `brasil fiscal sign …` (NF-e),
+`SimpleSign.Europe.Eidas.Cli` adds `--profile eidas`,
 and `SimpleSign.Peru.Iofe.Cli` adds `--profile iofe` and `simplesign iofe …`. This project references none of them.
 
 ## Files here
