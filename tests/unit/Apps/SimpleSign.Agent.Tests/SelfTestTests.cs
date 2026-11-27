@@ -14,7 +14,7 @@ public sealed class SelfTestTests : IAsyncLifetime
     private AgentController _controller = null!;
     private SelfTest _test = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var services = Fixtures.Services(_dialogs);
         services.Settings.Current.AgentPort = Fixtures.FreePort();
@@ -24,7 +24,7 @@ public sealed class SelfTestTests : IAsyncLifetime
         _test = new SelfTest(_controller.Server.Port);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _test.Dispose();
         await _controller.DisposeAsync();
