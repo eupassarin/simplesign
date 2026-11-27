@@ -21,7 +21,7 @@ public sealed class AgentServerTests : IAsyncLifetime
     private AgentServer _agent = null!;
     private int _port;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _services = Fixtures.Services(_dialogs);
         var entry = new CertificateEntry(CertificateSourceKind.File, _certificate, FilePath: "test.pfx");
@@ -30,7 +30,7 @@ public sealed class AgentServerTests : IAsyncLifetime
         await _agent.StartAsync(_port);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _agent.DisposeAsync();
         _http.Dispose();

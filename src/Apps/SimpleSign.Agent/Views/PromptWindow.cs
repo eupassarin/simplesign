@@ -24,7 +24,7 @@ internal sealed class PromptWindow : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
-        var secret = new TextBox { PasswordChar = '●', Watermark = "••••••" };
+        var secret = new TextBox { PasswordChar = '●', PlaceholderText = "••••••" };
         var cancel = Ui.Button(L.T("common.cancel"), null, "outline", Close);
         cancel.IsCancel = true;
         var confirm = Ui.Button(confirmText, Icons.Mark, "primary", () =>

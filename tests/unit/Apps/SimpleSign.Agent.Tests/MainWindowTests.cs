@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -203,7 +204,7 @@ public sealed class MainWindowTests
         Dispatcher.UIThread.RunJobs();
         using var frame = window.CaptureRenderedFrame();
         frame.ShouldNotBeNull();
-        frame.Save(Path.Combine(s_shots, name + ".png"));
+        frame.Save(Path.Combine(s_shots, name + ".png"), PngBitmapEncoderOptions.Default);
     }
 
     /// <summary>
