@@ -750,6 +750,16 @@ internal sealed class XadesPlan
 
     private void AddType()
     {
+        if (_o.Kind == XadesKind.IcpBrasil)
+        {
+            // The policy sets the level and the extended form (DOC-ICP-15.03); the TSA (an ACT) from AD-RT up.
+            var policy = _o.IcpPolicy;
+            var icpTsa = policy == SimpleSign.Brazil.IcpBrasil.IcpBrasilPolicy.AdRb ? null : _context.BuildTimestamp(_o.Timestamp, "tsa");
+            _steps.Add(($".WithIcpBrasilPolicy(IcpBrasilPolicy.{policy}{(icpTsa is null ? "" : ", tsa")}) // DOC-ICP-15.03: the policy's OID and hash, and its level",
+                b => SimpleSign.Brazil.IcpBrasil.Xades.IcpBrasilXadesExtensions.WithIcpBrasilPolicy(b, policy, icpTsa)));
+            return;
+        }
+
         if (_o.Kind == XadesKind.CustomPolicy)
         {
             string? uri = SigningPlan.Blank(_o.PolicyUri);
@@ -835,7 +845,8 @@ internal sealed class XadesPlan
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
         string output = _o.CounterSign ? "countersigned.xml" : XmlRunner.SignedFile;
-        var cli = new CliLine("xades", "sign", CliInput);
+        // Under an ICP-Brasil policy, the Brazilian extension's brasil xades sign: xades sign and its options, plus --icp-policy.
+        var cli = _o.Kind == XadesKind.IcpBrasil ? new CliLine("brasil", "xades", "sign", CliInput) : new CliLine("xades", "sign", CliInput);
         if (_o.CounterSign)
         {
             cli.Add("--countersign");
@@ -871,7 +882,11 @@ internal sealed class XadesPlan
             }
         }
 
-        if (_o.Level != BaselineLevel.BB)
+        if (_o.Kind == XadesKind.IcpBrasil)
+        {
+            CodeGenerator.IcpPolicy(cli, _o.IcpPolicy, _o.Timestamp, _context);
+        }
+        else if (_o.Level != BaselineLevel.BB)
         {
             _context.CliTimestamp(cli, _o.Timestamp);
             cli.Add("--level", _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
@@ -909,7 +924,7 @@ internal sealed class XadesPlan
             cli.Add("--signing-time", time.ToString("O", CultureInfo.InvariantCulture));
         }
 
-        if (_o.ExtendedForm != XadesExtendedChoice.None)
+        if (_o.ExtendedForm != XadesExtendedChoice.None && _o.Kind != XadesKind.IcpBrasil)
         {
             cli.Add("--extended-form", CodeGenerator.ExtendedForm(_o.ExtendedForm.ToString()));
         }

@@ -198,11 +198,6 @@ internal sealed class CadesRunner(SandboxEnvironment sandbox, DocumentStore docu
                 return Failure(o, report, unsupported, "CliUnsupported", code);
             }
 
-            if (o.Kind == CadesKind.IcpBrasil)
-            {
-                return Failure(o, report, L.T("The CLI signs under an ICP-Brasil policy for PAdES only (brasil sign --icp-policy): run this one through the library."), "CliUnsupported", code);
-            }
-
             var jobs = new CliJobs().Credential(credential).Timestamp(o.Timestamp, documents).Uploads(o, o.SigningPolicyId, documents);
             foreach (var (name, content) in controls.CliFiles())
             {
@@ -756,7 +751,8 @@ internal sealed class CadesPlan
         sb.Append(CultureInfo.InvariantCulture, $"File.WriteAllBytes(\"{OutputName()}\", result.SignedArtifact);\n");
         sb.Append("Console.WriteLine($\"Requested {result.RequestedLevel}, achieved {result.AchievedLevel}\");\n");
 
-        var cli = new CliLine("cades", "sign", CliInput);
+        // Under an ICP-Brasil policy, the Brazilian extension's brasil cades sign: cades sign and its options, plus --icp-policy.
+        var cli = _o.Kind == CadesKind.IcpBrasil ? new CliLine("brasil", "cades", "sign", CliInput) : new CliLine("cades", "sign", CliInput);
         var notes = new List<string>();
         if (_o.TwoPhases)
         {
@@ -796,7 +792,11 @@ internal sealed class CadesPlan
                 break;
         }
 
-        if (_o.Level != BaselineLevel.BB)
+        if (_o.Kind == CadesKind.IcpBrasil)
+        {
+            CodeGenerator.IcpPolicy(cli, _o.IcpPolicy, _o.Timestamp, _context);
+        }
+        else if (_o.Level != BaselineLevel.BB)
         {
             _context.CliTimestamp(cli, _o.Timestamp);
             cli.Add("--level", _o.Level switch { BaselineLevel.BT => "timestamped", BaselineLevel.BLT => "longterm", _ => "archive" });
@@ -819,7 +819,7 @@ internal sealed class CadesPlan
             }
         }
 
-        if (_o.ExtendedForm != CadesExtendedChoice.None)
+        if (_o.ExtendedForm != CadesExtendedChoice.None && _o.Kind != CadesKind.IcpBrasil)
         {
             cli.Add("--extended-form", CodeGenerator.ExtendedForm(_o.ExtendedForm.ToString()));
         }
