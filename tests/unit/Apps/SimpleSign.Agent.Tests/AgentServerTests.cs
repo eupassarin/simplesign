@@ -327,6 +327,57 @@ public sealed class AgentServerTests : IAsyncLifetime
         (await response.Content.ReadAsStringAsync()).ShouldContain("signedHashBase64");
     }
 
+    /// <summary>The canonical SignedInfo of a fiscal (NF-e) signature: C14N, the given SignatureMethod, one reference.</summary>
+    private static byte[] NfeSignedInfo(string signatureMethod) => Encoding.UTF8.GetBytes(
+        "<SignedInfo xmlns=\"http://www.w3.org/2000/09/xmldsig#\">"
+        + "<CanonicalizationMethod Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"></CanonicalizationMethod>"
+        + $"<SignatureMethod Algorithm=\"{signatureMethod}\"></SignatureMethod>"
+        + "<Reference URI=\"#NFe35260711222333000181550010000000071123456780\"><Transforms>"
+        + "<Transform Algorithm=\"http://www.w3.org/2000/09/xmldsig#enveloped-signature\"></Transform>"
+        + "<Transform Algorithm=\"http://www.w3.org/TR/2001/REC-xml-c14n-20010315\"></Transform></Transforms>"
+        + "<DigestMethod Algorithm=\"http://www.w3.org/2000/09/xmldsig#sha1\"></DigestMethod>"
+        + $"<DigestValue>{Convert.ToBase64String(new byte[20])}</DigestValue></Reference></SignedInfo>");
+
+    private string Sha1Body(byte[] data) =>
+        $$"""{"thumbprint":"{{_certificate.Thumbprint}}","hashAlgorithm":"SHA1","signRequests":[{"id":"nfe","authenticatedAttributeBase64":"{{Convert.ToBase64String(data)}}"}]}""";
+
+    [Fact]
+    public async Task Sign_Sha1OfAnRsaSha1SignedInfo_SignsIt()
+    {
+        byte[] signedInfo = NfeSignedInfo("http://www.w3.org/2000/09/xmldsig#rsa-sha1");
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", Sha1Body(signedInfo));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        byte[] signature = Convert.FromBase64String(json.RootElement[0].GetProperty("signedHashBase64").GetString()!);
+        using var rsa = _certificate.GetRSAPublicKey()!;
+#pragma warning disable CA5350 // the RSA-SHA1 the fiscal layouts mandate
+        rsa.VerifyData(signedInfo, signature, HashAlgorithmName.SHA1, RSASignaturePadding.Pkcs1).ShouldBeTrue();
+#pragma warning restore CA5350
+    }
+
+    [Fact]
+    public async Task Sign_Sha1OfCmsSignedAttributes_BadRequestWithoutSigning()
+    {
+        byte[] attributes = SelfTest.SignedAttributes(SHA256.HashData("contrato"u8));
+
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com", Sha1Body(attributes));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("SHA1");
+        _dialogs.Asked.ShouldAllBe(asked => string.IsNullOrEmpty(asked.CertificateHolder));
+    }
+
+    [Fact]
+    public async Task Sign_Sha1OfAnRsaSha256SignedInfo_BadRequest()
+    {
+        using var response = await Send(HttpMethod.Post, "/api/sign", "https://portal.example.com",
+            Sha1Body(NfeSignedInfo("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
     [Fact]
     public async Task Sign_RawBytes_BadRequestWithoutAsking()
     {

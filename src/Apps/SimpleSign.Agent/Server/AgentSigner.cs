@@ -142,6 +142,8 @@ internal sealed class AgentSigner(
         var decoded = Decode(items);
         var grant = _verifier.Verify(request.SignedRequest, origin, request, decoded);
         var payloads = Inspect(decoded, entry.Certificate);
+        var hash = ParseHash(request.HashAlgorithm);
+        EnsureHashFits(payloads, hash, entry.Certificate);
         string? documentName = grant is not null ? grant.DocumentName : request.DocumentName;
         string what = documentName is { Length: > 0 } name ? $"“{Trim(name, 80)}”" : L.T("consent.sign.documents", items.Count);
         string digest = payloads[0].Inspection.Digests[0].ToShortString();
@@ -160,7 +162,6 @@ internal sealed class AgentSigner(
             return null;
         }
 
-        var hash = ParseHash(request.HashAlgorithm);
         if (entry.Kind == CertificateSourceKind.Token)
         {
             var signer = await OpenTokenAsync(entry);
@@ -219,6 +220,32 @@ internal sealed class AgentSigner(
         }
 
         return payloads;
+    }
+
+    /// <summary>
+    /// SHA-1 is signed for one payload only, an XML-DSig SignedInfo whose SignatureMethod is rsa-sha1 with an RSA key:
+    /// the Brazilian fiscal layouts (NF-e, CT-e, MDF-e) mandate it. CMS signed attributes are never signed with SHA-1.
+    /// </summary>
+    /// <param name="payloads">The inspected items.</param>
+    /// <param name="hash">The hash of the request.</param>
+    /// <param name="certificate">The certificate the signature will be made with.</param>
+    /// <exception cref="AgentRequestException">SHA-1 was asked for something else.</exception>
+    internal static void EnsureHashFits(IReadOnlyList<Payload> payloads, HashAlgorithmName hash, X509Certificate2 certificate)
+    {
+        if (hash != HashAlgorithmName.SHA1)
+        {
+            return;
+        }
+
+        using var rsa = certificate.GetRSAPublicKey();
+        foreach (var payload in payloads)
+        {
+            if (rsa is null || payload.Inspection.Kind != ExternalSigningPayloadKind.XmlCanonicalizedSignedInfo
+                || payload.Inspection.SignatureMethod != XmlDSigUrls.RsaSha1)
+            {
+                throw new AgentRequestException(L.T("api.sha1OnlyForXml", payload.Id));
+            }
+        }
     }
 
     /// <summary>One item of a request, base64-decoded.</summary>
@@ -285,6 +312,7 @@ internal sealed class AgentSigner(
             bool rsa = signer.Certificate.GetRSAPublicKey() is { } key && Dispose(key);
             string algorithm = (rsa, hash.Name) switch
             {
+                (true, "SHA1") => Oids.RsaSha1,
                 (true, "SHA384") => Oids.RsaSha384,
                 (true, "SHA512") => Oids.RsaSha512,
                 (true, _) => Oids.RsaSha256,
@@ -330,14 +358,15 @@ internal sealed class AgentSigner(
     private static bool Same(CertificateEntry entry, string? thumbprint) =>
         string.Equals(entry.Certificate.Thumbprint, thumbprint?.Replace(" ", "", StringComparison.Ordinal), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Whether the hash algorithm of a request is one the agent signs with (SHA-256 when absent).</summary>
+    /// <summary>Whether the hash algorithm of a request is one the agent signs with (SHA-256 when absent; SHA-1 for an XML-DSig SignedInfo only, see <see cref="EnsureHashFits"/>).</summary>
     internal static bool IsSupportedHash(string? name) =>
-        name is null || name.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant() is "SHA256" or "SHA384" or "SHA512";
+        name is null || name.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant() is "SHA1" or "SHA256" or "SHA384" or "SHA512";
 
     private static HashAlgorithmName ParseHash(string? name) =>
         name?.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant() switch
         {
             null or "SHA256" => HashAlgorithmName.SHA256,
+            "SHA1" => HashAlgorithmName.SHA1,
             "SHA384" => HashAlgorithmName.SHA384,
             "SHA512" => HashAlgorithmName.SHA512,
             _ => throw new ArgumentException(L.T("api.hashUnsupported", name), nameof(name)),
