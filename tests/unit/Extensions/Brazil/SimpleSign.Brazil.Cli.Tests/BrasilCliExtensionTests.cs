@@ -57,7 +57,8 @@ public sealed class BrasilCliExtensionTests : IDisposable
         extension.ValidationPolicies.Keys.ShouldBe(["icp-brasil", "govbr"], ignoreOrder: true);
         extension.TrustedListProfiles.ShouldBeEmpty();
         extension.PassThroughCommands.Select(c => string.Join(' ', c.Path))
-            .ShouldBe(["brasil sign", "icp-brasil sign", "brasil fiscal sign", "icp-brasil fiscal sign"]);
+            .ShouldBe(["brasil sign", "icp-brasil sign", "brasil cades sign", "icp-brasil cades sign", "brasil xades sign", "icp-brasil xades sign",
+                "brasil fiscal sign", "icp-brasil fiscal sign"]);
         using var http = new HttpClient();
         extension.CreateChainValidationProviders(http, null).Count.ShouldBeGreaterThanOrEqualTo(2);
     }
@@ -108,6 +109,8 @@ public sealed class BrasilCliExtensionTests : IDisposable
     [InlineData("icp-brasil sign")]
     [InlineData("brasil timestamp")]
     [InlineData("brasil timestamp verify")]
+    [InlineData("brasil cades sign")]
+    [InlineData("brasil xades sign")]
     [InlineData("brasil fiscal")]
     [InlineData("brasil fiscal sign")]
     [InlineData("brasil fiscal validate")]

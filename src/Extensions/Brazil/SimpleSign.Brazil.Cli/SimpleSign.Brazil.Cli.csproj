@@ -16,6 +16,7 @@
     <ProjectReference Include="..\SimpleSign.Brazil\SimpleSign.Brazil.csproj" />
     <ProjectReference Include="..\IcpBrasil\SimpleSign.Brazil.IcpBrasil\SimpleSign.Brazil.IcpBrasil.csproj" />
     <ProjectReference Include="..\Fiscal\SimpleSign.Brazil.Fiscal\SimpleSign.Brazil.Fiscal.csproj" />
+    <ProjectReference Include="..\IcpBrasil\SimpleSign.Brazil.IcpBrasil.Xades\SimpleSign.Brazil.IcpBrasil.Xades.csproj" />
     <ProjectReference Include="..\GovBr\SimpleSign.Brazil.GovBr\SimpleSign.Brazil.GovBr.csproj" />
     <ProjectReference Include="..\..\..\Apps\SimpleSign.Cli.Extensibility\SimpleSign.Cli.Extensibility.csproj" />
   </ItemGroup>
