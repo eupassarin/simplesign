@@ -1,4 +1,3 @@
-using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Cryptography.Xml;
@@ -19,25 +18,18 @@ namespace SimpleSign.Brazil.Fiscal.Tests;
 public sealed class FiscalXmlSignerTests : IDisposable
 {
     private const string NfeKey = "NFe35260711222333000181550010000000071123456780";
-    private readonly X509Certificate2 _eCnpj = CreateECnpj("11222333000181");
+    private readonly X509Certificate2 _eCnpj = FiscalTestSigning.CreateECnpj("11222333000181");
 
     public void Dispose() => _eCnpj.Dispose();
 
-    /// <summary>The layout's policy without the checks only a real ICP-Brasil certificate passes (chain to its roots, revocation).</summary>
-    private static SigningPolicy Offline(FiscalDocumentProfile layout) => layout.SigningPolicy
-        .With("SigningCertificate/ProspectiveCertificateChain", new PolicyConstraint(ConstraintLevel.Ignore))
-        .With("SigningCertificate/NotRevoked", new PolicyConstraint(ConstraintLevel.Ignore))
-        .With("SigningCertificate/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore))
-        .With("CACertificate/NotRevoked", new PolicyConstraint(ConstraintLevel.Ignore))
-        .With("CACertificate/RevocationDataAvailable", new PolicyConstraint(ConstraintLevel.Ignore));
+    private static XmlDsigSignerBuilder Signer(string xml, FiscalDocumentProfile layout) => FiscalTestSigning.Signer(xml, layout);
 
-    private static XmlDsigSignerBuilder Signer(string xml, FiscalDocumentProfile layout) =>
-        FiscalXmlSigner.Document(Utf8(xml), layout).WithSigningPolicy(Offline(layout));
+    private static SigningPolicy Offline(FiscalDocumentProfile layout) => FiscalTestSigning.Offline(layout);
 
     private static string Nfe(string key = NfeKey) =>
         $"<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe versao=\"4.00\" Id=\"{key}\"><ide><cUF>35</cUF><natOp>VENDA</natOp></ide><emit><CNPJ>11222333000181</CNPJ><xNome>EMPRESA &amp; CIA LTDA</xNome></emit></infNFe></NFe>";
 
-    private static byte[] Utf8(string s) => Encoding.UTF8.GetBytes(s);
+    private static byte[] Utf8(string s) => FiscalTestSigning.Utf8(s);
 
     [Fact]
     public async Task Document_NFe_SignsInfNFeWithRsaSha1AfterIt()
@@ -99,6 +91,34 @@ public sealed class FiscalXmlSignerTests : IDisposable
         var result = FiscalXmlValidator.VerifySignatures(signed, FiscalDocumentProfile.NFe);
         result.Signatures.Count.ShouldBe(2);
         result.IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Document_ESocialBatch_IsRefused()
+    {
+        string batch = FiscalTestSigning.ESocialBatch((FiscalTestSigning.ESocialEventId, FiscalTestSigning.ESocialEvent(FiscalTestSigning.ESocialEventId)));
+
+        var ex = Should.Throw<ArgumentException>(() => FiscalXmlSigner.Document(Utf8(batch), FiscalDocumentProfile.ESocial));
+
+        ex.Message.ShouldContain("envioLoteEventos");
+        ex.Message.ShouldContain("Sign each event, then build the batch");
+    }
+
+    [Fact]
+    public void Document_ReinfBatch_IsRefused()
+    {
+        string batch = FiscalTestSigning.ReinfBatch((FiscalTestSigning.ESocialEventId, FiscalTestSigning.ReinfEvent(FiscalTestSigning.ESocialEventId)));
+
+        Should.Throw<ArgumentException>(() => FiscalXmlSigner.Document(Utf8(batch), FiscalDocumentProfile.Reinf))
+            .Message.ShouldContain("envioLoteEventos");
+    }
+
+    [Fact]
+    public void Deferred_ESocialBatch_IsRefused()
+    {
+        string batch = FiscalTestSigning.ESocialBatch((FiscalTestSigning.ESocialEventId, FiscalTestSigning.ESocialEvent(FiscalTestSigning.ESocialEventId)));
+
+        Should.Throw<ArgumentException>(() => FiscalXmlSigner.Deferred(Utf8(batch), FiscalDocumentProfile.ESocial));
     }
 
     [Fact]
@@ -201,29 +221,6 @@ public sealed class FiscalXmlSignerTests : IDisposable
         var doc = new XmlDocument { PreserveWhitespace = true, XmlResolver = null };
         doc.LoadXml(Encoding.UTF8.GetString(xml));
         return doc;
-    }
-
-    /// <summary>A self-signed RSA certificate shaped like an e-CNPJ (SAN otherName 2.16.76.1.3.3, digitalSignature).</summary>
-    private static X509Certificate2 CreateECnpj(string cnpj)
-    {
-        var w = new AsnWriter(AsnEncodingRules.DER);
-        using (w.PushSequence())
-        {
-            using (w.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)))
-            {
-                w.WriteObjectIdentifier("2.16.76.1.3.3");
-                using (w.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)))
-                {
-                    w.WriteOctetString(Encoding.ASCII.GetBytes(cnpj));
-                }
-            }
-        }
-
-        using var key = RSA.Create(2048);
-        var request = new CertificateRequest("CN=EMPRESA EXEMPLO LTDA:11222333000181, O=ICP-Brasil Test", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        request.CertificateExtensions.Add(new X509Extension("2.5.29.17", w.Encode(), critical: false));
-        request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.NonRepudiation, true));
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
     }
 }
 

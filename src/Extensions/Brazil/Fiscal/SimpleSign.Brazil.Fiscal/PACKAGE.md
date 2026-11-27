@@ -14,4 +14,6 @@ Each layout is a profile: the signed element by its Id (or the whole document), 
 SHA-256 for eSocial/Reinf, enveloped-signature + C14N, KeyInfo with the signer certificate. The certificate is
 checked against the ICP-Brasil signing policy before signing; SHA-1 is accepted only in the SEFAZ layouts
 (`FiscalPolicies.Sefaz`). A3 tokens and cloud certificates sign through `IExternalSigner`, batches with
-`SignAllAsync`, and a local agent in two phases with `FiscalXmlSigner.Deferred`.
+`SignAllAsync`, and a local agent in two phases with `FiscalXmlSigner.Deferred`. eSocial and EFD-Reinf batches
+(`envioLoteEventos`) are validated event by event (`BatchEventId`); sign each event before building the batch, since
+a batch is refused.

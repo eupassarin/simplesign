@@ -92,6 +92,9 @@ public sealed class XmlDsigDeferredSignerBuilder
     /// <summary>The certificate chain given with the signer certificate.</summary>
     public IReadOnlyList<X509Certificate2> SignerChain => _inner.SignerChain;
 
+    /// <summary>The XML to sign. Extensions read it to check the input.</summary>
+    public ReadOnlyMemory<byte> Document => _inner.Document;
+
     /// <summary>Sets the signer's public certificate. The private key is not needed: it signs between the two phases.</summary>
     /// <param name="certificate">The signer certificate.</param>
     /// <returns>A new builder with the certificate.</returns>

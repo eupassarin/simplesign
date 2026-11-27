@@ -80,6 +80,9 @@ public sealed class XmlDsigSignerBuilder
 
     internal byte[] Xml { get; }
 
+    /// <summary>The XML to sign, as given to <see cref="XmlDsigSigner.Document"/>. Extensions read it to check the input (a fiscal layout refuses a batch it cannot sign).</summary>
+    public ReadOnlyMemory<byte> Document => Xml;
+
     /// <summary>The signer certificate given to WithCertificate or WithExternalSigner, or <see langword="null"/> before either is called. Extensions read it to pick policies.</summary>
     public X509Certificate2? SignerCertificate => Options.Certificate;
 
