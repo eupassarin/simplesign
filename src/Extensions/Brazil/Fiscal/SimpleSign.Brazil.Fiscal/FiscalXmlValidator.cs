@@ -55,9 +55,10 @@ public sealed class FiscalXmlValidator
 
     /// <summary>Creates a validator under <paramref name="profile"/> (default: <see cref="IcpBrasilProfile.Create"/>).</summary>
     /// <param name="profile">The trust profile whose chain validation checks the signers.</param>
-    public FiscalXmlValidator(TrustProfile? profile = null)
+    /// <param name="httpClientProvider">The HTTP of the AIA downloads of a chain outside the profile's providers.</param>
+    public FiscalXmlValidator(TrustProfile? profile = null, SimpleSign.Core.Http.IHttpClientProvider? httpClientProvider = null)
     {
-        _validator = new XmlDsigValidator(profile ?? IcpBrasilProfile.Create());
+        _validator = new XmlDsigValidator(profile ?? IcpBrasilProfile.Create(), httpClientProvider);
     }
 
     /// <summary>Creates a validator under ICP-Brasil with <paramref name="options"/> (the HTTP client of the LCR/OCSP checks).</summary>

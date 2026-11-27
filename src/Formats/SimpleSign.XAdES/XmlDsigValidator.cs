@@ -77,12 +77,18 @@ public sealed class XmlDsigValidationResult
 public sealed class XmlDsigValidator
 {
     private readonly TrustProfile? _profile;
+    private readonly SimpleSign.Core.Http.IHttpClientProvider _http;
 
     /// <summary>Creates a validator; with <paramref name="profile"/>, the signer chain is checked by its chain validation.</summary>
     /// <param name="profile">The trust profile (e.g. <c>IcpBrasilProfile.Create()</c>), or null to check the signatures only.</param>
-    public XmlDsigValidator(TrustProfile? profile = null)
+    /// <param name="httpClientProvider">
+    /// The HTTP of the AIA downloads that complete a chain no provider takes (KeyInfo of the fiscal layouts carries the
+    /// signer certificate only), under its outbound policy; default: <see cref="SimpleSign.Core.Http.DefaultHttpClientProvider"/>.
+    /// </param>
+    public XmlDsigValidator(TrustProfile? profile = null, SimpleSign.Core.Http.IHttpClientProvider? httpClientProvider = null)
     {
         _profile = profile;
+        _http = httpClientProvider ?? SimpleSign.Core.Http.DefaultHttpClientProvider.Instance;
     }
 
     /// <summary>Checks digests and signature values only (no chain, no network).</summary>
@@ -153,7 +159,11 @@ public sealed class XmlDsigValidator
         }
         else
         {
-            chainValid = ChainsToAnchor(certificate, profile, errors);
+            // The issuers the profile does not hold come from the certificates' AIA caIssuers.
+            var warnings = new List<string>();
+            var downloaded = await SimpleSign.Core.Validation.CertificateChainUtility.DownloadAiaCertsAsync(
+                _http.GetClient(), certificate, null, warnings, _http.OutboundPolicy, cancellationToken).ConfigureAwait(false);
+            chainValid = ChainsToAnchor(certificate, profile, downloaded, errors);
         }
 
         var identifiers = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
@@ -185,28 +195,39 @@ public sealed class XmlDsigValidator
         };
     }
 
-    /// <summary>The chain of a signer no chain validation provider takes: built to the profile's anchors (no revocation).</summary>
-    private static bool ChainsToAnchor(X509Certificate2 certificate, TrustProfile profile, List<string> errors)
+    /// <summary>
+    /// The chain of a signer no chain validation provider takes: built to one of the profile's anchors, which may be a
+    /// root or a CA at any level (a trusted list names CAs), with every certificate valid now and correctly signed. No
+    /// revocation here: that is the chain validation providers'.
+    /// </summary>
+    private static bool ChainsToAnchor(
+        X509Certificate2 certificate, TrustProfile profile, IReadOnlyList<X509Certificate2> issuers, List<string> errors)
     {
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
         var anchors = profile.Anchors();
-        if (!profile.TrustSystemRoots)
-        {
-            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-            chain.ChainPolicy.CustomTrustStore.AddRange(anchors.ToArray());
-        }
-        else
-        {
-            chain.ChainPolicy.ExtraStore.AddRange(anchors.ToArray());
-        }
-
-        if (chain.Build(certificate))
+        var anchored = anchors.Select(a => a.Thumbprint).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        using var chain = new X509Chain();
+        // KeyInfo of the fiscal layouts carries the signer certificate only: the issuers come from the anchors' providers or
+        // from the certificate's AIA, which the platform downloads (revocation stays off, as in the other validators).
+        CryptoUtility.ConfigureChainPolicy(chain, TimeSpan.FromSeconds(15));
+        chain.ChainPolicy.ExtraStore.AddRange(anchors.ToArray());
+        chain.ChainPolicy.ExtraStore.AddRange(profile.TrustAnchorProviders.SelectMany(p => p.GetIntermediateCertificates()).ToArray());
+        chain.ChainPolicy.ExtraStore.AddRange(issuers.ToArray());
+        bool built = chain.Build(certificate);
+        if (built && profile.TrustSystemRoots)
         {
             return true;
         }
 
-        errors.Add($"Chain: the signer certificate does not chain to a trust anchor of the {profile.Title} profile.");
+        // Only the root being unknown is tolerated, and only when an anchor is on the path.
+        bool sound = chain.ChainStatus.All(s => s.Status is X509ChainStatusFlags.NoError or X509ChainStatusFlags.UntrustedRoot
+            or X509ChainStatusFlags.PartialChain or X509ChainStatusFlags.OfflineRevocation or X509ChainStatusFlags.RevocationStatusUnknown);
+        if (sound && chain.ChainElements.Any(e => anchored.Contains(e.Certificate.Thumbprint)))
+        {
+            return true;
+        }
+
+        errors.Add($"Chain: the signer certificate does not chain to a trust anchor of the {profile.Title} profile"
+            + (sound ? "." : $" ({string.Join(", ", chain.ChainStatus.Select(s => s.Status))})."));
         return false;
     }
 
