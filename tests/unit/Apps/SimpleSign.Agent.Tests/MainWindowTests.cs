@@ -29,7 +29,6 @@ public sealed class MainWindowTests
     public async Task EverySectionAndPanel_Renders(string language, string theme)
     {
         MainWindow.Animate = false;
-        Directory.CreateDirectory(s_shots);
         using var first = Fixtures.RsaCertificate("CN=Maria Fernanda Oliveira, O=ICP-Brasil, C=BR");
         using var second = Fixtures.EcdsaCertificate();
         using var expiring = Fixtures.RsaCertificate("CN=Empresa Exemplo Ltda, C=BR", validDays: 12);
@@ -131,7 +130,6 @@ public sealed class MainWindowTests
     public async Task TestPage_RunsTheWholeFlowAndVerifiesTheSignature()
     {
         MainWindow.Animate = false;
-        Directory.CreateDirectory(s_shots);
         L.Use(L.Portuguese);
         Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
         using var certificate = Fixtures.RsaCertificate("CN=Maria Fernanda Oliveira, C=BR");
@@ -204,6 +202,7 @@ public sealed class MainWindowTests
         Dispatcher.UIThread.RunJobs();
         using var frame = window.CaptureRenderedFrame();
         frame.ShouldNotBeNull();
+        Directory.CreateDirectory(s_shots);
         frame.Save(Path.Combine(s_shots, name + ".png"), PngBitmapEncoderOptions.Default);
     }
 
