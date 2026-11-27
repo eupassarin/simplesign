@@ -3,7 +3,6 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleSign.Core.Constants;
-using SimpleSign.Core.Crypto;
 using SimpleSign.Core.Signing;
 using SimpleSign.Signers.Cloud.Internal;
 
@@ -118,7 +117,7 @@ public sealed class PscSigner : IExternalSigner, IDisposable
             throw new CloudSigningException("The PSC authorization has expired; authorize again.");
         }
 
-        byte[] hash = CmsSignatureBuilder.ComputeHash(request.DataToSign.Span, request.HashAlgorithm);
+        byte[] hash = ExternalSigningDigest.Compute(request);
         string id = $"{request.OperationId ?? "simplesign"}-{Interlocked.Increment(ref _sequence)}";
         var logger = Logger(_client);
         long started = Stopwatch.GetTimestamp();

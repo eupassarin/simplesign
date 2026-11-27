@@ -41,6 +41,24 @@ public sealed class Pkcs11SignatureEncoderTests
     }
 
     [Fact]
+    public void Prepare_RsaSha1XmlSignedInfo_SendsSha1DigestInfo()
+    {
+        var request = new ExternalSigningRequest(Payload, HashAlgorithmName.SHA1, Oids.RsaSha1, ExternalSigningPayloadKind.XmlCanonicalizedSignedInfo);
+
+        var plan = Pkcs11SignatureEncoder.Prepare(request, Pkcs11KeyAlgorithm.Rsa, Unix);
+
+        plan.Mechanism.ShouldBe(CkConstants.CkmRsaPkcs);
+#pragma warning disable CA5350 // the SHA-1 the fiscal layouts mandate (NF-e)
+        plan.Data.ShouldBe([.. Convert.FromHexString("3021300906052b0e03021a05000414"), .. SHA1.HashData(Payload)]);
+#pragma warning restore CA5350
+    }
+
+    [Fact]
+    public void Prepare_RsaSha1CmsSignedAttributes_IsRefused() =>
+        Should.Throw<NotSupportedException>(() =>
+            Pkcs11SignatureEncoder.Prepare(Request(Oids.RsaSha1, HashAlgorithmName.SHA1), Pkcs11KeyAlgorithm.Rsa, Unix));
+
+    [Fact]
     public void Prepare_RsaEncryptionOid_IsTreatedAsPkcs1()
     {
         var plan = Pkcs11SignatureEncoder.Prepare(Request(Oids.RsaEncryption, HashAlgorithmName.SHA256), Pkcs11KeyAlgorithm.Rsa, Unix);

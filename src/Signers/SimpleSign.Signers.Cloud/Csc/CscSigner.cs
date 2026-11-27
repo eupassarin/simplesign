@@ -92,8 +92,8 @@ public sealed class CscSigner : IExternalSigner, IDisposable
         ArgumentNullException.ThrowIfNull(request);
         ObjectDisposedException.ThrowIf(_disposed, this);
         var (signAlgo, parameters, isEcdsa) = ResolveAlgorithm(request);
-        byte[] hash = CmsSignatureBuilder.ComputeHash(request.DataToSign.Span, request.HashAlgorithm);
-        string hashOid = CmsSignatureBuilder.GetDigestOid(request.HashAlgorithm);
+        byte[] hash = ExternalSigningDigest.Compute(request);
+        string hashOid = ExternalSigningDigest.Oid(request);
 
         var logger = Logger(_client);
         long started = Stopwatch.GetTimestamp();
@@ -202,6 +202,7 @@ public sealed class CscSigner : IExternalSigner, IDisposable
 
     private static string? RsaOidFor(HashAlgorithmName hash) => hash.Name switch
     {
+        "SHA1" => Oids.RsaSha1,
         "SHA256" => Oids.RsaSha256,
         "SHA384" => Oids.RsaSha384,
         "SHA512" => Oids.RsaSha512,
