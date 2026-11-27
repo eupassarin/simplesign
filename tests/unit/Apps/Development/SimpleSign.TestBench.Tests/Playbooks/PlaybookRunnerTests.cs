@@ -49,6 +49,7 @@ public sealed class PlaybookRunnerTests(TestBenchFixture fixture)
     [InlineData("icp-brasil-pades")]
     [InlineData("icp-brasil-cades")]
     [InlineData("icp-brasil-xades")]
+    [InlineData("fiscal-xmldsig")]
     [InlineData("govbr-pades")]
     [InlineData("augment-external")]
     public async Task RunToEnd_Sample_PassesEveryStep(string sample)

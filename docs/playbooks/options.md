@@ -9,7 +9,7 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `sandbox:SIGNER` | A Sandbox signer, as `credentialId` (see the Sandbox signers below). |
 | `sample:ID` | A sample PDF as `documentId` (`contract`, …), or a PAdES validation sample as a validation's `fileId` (`valid`, `revoked`, `expired`, `tampered-content`, `untrusted-root`, `untrusted-tsa`…). |
 | `cades-sample:ID` / `xades-sample:ID` | A CAdES or XAdES sample: data to sign as `dataId` (`text`, `json`, `pdf` / `order`), or a signed file as a validation's `fileId` (`v-valid`, `v-tampered`… / `v-xades`, `v-changed`…); `ID#data` is the data a detached sample signature is checked against, as a validation's `dataId`. |
-| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:anchored`, `preset:signing:iofe`, `preset:validation:strict`, `preset:validation:iofe`, `preset:signing:icp-brasil`, `preset:validation:icp-brasil`, `preset:validation:govbr`, `preset:signing:eidas`, `preset:validation:eidas`. |
+| `preset:signing:NAME` / `preset:validation:NAME` | A built-in policy, as `signingPolicyId` or `validation.policyId`: `preset:signing:strict`, `preset:signing:minimal`, `preset:signing:anchored`, `preset:signing:iofe`, `preset:validation:strict`, `preset:validation:iofe`, `preset:signing:icp-brasil`, `preset:signing:fiscal-sefaz`, `preset:validation:icp-brasil`, `preset:validation:govbr`, `preset:signing:eidas`, `preset:validation:eidas`. |
 | `step:ID` | The file an earlier step signed, as `fileId` of a validation or as the input of a later signature. |
 | `input:ID` | The file uploaded on the Playbook tab for an input the playbook declares in `inputs` (a PDF signed elsewhere, a document to sign), wherever a file goes (`fileId`, `documentId`, `dataId`). A step whose input has no file is skipped. |
 | `sandbox-short-lived:N` | A Sandbox signer issued when the step runs and valid for N seconds (1 to 3600), as `credentialId`: with a later step's `wait`, its certificate has expired by validation time. |
@@ -187,7 +187,8 @@ Generated from the TestBench (`PlaybookSchema.OptionsMarkdown`); do not edit. A 
 | `externalObjectId` | upload |  | Additional data object (external): A file signed together with the document and kept outside the signature: its ds:Reference points to the file name and digests the file as it is. |
 | `counterSign` | toggle |  | XAdES countersignature: Countersign a signature the document already has: the new signature signs its SignatureValue and is stored in its CounterSignature unsigned property. |
 | `counterSignatureId` | text |  | Signature to countersign: The Id of the ds:Signature to countersign. Empty: the only signature of the document. |
-| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil` | Signature type: Baseline levels, or a signature policy. |
+| `kind` | choice | `Baseline`, `CustomPolicy`, `IcpBrasil`, `Fiscal` | Signature type: Baseline levels, or a signature policy. |
+| `fiscalLayout` | choice | `nfe`, `evento`, `inutilizacao`, `cte`, `mdfe`, `nfse`, `esocial`, `reinf` | Fiscal layout: The layout of the fiscal XML: the element signed by its Id (or the whole document), the hash and where the signature goes. The SEFAZ layouts sign with RSA-SHA1, under the ICP-Brasil policy with SHA-1 accepted (FiscalPolicies.Sefaz). |
 | `level` | choice | `BB`, `BT`, `BLT`, `BLTA` | Baseline level: Each level adds what a validator needs later. |
 | `policyOid` | text |  | Policy OID: The object identifier of the signature policy. |
 | `policyUri` | text |  | Policy URI: Where the policy document can be downloaded (SPuri qualifier). Optional. |

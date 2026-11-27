@@ -89,7 +89,7 @@ hover it for every reference and the call.
 |---|---|
 | What to sign | The PDF; the data and the operation (sign, co-sign, countersign) and content type of CAdES; the packaging (enveloped, enveloping, detached) of XAdES |
 | Signer | Sandbox A1, PFX, OS store, A3 token (PKCS#11) or CSC v2 |
-| Signature level | Baseline level, explicit signature policy, the CAdES and XAdES extended forms |
+| Signature level | Baseline level, explicit signature policy, an ICP-Brasil policy, the CAdES and XAdES extended forms; on the XML page, the Fiscal XML type (the plain XML-DSig of NF-e, CT-e, eSocial…, with its layout) |
 | Timestamps | The TSA of the signature timestamp and of the archive timestamp, with their credentials |
 | Cryptography | Digest, RSA PKCS#1 v1.5 or PSS |
 | Signed attributes | Claimed signing time, commitment type, signer metadata, signer roles, MIME type |

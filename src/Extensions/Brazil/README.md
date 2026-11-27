@@ -14,7 +14,7 @@ Everything SimpleSign has for Brazil's trust frameworks — the Infraestrutura d
 | [`docs/icp-brasil.md`](docs/icp-brasil.md) | The article: certificates, policies, time-stamps, validation, the command line |
 | [`docs/fiscal-xml.md`](docs/fiscal-xml.md) | Fiscal XML: the layouts, SHA-1, two phases, validation, the command line |
 | [`docs/icp-brasil-validar-check.md`](docs/icp-brasil-validar-check.md) | How a signature is checked against the ITI's VALIDAR service |
-| [`playbooks/`](playbooks) | `icp-brasil-pades.json`, `icp-brasil-cades.json`, `icp-brasil-xades.json` and `govbr-pades.json`, the playbooks the TestBench runs |
+| [`playbooks/`](playbooks) | `icp-brasil-pades.json`, `icp-brasil-cades.json`, `icp-brasil-xades.json`, `fiscal-xmldsig.json` and `govbr-pades.json`, the playbooks the TestBench runs |
 | [`tools/update-icp-intermediates.sh`](tools/update-icp-intermediates.sh) | Refreshes the bundled ICP-Brasil intermediate certificates from the ITI |
 
 The tests are in `tests/unit/Extensions/Brazil`.

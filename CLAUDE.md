@@ -87,7 +87,7 @@ src/
 │   │   │                                       (sign + --icp-policy, --aea, --health-document), `brasil cades|xades sign` (+ --icp-policy),
 │   │   │                                       `brasil fiscal sign|validate` (xmldsig sign + --layout), `brasil timestamp verify`, Lei 14.063 in validate/inspect
 │   │   ├── docs/                               icp-brasil.md, icp-brasil-validar-check.md, fiscal-xml.md
-│   │   ├── playbooks/                          icp-brasil-pades.json, icp-brasil-cades.json, icp-brasil-xades.json, govbr-pades.json
+│   │   ├── playbooks/                          icp-brasil-pades.json, icp-brasil-cades.json, icp-brasil-xades.json, fiscal-xmldsig.json, govbr-pades.json
 │   │   └── tools/update-icp-intermediates.sh   refreshes the bundled intermediates
 │   ├── Europe/Eidas/                         everything of eIDAS lives here
 │   │   ├── SimpleSign.Europe.Eidas/            eIDAS (EU): anchors from the EU LOTL (pivots followed), qualification (QESig, AdESig-QC…), policies

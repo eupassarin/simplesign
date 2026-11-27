@@ -111,6 +111,13 @@ a PKCS#11 token or a cloud certificate; `--prepare` and `deferred complete`; `--
 anchors and the layout's policy. `--element`, `--hash`, `--placement` and `--canonicalization` are set by `--layout`.
 `--signing-policy` replaces the layout's policy; the preset `fiscal-sefaz` is `FiscalPolicies.Sefaz`.
 
+## TestBench
+
+The XML page has a **Fiscal XML** signature type: choose the layout, a sample (NF-e, event, CT-e, eSocial) or your own
+XML, and sign through the library or the CLI, in one call or in two phases. The playbook `fiscal-xmldsig` runs every
+family, the refusal of SHA-1 outside `fiscal-sefaz` and the two phases, with the Sandbox's trust added to the
+icp-brasil profile.
+
 ## Checking against the authorities
 
 The tests check each layout with .NET's own `SignedXml`, independently of this implementation. Before production,

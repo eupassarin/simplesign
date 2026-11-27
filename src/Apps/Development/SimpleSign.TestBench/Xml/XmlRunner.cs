@@ -129,7 +129,10 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
             try
             {
                 var controls = await SigningControls.ResolveAsync(report.Effective.SigningControls, sandbox, cancellationToken);
-                code = new XadesPlan(report.Effective, new PlanContext(credential, sandbox, documents) { Controls = controls }).Code(credential.Facts);
+                var planContext = new PlanContext(credential, sandbox, documents) { Controls = controls };
+                code = report.Effective.Kind == XadesKind.Fiscal
+                    ? new FiscalPlan(report.Effective, planContext).Code()
+                    : new XadesPlan(report.Effective, planContext).Code(credential.Facts);
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or SigningException or HttpRequestException or KeyNotFoundException)
             {
@@ -172,6 +175,11 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         catch (Exception ex) when (ex is SigningException or ArgumentException or HttpRequestException)
         {
             return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), new CodeSnippets("", "", []));
+        }
+
+        if (o.Kind == XadesKind.Fiscal)
+        {
+            return await RunFiscalAsync(report, credential, data, controls, engine, cancellationToken);
         }
 
         var context = new PlanContext(credential, sandbox, documents) { Controls = controls };
@@ -494,6 +502,152 @@ internal sealed class XmlRunner(SandboxEnvironment sandbox, DocumentStore docume
         }
 
         return byUri;
+    }
+
+    /// <summary>
+    /// Signs a fiscal layout (<see cref="XadesKind.Fiscal"/>) with <c>FiscalXmlSigner</c> or <c>simplesign brasil fiscal
+    /// sign</c>, in one call or in two phases, and validates it with <c>FiscalXmlValidator</c>.
+    /// </summary>
+    private async Task<XmlSignResult> RunFiscalAsync(
+        XmlOptionsReport report, CredentialHandle credential, StoredFile data, SigningControls controls, string engine, CancellationToken cancellationToken)
+    {
+        var o = report.Effective;
+        var context = new PlanContext(credential, sandbox, documents) { Controls = controls };
+        FiscalPlan plan;
+        CodeSnippets code;
+        try
+        {
+            plan = new FiscalPlan(o, context);
+            code = plan.Code();
+        }
+        catch (ArgumentException ex)
+        {
+            return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), new CodeSnippets("", "", []));
+        }
+
+        var watch = Stopwatch.StartNew();
+        byte[] signed;
+        var warnings = new List<string>();
+        IReadOnlyList<CliStep>? cliSteps = null;
+        try
+        {
+            if (engine == RunEngines.Cli)
+            {
+                if (CliJobs.Unsupported(credential) is { } unsupported)
+                {
+                    return Failure(report, unsupported, "CliUnsupported", code);
+                }
+
+                var jobs = new CliJobs().Credential(credential).Uploads(o, o.SigningPolicyId, documents).File(DataFile, data.Content);
+                foreach (var (name, content) in controls.CliFiles())
+                {
+                    jobs.File(name, content);
+                }
+
+                var signOutside = o.TwoPhases ? TwoPhaseSupport.SignOutside(credential, DataFile, plan.Layout.HashAlgorithm, pss: false) : null;
+                var outcome = await _cli.RunAsync(jobs.Build(code.CliCommands, signOutside), cancellationToken);
+                controls.Report(outcome.AuditTrail);
+                if (!outcome.Success)
+                {
+                    return Failure(report, outcome.Error!, outcome.Json?.ErrorType ?? "Cli", code) with { Cli = outcome.Steps };
+                }
+
+                signed = outcome.Output!;
+                cliSteps = outcome.Steps;
+            }
+            else
+            {
+                var builder = plan.Builder(data.Content);
+                if (o.TwoPhases)
+                {
+                    // Phase 1 (server), phase 2 (the signer: the canonical SignedInfo), phase 3 (server, from the session).
+                    byte[] integrityKey = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+                    var prepared = await XmlDsigDeferredSigner.From(builder).WithSessionIntegrityKey(integrityKey).PrepareAsync(cancellationToken);
+                    byte[] raw = await SigningRunner.SignRequestAsync(credential, prepared.ToSigningRequest(), cancellationToken);
+                    var resumed = XmlDsigDeferredSigner.Resume(prepared.SessionData, integrityKey).WithLogger(RunLog.Logger);
+                    resumed = controls.Audit is { } audit ? resumed.WithAuditSink(audit) : resumed;
+                    signed = await resumed.CompleteAsync(raw, cancellationToken);
+                    warnings.AddRange(prepared.Warnings.Select(w => w.Message));
+                }
+                else
+                {
+                    signed = await builder.SignAsync(cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Failure(report, ex.Message, SigningRunner.ErrorTypeOf(ex), code);
+        }
+        finally
+        {
+            if (cliSteps is null && engine != RunEngines.Cli)
+            {
+                controls.Report(cliTrail: null);
+            }
+        }
+
+        long signMs = watch.ElapsedMilliseconds;
+        string fileName = OutputName(o, data.FileName);
+        var output = documents.Add(fileName, signed);
+        var view = o.Validate ? await ValidateFiscalAsync(signed, plan.Layout, o.Validation ?? new ValidationSettings(), cancellationToken) : null;
+        var signedResult = new XmlSignResult(true, null, null, output.Id, fileName, signed.LongLength, report.EffectiveLevel, report.EffectiveLevel,
+            warnings, signMs, view, code, report.Issues);
+        return signedResult with { Cli = cliSteps };
+    }
+
+    /// <summary>
+    /// Validates the XML-DSig signatures of a fiscal XML: the layout, the digests and signature values, and the chain under
+    /// the trust of <paramref name="settings"/> (its profile, the Sandbox's anchors).
+    /// </summary>
+    internal async Task<XmlValidationView> ValidateFiscalAsync(
+        byte[] xml, SimpleSign.Brazil.Fiscal.FiscalDocumentProfile layout, ValidationSettings settings, CancellationToken cancellationToken)
+    {
+        var watch = Stopwatch.StartNew();
+        var trust = await validation.TrustAsync(settings, cancellationToken);
+        // The trust of the settings, as the XAdES validator takes it: the roots, the providers, the profile's.
+        var roots = new RootsProvider(trust.Options.TrustedRoots ?? []);
+        var profile = new SimpleSign.Core.Extensions.TrustProfile("testbench", "TestBench", null, SimpleSign.Core.Policies.ValidationPolicy.Default,
+            [roots, .. trust.Providers, .. trust.Options.Profile?.TrustAnchorProviders ?? []],
+            [.. trust.ChainValidation, .. trust.Options.Profile?.ChainValidationProviders ?? []])
+        {
+            SignerIdentityReaders = [SimpleSign.Brazil.BrazilSignerIdentityReader.Instance],
+            TrustSystemRoots = trust.Options.TrustSystemRoots,
+        };
+        var result = await new SimpleSign.Brazil.Fiscal.FiscalXmlValidator(profile, sandbox).ValidateAsync(xml, layout, trust.Options.CheckRevocation, cancellationToken);
+
+        static string Status(bool? ok) => ok switch { true => "pass", false => "fail", null => "n/a" };
+        var reports = new List<XmlSignatureReport>();
+        foreach (var (s, i) in result.Signatures.Select((s, i) => (s, i)))
+        {
+            var v = s.Signature;
+            string indication = !v.IsDigestValid || !v.IsSignatureValid || s.LayoutErrors.Count > 0 ? "Invalid"
+                : v.IsChainValid == false || v.Errors.Count > 0 ? "Indeterminate"
+                : "Valid";
+            var checks = new List<CheckRow>
+            {
+                new("signature", L.T("Signature value and references"), Status(v.IsDigestValid && v.IsSignatureValid), v.HashAlgorithm),
+                new("layout", L.T("Fiscal layout"), Status(s.LayoutErrors.Count == 0), layout.Name),
+                new("chain", L.T("Certificate chain"), Status(v.IsChainValid), s.Cnpj is { } cnpj ? "CNPJ " + cnpj : s.Cpf is { } cpf ? "CPF " + cpf : null),
+            };
+            reports.Add(new XmlSignatureReport(i, v.ReferenceUri.Length == 0 ? "URI=\"\"" : v.ReferenceUri, CadesInspector.SimpleName(v.Certificate),
+                indication, "XML-DSig", null, checks, [.. s.Errors], [], indication == "Indeterminate" ? "NO_CERTIFICATE_CHAIN_FOUND" : null));
+        }
+
+        string? signatureXml = XmlInspector.SignatureXml(xml);
+        var view = View(reports, signatureXml, XmlInspector.Preview(xml), watch.ElapsedMilliseconds, new CodeSnippets(
+            "var result = await new FiscalXmlValidator(profile).ValidateAsync(xml, FiscalDocumentProfile." + layout.Name + ");", "", []));
+        return result.Errors.Count == 0 ? view : view with { Errors = [.. view.Errors, .. result.Errors] };
+    }
+
+    /// <summary>The trusted roots of the validation options, as a provider of the fiscal validation's profile.</summary>
+    private sealed class RootsProvider(IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> roots) : SimpleSign.Core.Extensions.ITrustAnchorProvider
+    {
+        public string RegionCode => "TestBench";
+
+        public string DisplayName => "TestBench validation trust";
+
+        public IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2> GetTrustAnchors() => roots;
     }
 
     private static string OutputName(XmlOptions o, string input)

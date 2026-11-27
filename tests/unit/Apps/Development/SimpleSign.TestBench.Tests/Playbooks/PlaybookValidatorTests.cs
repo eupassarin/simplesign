@@ -246,7 +246,7 @@ public sealed class PlaybookValidatorTests
     [Fact]
     public void Samples_AreValidPlaybooks()
     {
-        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["augment-external", "eidas-baseline", "etsi-baseline", "govbr-pades", "icp-brasil-cades", "icp-brasil-pades", "icp-brasil-xades", "indecopi-guia-v4", "sandbox-basics"]);
+        PlaybookSamples.All.Select(s => s.Id).ShouldBe(["augment-external", "eidas-baseline", "etsi-baseline", "fiscal-xmldsig", "govbr-pades", "icp-brasil-cades", "icp-brasil-pades", "icp-brasil-xades", "indecopi-guia-v4", "sandbox-basics"]);
         foreach (var sample in PlaybookSamples.All)
         {
             var check = PlaybookValidator.Check(PlaybookSamples.Json(sample.Id)!, sandbox: null);
@@ -322,7 +322,7 @@ public sealed class PlaybookValidatorTests
             .SelectMany(id => RunKeys(id).Select(r => (r.Key, Name: $"{id}:{r.Step.Id}")))
             .GroupBy(r => r.Key, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First().Name, StringComparer.Ordinal);
-        var repeated = new[] { "indecopi-guia-v4", "icp-brasil-pades", "icp-brasil-cades", "icp-brasil-xades", "govbr-pades", "eidas-baseline" }
+        var repeated = new[] { "indecopi-guia-v4", "icp-brasil-pades", "icp-brasil-cades", "icp-brasil-xades", "fiscal-xmldsig", "govbr-pades", "eidas-baseline" }
             .SelectMany(id => RunKeys(id).Where(r => !r.FileUsed && generic.ContainsKey(r.Key)).Select(r => $"{id}:{r.Step.Id} = {generic[r.Key]}"))
             .ToList();
 

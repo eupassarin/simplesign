@@ -14,7 +14,7 @@ from the published standards; check them against the version you follow before q
 |---|---|---|---|
 | PAdES | 143 | 142 | 1 |
 | CAdES | 86 | 85 | 1 |
-| XAdES | 95 | 91 | 4 |
+| XAdES | 105 | 101 | 4 |
 
 ## PAdES
 
@@ -280,6 +280,16 @@ ETSI EN 319 132-1 (XAdES building blocks and baseline signatures); ETSI EN 319 1
 | Signature level | Signature type: Baseline | ETSI EN 319 102-1 · Annex B Signature classes | `WithLevel(AdesBaselineProfile.…)` | yes |
 | Signature level | Signature type: Explicit signature policy | ETSI EN 319 132-1 · §5.2.9 SignaturePolicyIdentifier | `WithSignaturePolicy(new SignaturePolicyReference(oid, hashOid, hash, uri))` | yes |
 | Signature level | Signature type: ICP-Brasil signature policy | DOC-ICP-15.03 · Signature policies of ICP-Brasil | `WithIcpBrasilPolicy(IcpBrasilPolicy)` | yes |
+| Signature level | Signature type: Fiscal XML (NF-e, CT-e, eSocial…) | W3C XMLDSig Core 1.1 · §6.6.4 Enveloped Signature Transform<br>MOC NF-e 4.00 · Assinatura digital | `FiscalXmlSigner.Document(xml, FiscalDocumentProfile.NFe)` | yes |
+| Signature level | Fiscal layout | MOC NF-e 4.00 · Assinatura digital | `FiscalDocumentProfile` | yes |
+| Signature level | Fiscal layout: NF-e / NFC-e |  | `FiscalDocumentProfile.NFe` | yes |
+| Signature level | Fiscal layout: Event (NF-e, CT-e, MDF-e) |  | `FiscalDocumentProfile.Evento` | yes |
+| Signature level | Fiscal layout: Number voiding (inutilização) |  | `FiscalDocumentProfile.Inutilizacao` | yes |
+| Signature level | Fiscal layout: CT-e |  | `FiscalDocumentProfile.CTe` | yes |
+| Signature level | Fiscal layout: MDF-e |  | `FiscalDocumentProfile.MDFe` | yes |
+| Signature level | Fiscal layout: NFS-e Nacional (DPS) |  | `FiscalDocumentProfile.NFSeDps` | yes |
+| Signature level | Fiscal layout: eSocial |  | `FiscalDocumentProfile.ESocial` | yes |
+| Signature level | Fiscal layout: EFD-Reinf |  | `FiscalDocumentProfile.Reinf` | yes |
 | Signature level | Baseline level | ETSI EN 319 132-1 · §6.2 Signature levels<br>ETSI EN 319 132-1 · §6.3 Requirements | `WithLevel(AdesBaselineProfile)` | yes |
 | Signature level | Baseline level: B-B (basic) | ETSI EN 319 132-1 · §6.3 XAdES-B-B | `AdesBaselineProfile.Basic()` | yes |
 | Signature level | Baseline level: B-T (timestamp) | ETSI EN 319 132-1 · §5.3 SignatureTimeStamp (XAdES-B-T)<br>RFC 3161 · Time-Stamp Protocol | `AdesBaselineProfile.Timestamped(tsa)` | yes |
@@ -656,6 +666,13 @@ Each clause and the options that implement it.
 |---|---|---|---|
 | QR Code | QR code | PAdES | yes |
 
+### MOC NF-e 4.00
+
+| Clause | Option | Formats | Implemented |
+|---|---|---|---|
+| Assinatura digital | Fiscal layout | XAdES | yes |
+| Assinatura digital | Signature type: Fiscal XML (NF-e, CT-e, eSocial…) | XAdES | yes |
+
 ### RFC 2634
 
 | Clause | Option | Formats | Implemented |
@@ -790,4 +807,5 @@ Each clause and the options that implement it.
 | §4.4.3.1 The URI attribute | Reference URI | XAdES | yes |
 | §6.2 Message digests | Digest algorithm | PAdES, CAdES, XAdES | yes |
 | §6.6 Transform algorithms | XPath and XSLT transforms | XAdES | **no** |
+| §6.6.4 Enveloped Signature Transform | Signature type: Fiscal XML (NF-e, CT-e, eSocial…) | XAdES | yes |
 | §6.6.4 Enveloped signature transform | Packaging: Enveloped | XAdES | yes |

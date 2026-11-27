@@ -52,6 +52,14 @@ public static class XmlCompatibility
             Error(StepData, L.T("The file is not well-formed XML: {0}", data.Error));
         }
 
+        if (o.Kind == XadesKind.Fiscal)
+        {
+            string fiscalLevel = EvaluateFiscal(o, credential, state, Error, out var fiscal);
+            Set("signingPolicy", OptionState.Shown);
+            SharedRules.Signer(credential, Error, Warn, StepSigner, signingPolicy);
+            return new XmlOptionsReport(state, issues, fiscal, fiscalLevel);
+        }
+
         string level = EvaluateXades(o, data, credential, state, Error, sandboxConnected, out var effective);
 
         // ── 2. Signer ──────────────────────────────────────────────────
@@ -59,6 +67,75 @@ public static class XmlCompatibility
         SharedRules.Signer(credential, Error, Warn, StepSigner, signingPolicy);
         return new XmlOptionsReport(state, issues, effective, level);
     }
+
+    /// <summary>The options of XAdES that a plain XML-DSig signature of a fiscal layout does not have.</summary>
+    private static readonly string[] s_notFiscal =
+    [
+        "counterSign", "counterSignatureId", "dataUri", "detachedBinary", "level", "icpPolicy", "customPolicy", "extendedForm",
+        "dataObjectsTimestamp", "timestamp", "hash", "padding", "signingCertificate", "roles", "certifiedRoles", "additionalObjects",
+        "mimeType", "productionPlace", "canonicalization", "revocationPreference", "commitment",
+    ];
+
+    /// <summary>
+    /// A fiscal layout (SimpleSign.Brazil.Fiscal): the layout sets the element, the hash, the placement and C14N; the
+    /// signature is plain XML-DSig, RSA PKCS#1 v1.5, with no level, timestamp or XAdES property.
+    /// </summary>
+    private static string EvaluateFiscal(XmlOptions o, CredentialFacts? credential, Dictionary<string, OptionState> state,
+        Action<string, string> error, out XmlOptions effective)
+    {
+        string notXades = L.T("A fiscal layout is a plain XML-DSig signature: the layout sets this, and XAdES properties do not apply.");
+        foreach (string key in s_notFiscal)
+        {
+            state[key] = OptionState.Hidden;
+        }
+
+        foreach (var form in Enum.GetValues<XadesFormChoice>())
+        {
+            state[$"form.{form}"] = form == XadesFormChoice.Enveloped ? OptionState.Shown : OptionState.Off(notXades);
+        }
+
+        foreach (var kind in Enum.GetValues<XadesKind>())
+        {
+            state[$"kind.{kind}"] = OptionState.Shown;
+        }
+
+        state["fiscalLayout"] = OptionState.Shown;
+        var layout = FiscalLayout(o.FiscalLayout);
+        if (layout is null)
+        {
+            error(StepType, L.T("Unknown fiscal layout."));
+        }
+
+        if (credential is not null && credential.KeyAlgorithm != "RSA")
+        {
+            error(StepSigner, L.T("The fiscal layouts sign with RSA: choose an RSA signer."));
+        }
+
+        effective = o with
+        {
+            Form = XadesFormChoice.Enveloped,
+            Level = BaselineLevel.BB,
+            ExtendedForm = XadesExtendedChoice.None,
+            CounterSign = false,
+            CounterSignatureId = null,
+            DataObjectsTimestamp = false,
+            Padding = RsaPadding.Pkcs1,
+            Hash = HashChoice.Sha256,
+            SignerRoles = [],
+            AttributeCertificateId = null,
+            SignedAssertionId = null,
+            EmbeddedObjectId = null,
+            ExternalObjectId = null,
+            MimeType = null,
+            Commitment = null,
+            SigningTime = null,
+        };
+        return "XML-DSig" + (layout is null ? "" : $" ({layout.Name})");
+    }
+
+    /// <summary>The fiscal layout of a <c>fiscalLayout</c> value, or null.</summary>
+    internal static SimpleSign.Brazil.Fiscal.FiscalDocumentProfile? FiscalLayout(string? name) =>
+        name is not null && SimpleSign.Brazil.Fiscal.FiscalDocumentProfile.ByName.TryGetValue(name, out var layout) ? layout : null;
 
     private static string EvaluateXades(XmlOptions o, XmlFacts? data, CredentialFacts? credential, Dictionary<string, OptionState> state,
         Action<string, string> error, bool sandboxConnected, out XmlOptions effective)

@@ -61,7 +61,12 @@ changed since:
   ICP-Brasil before signing, which refuses test certificates unless the policy says otherwise.
 - An A3 token signs an NF-e the same way as a PDF: the server prepares (`FiscalXmlSigner.Deferred`), the agent signs
   the `SignedInfo` and the server completes.
-- `XmlDsigValidator` checks the chain through a trust profile's chain validation providers (or its anchors); it does
-  not apply a validation policy, so SHA-1 signatures are not marked by the default policy's SHA-1 cut-off of 2012.
+- `XmlDsigValidator` checks the chain through a trust profile's chain validation providers, or else builds it to one of
+  the profile's anchors (a root or a CA at any level, as a trusted list names them), downloading from the AIA the issuers
+  that KeyInfo, which carries the signer certificate only, lacks. It does not apply a validation policy, so SHA-1
+  signatures are not marked by the default policy's SHA-1 cut-off of 2012.
+- The TestBench's XML page has a Fiscal XML type next to XAdES: it is a kind of the page (the samples, the profile menu
+  and the playbooks are the page's) with its own plan and runner, since the steps of a XAdES plan transform a
+  `XadesSignerBuilder`.
 - The CLI's `validate` annotations of the `brasil` extension (Lei 14.063, the ICP-Brasil data) are still shown for PDF
   signatures only: the CAdES and XAdES validators do not produce the chain region and data they read.

@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after the element or at the end of the root (`WithPlacement`), `SignAllAsync` for a batch. The signing policy, the
   trust anchors and the audit sink apply as in XAdES. `XmlDsigDeferredSigner` makes it in two phases (ADR 0028), and
   `XmlDsigValidator` checks digests, signature values, duplicate Ids (signature wrapping) and, with a trust profile, the
-  signer chain.
+  signer chain (an anchor at any level; the issuers KeyInfo lacks are downloaded from the AIA, under the outbound policy
+  of the `IHttpClientProvider` it is given).
 - **`SimpleSign.Brazil.Fiscal` is back**, on `XmlDsigSigner` (removed in 0.13.0; the last version with it was 0.12.0):
   NF-e/NFC-e, events, inutilização, CT-e, MDF-e, NFS-e DPS, eSocial and EFD-Reinf. `FiscalXmlSigner.Document(xml,
   FiscalDocumentProfile.NFe)` returns a builder set for the layout, the ICP-Brasil anchors and the layout's signing
@@ -36,8 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (CMS signed attributes are still refused), and the Agent's `/api/sign` takes `hashAlgorithm: SHA1` for a `SignedInfo`
   whose SignatureMethod is rsa-sha1 with an RSA key, and nothing else.
 - **TestBench**: the XML page signs under an ICP-Brasil policy again, and the ICP-Brasil types of the XML and CAdES pages
-  run through the CLI too (`brasil xades sign`, `brasil cades sign`). Playbooks `icp-brasil-cades` and
-  `icp-brasil-xades`.
+  run through the CLI too (`brasil xades sign`, `brasil cades sign`). The XML page has a **Fiscal XML** signature type
+  (the layout to choose, NF-e, event, CT-e and eSocial samples, the `fiscal-sefaz` signing policy preset), signed through
+  the library or `brasil fiscal sign`, in one call or in two phases, and checked with `FiscalXmlValidator`. Playbooks
+  `icp-brasil-cades`, `icp-brasil-xades` and `fiscal-xmldsig`.
 
 - **`SigningWarning.Reason`** (`SigningErrorReason?`) and the codes `SigningWarningCode.SignatureTimestampRefused` (7)
   and `ArchiveTimestampRefused` (8). A timestamp left out under `ReturnLowerLevel` now tells why:
