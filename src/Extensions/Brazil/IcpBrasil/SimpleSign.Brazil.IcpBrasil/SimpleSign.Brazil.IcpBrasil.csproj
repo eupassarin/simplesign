@@ -20,6 +20,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Tests" />
+    <!-- The XML LPA refresh (IcpBrasilXadesPolicies.RefreshAsync): download, ITI signer check and apply. -->
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Xades" />
+    <InternalsVisibleTo Include="SimpleSign.Brazil.IcpBrasil.Xades.Tests" />
   </ItemGroup>
 
   <ItemGroup>

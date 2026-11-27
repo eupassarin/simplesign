@@ -26,6 +26,7 @@ Update `<Version>` in all `.csproj` files:
 | `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj` | ICP-Brasil |
 | `src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj` | Gov.br |
 | `src/Extensions/Brazil/Fiscal/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj` | Fiscal XML (NF-e, CT-e, MDF-e, NFS-e, eSocial, EFD-Reinf) |
+| `src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj` | ICP-Brasil XAdES |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj` | IOFE (Peru) |
 | `src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj` | IOFE CLI extension (its `extension.json` takes the version from here) |
 | `src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj` | Brazil CLI extension (ICP-Brasil, Gov.br) |
@@ -55,6 +56,7 @@ sed -i '' "s/<Version>$OLD</<Version>$VERSION</g" \
   src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil/SimpleSign.Brazil.IcpBrasil.csproj \
   src/Extensions/Brazil/GovBr/SimpleSign.Brazil.GovBr/SimpleSign.Brazil.GovBr.csproj \
   src/Extensions/Brazil/Fiscal/SimpleSign.Brazil.Fiscal/SimpleSign.Brazil.Fiscal.csproj \
+  src/Extensions/Brazil/IcpBrasil/SimpleSign.Brazil.IcpBrasil.Xades/SimpleSign.Brazil.IcpBrasil.Xades.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe/SimpleSign.Peru.Iofe.csproj \
   src/Extensions/Peru/Iofe/SimpleSign.Peru.Iofe.Cli/SimpleSign.Peru.Iofe.Cli.csproj \
   src/Extensions/Brazil/SimpleSign.Brazil.Cli/SimpleSign.Brazil.Cli.csproj \

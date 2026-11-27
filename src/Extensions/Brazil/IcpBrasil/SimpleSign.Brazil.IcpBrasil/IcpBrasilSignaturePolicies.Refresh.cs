@@ -65,7 +65,7 @@ public sealed record IcpBrasilLpa(IReadOnlyList<IcpBrasilLpaEntry> Entries, Date
 
     /// <summary>
     /// Parses the XML LPA (<c>LPA_XAdES.xml</c>, namespace <c>http://www.iti.gov.br/LPA/v2#</c>).
-    /// This does not verify its XML signature.
+    /// This does not verify its XML signature (SimpleSign.Brazil.IcpBrasil.Xades does).
     /// </summary>
     /// <param name="lpa">The LPA bytes.</param>
     /// <exception cref="ArgumentException">The bytes are not an XML LPA.</exception>
@@ -179,7 +179,7 @@ public static partial class IcpBrasilSignaturePolicies
     /// Call it at start-up or when <see cref="IcpBrasilLpa.NextUpdate"/> has passed; on failure the current catalog is kept.
     /// </summary>
     /// <param name="httpClient">HTTP client for the ITI repository, LCRs and AIA.</param>
-    /// <param name="format">PAdES or CAdES.</param>
+    /// <param name="format">PAdES or CAdES (for XAdES, use IcpBrasilXadesPolicies.RefreshAsync in SimpleSign.Brazil.IcpBrasil.Xades).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The LPA that was applied.</returns>
     /// <exception cref="CryptographicException">The LPA signature or a PA digest does not verify.</exception>
