@@ -54,9 +54,17 @@ public sealed class BrasilCliExtension : ICliExtension
         ArgumentNullException.ThrowIfNull(config);
         config.AddBranch(ExtensionName, brasil =>
         {
-            brasil.SetDescription("Brazil: sign under ICP-Brasil and Lei 14.063, check an ICP-Brasil time-stamp");
+            brasil.SetDescription("Brazil: sign under ICP-Brasil and Lei 14.063, sign fiscal XML (NF-e…), check an ICP-Brasil time-stamp");
             brasil.AddCommand<BrasilSignCommand>("sign")
                 .WithDescription("Sign a PDF as 'simplesign sign' does (its options are accepted here: see 'simplesign sign --help'), plus an ICP-Brasil policy, an advanced electronic signature (Lei 14.063) or a VALIDAR health document");
+            brasil.AddBranch("fiscal", fiscal =>
+            {
+                fiscal.SetDescription("Fiscal XML (NF-e, NFC-e, CT-e, MDF-e, events, NFS-e, eSocial, EFD-Reinf): XML-DSig under ICP-Brasil");
+                fiscal.AddCommand<BrasilFiscalSignCommand>("sign")
+                    .WithDescription("Sign fiscal XML as 'simplesign xmldsig sign' does (its options are accepted here: see 'simplesign xmldsig sign --help'), with the layout of --layout");
+                fiscal.AddCommand<BrasilFiscalValidateCommand>("validate")
+                    .WithDescription("Validate the signatures of a fiscal XML: the layout, and the ICP-Brasil chain of each signer");
+            });
             brasil.AddBranch("timestamp", timestamp =>
             {
                 timestamp.SetDescription("ICP-Brasil time-stamps (ACT)");
@@ -95,6 +103,7 @@ public sealed class BrasilCliExtension : ICliExtension
         new Dictionary<string, Func<SigningPolicy>>(StringComparer.OrdinalIgnoreCase)
         {
             ["icp-brasil"] = () => IcpBrasilPolicies.Signing,
+            ["fiscal-sefaz"] = () => SimpleSign.Brazil.Fiscal.FiscalPolicies.Sefaz,
         };
 
     /// <inheritdoc />
@@ -130,6 +139,8 @@ public sealed class BrasilCliExtension : ICliExtension
     [
         new([ExtensionName, "sign"], typeof(BrasilSignCommand.Settings)),
         new([BranchAlias, "sign"], typeof(BrasilSignCommand.Settings)),
+        new([ExtensionName, "fiscal", "sign"], typeof(BrasilFiscalSignCommand.Settings)),
+        new([BranchAlias, "fiscal", "sign"], typeof(BrasilFiscalSignCommand.Settings)),
     ];
 
     /// <inheritdoc />

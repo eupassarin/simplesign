@@ -268,9 +268,9 @@ internal sealed class DeferredPrepareCommand(ICertificateChainService certChainS
 /// <summary>
 /// Deferred signing, step 2: completes with the signature made elsewhere a session written by
 /// <c>deferred prepare</c> or by <c>sign</c>, <c>cades sign</c> or <c>xades sign</c> with <c>--prepare</c>.
-/// The format (PAdES, CAdES or XAdES) is read from the session.
+/// The format (PAdES, CAdES, XAdES or XML-DSig) is read from the session.
 /// </summary>
-[Description("Complete a prepared signature (PAdES, CAdES or XAdES) with the signature made elsewhere")]
+[Description("Complete a prepared signature (PAdES, CAdES, XAdES or XML-DSig) with the signature made elsewhere")]
 internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCommand.Settings>
 {
     /// <summary>Settings of <c>deferred complete</c>.</summary>
@@ -393,12 +393,30 @@ internal sealed class DeferredCompleteCommand : AsyncCommand<DeferredCompleteCom
         {
             "cades" => settings.DetachedDataPath is not null || settings.ExternalObjects is { Length: > 0 } ? "--detached-data and --external-object are for a XAdES session; this one is CAdES." : null,
             "xades" => settings.ContentPath is not null ? "--content is for a CAdES session; this one is XAdES." : null,
+            "xmldsig" => (settings.ContentPath ?? settings.DetachedDataPath) is not null || settings.ExternalObjects is { Length: > 0 }
+                ? "--content, --detached-data and --external-object are for CAdES and XAdES sessions; this one is XML-DSig." : null,
             _ => settings.ContentPath is not null || settings.DetachedDataPath is not null || settings.ExternalObjects is { Length: > 0 }
                 ? "--content, --detached-data and --external-object are for CAdES and XAdES sessions; this one is PAdES." : null,
         };
         if (misplaced is not null)
         {
             throw new InvalidOperationException(misplaced);
+        }
+
+        if (format == "xmldsig")
+        {
+            var plain = XmlDsigDeferredSigner.Resume(session, key);
+            plain = audit is null ? plain : plain.WithAuditSink(audit);
+            byte[] signedXml = await plain.CompleteAsync(signature, cancellationToken);
+            await File.WriteAllBytesAsync(settings.OutputPath, signedXml, cancellationToken);
+            if (settings.Json)
+            {
+                SignJson.WriteSuccess(format, settings.OutputPath, signer: string.Empty);
+                return 0;
+            }
+
+            AnsiConsole.MarkupLine($"[green]✓ Signed:[/] {settings.OutputPath.EscapeMarkup()} (XML-DSig)");
+            return 0;
         }
 
         ISigningResult result;

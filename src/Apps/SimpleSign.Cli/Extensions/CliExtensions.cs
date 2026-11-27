@@ -76,19 +76,32 @@ internal static class CliExtensions
         CliArguments.Normalize(args, Active.SelectMany(e => e.PassThroughCommands));
 
     /// <summary>
-    /// Runs the standard <c>sign</c> for an extension's command: a command line of its own, with the request in scope
-    /// for <see cref="SignCommand"/> to read. What goes wrong is thrown to the command that asked.
+    /// Runs a standard signing command for an extension's command (<c>sign</c>, or the one <see cref="CliSignRequest.Command"/>
+    /// names): a command line of its own, with the request in scope for the command to read. What goes wrong is thrown to
+    /// the command that asked.
     /// </summary>
     private static async Task<int> SignAsync(CliSignRequest request, CancellationToken cancellationToken)
     {
         using var scope = SignScope.Enter(request);
-        var app = new CommandApp<SignCommand>(Program.CreateRegistrar());
+        return request.Command switch
+        {
+            CliSignCommand.CadesSign => await RunAsync<CadesSignCommand>("simplesign cades sign", request, cancellationToken),
+            CliSignCommand.XadesSign => await RunAsync<XadesSignCommand>("simplesign xades sign", request, cancellationToken),
+            CliSignCommand.XmlDsigSign => await RunAsync<XmlDsigSignCommand>("simplesign xmldsig sign", request, cancellationToken),
+            _ => await RunAsync<SignCommand>("simplesign sign", request, cancellationToken),
+        };
+    }
+
+    private static Task<int> RunAsync<TCommand>(string name, CliSignRequest request, CancellationToken cancellationToken)
+        where TCommand : class, ICommand
+    {
+        var app = new CommandApp<TCommand>(Program.CreateRegistrar());
         app.Configure(config =>
         {
-            config.SetApplicationName("simplesign sign");
+            config.SetApplicationName(name);
             config.PropagateExceptions();
         });
-        return await app.RunAsync(request.Arguments, cancellationToken);
+        return app.RunAsync(request.Arguments, cancellationToken);
     }
 
     /// <summary>Adds the commands of the extensions in use.</summary>

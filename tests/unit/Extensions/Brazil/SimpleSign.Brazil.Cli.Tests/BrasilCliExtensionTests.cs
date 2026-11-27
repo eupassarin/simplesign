@@ -53,10 +53,11 @@ public sealed class BrasilCliExtensionTests : IDisposable
         extension.Name.ShouldBe("brasil");
         extension.Profiles.Select(p => p.Name).ShouldBe(["icp-brasil", "gov-br"]);
         extension.Profiles[1].CannotSign.ShouldNotBeNull();
-        extension.SigningPolicies.Keys.ShouldBe(["icp-brasil"]);
+        extension.SigningPolicies.Keys.ShouldBe(["icp-brasil", "fiscal-sefaz"]);
         extension.ValidationPolicies.Keys.ShouldBe(["icp-brasil", "govbr"], ignoreOrder: true);
         extension.TrustedListProfiles.ShouldBeEmpty();
-        extension.PassThroughCommands.Select(c => string.Join(' ', c.Path)).ShouldBe(["brasil sign", "icp-brasil sign"]);
+        extension.PassThroughCommands.Select(c => string.Join(' ', c.Path))
+            .ShouldBe(["brasil sign", "icp-brasil sign", "brasil fiscal sign", "icp-brasil fiscal sign"]);
         using var http = new HttpClient();
         extension.CreateChainValidationProviders(http, null).Count.ShouldBeGreaterThanOrEqualTo(2);
     }
@@ -107,6 +108,9 @@ public sealed class BrasilCliExtensionTests : IDisposable
     [InlineData("icp-brasil sign")]
     [InlineData("brasil timestamp")]
     [InlineData("brasil timestamp verify")]
+    [InlineData("brasil fiscal")]
+    [InlineData("brasil fiscal sign")]
+    [InlineData("brasil fiscal validate")]
     public async Task Help_EveryBrazilianCommand_Renders(string command)
     {
         var (exit, output) = await RunAsync([.. command.Split(' '), "--help"]);

@@ -35,6 +35,10 @@ internal static class SignJson
             Warnings = [.. result.Warnings.Select(w => w.Message)],
         });
 
+    /// <summary>Writes a successful signature that has no ETSI level (a plain XML-DSig signature).</summary>
+    public static void WriteSuccess(string format, string output, string signer) =>
+        Write(new SignOutput { Success = true, Format = format, Output = output, Signer = signer });
+
     /// <summary>Writes a failure: the exception type, the SigningErrorReason when there is one, and the message.</summary>
     public static void WriteError(Exception exception) =>
         Write(new SignOutput
