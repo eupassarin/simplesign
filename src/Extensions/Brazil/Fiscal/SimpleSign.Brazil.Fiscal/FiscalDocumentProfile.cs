@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
+using SimpleSign.Brazil.Fiscal.Internal;
 using SimpleSign.Brazil.IcpBrasil;
 using SimpleSign.Core.Policies;
 using SimpleSign.XAdES;
@@ -74,14 +75,26 @@ public sealed record FiscalDocumentProfile(
     /// </summary>
     public SigningPolicy SigningPolicy => HashAlgorithm == HashAlgorithmName.SHA1 ? FiscalPolicies.Sefaz : IcpBrasilPolicies.Signing;
 
-    /// <summary>Sets on <paramref name="builder"/> what the layout fixes: the signed element, the placement, the hash and the canonicalization.</summary>
+    /// <summary>
+    /// Sets on <paramref name="builder"/> what the layout fixes: the signed element, the placement, the hash and the
+    /// canonicalization. An eSocial or EFD-Reinf batch (<c>envioLoteEventos</c>) is refused: each of its events is
+    /// signed on its own, before it goes in the batch.
+    /// </summary>
     /// <param name="builder">A one-call XML-DSig builder.</param>
     /// <returns>The configured builder.</returns>
+    /// <exception cref="ArgumentException">The XML is an eSocial or EFD-Reinf batch.</exception>
     [RequiresUnreferencedCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
     [RequiresDynamicCode("XAdES uses System.Security.Cryptography.Xml which is not AOT-compatible.")]
     public XmlDsigSignerBuilder Apply(XmlDsigSignerBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        if (FiscalEventBatch.IsBatch(builder.Document))
+        {
+            throw new ArgumentException(
+                $"This is an eSocial/EFD-Reinf batch ({FiscalEventBatch.BatchElement}): each event is signed on its own, before it goes in the batch. Sign each event, then build the batch.",
+                nameof(builder));
+        }
+
         var target = SignedElement is null ? builder.WithWholeDocument() : builder.WithSignedElement(SignedElement, IdAttribute ?? "Id");
         return target.WithPlacement(Placement).WithHashAlgorithm(HashAlgorithm).WithCanonicalization(Canonicalization);
     }

@@ -27,6 +27,7 @@ public static class FiscalXmlSigner
     /// <param name="layout">The layout, e.g. <see cref="FiscalDocumentProfile.NFe"/>.</param>
     /// <param name="options">The ICP-Brasil options (HTTP client for the revocation check, extra roots).</param>
     /// <returns>The builder; set the certificate and call <c>SignAsync</c> or <c>SignAllAsync</c>.</returns>
+    /// <exception cref="ArgumentException">The XML is an eSocial or EFD-Reinf batch (<c>envioLoteEventos</c>): sign each event before building the batch.</exception>
     public static XmlDsigSignerBuilder Document(byte[] xml, FiscalDocumentProfile layout, IcpBrasilExtensionOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(xml);
@@ -44,6 +45,7 @@ public static class FiscalXmlSigner
     /// <param name="layout">The layout.</param>
     /// <param name="options">The ICP-Brasil options.</param>
     /// <returns>The builder; set the certificate and the session key and call <c>PrepareAsync</c>.</returns>
+    /// <exception cref="ArgumentException">The XML is an eSocial or EFD-Reinf batch (<c>envioLoteEventos</c>).</exception>
     public static XmlDsigDeferredSignerBuilder Deferred(byte[] xml, FiscalDocumentProfile layout, IcpBrasilExtensionOptions? options = null) =>
         XmlDsigDeferredSigner.From(Document(xml, layout, options));
 }

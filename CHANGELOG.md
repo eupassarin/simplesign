@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `FiscalSignatureResult.BatchEventId`: in an eSocial or EFD-Reinf batch, the Id of the `evento` that holds the
+  signature. `XmlDsigSignerBuilder.Document` and `XmlDsigDeferredSignerBuilder.Document`: the XML to sign, for extensions that
+  check the input.
+
+### Fixed
+
+- **eSocial and EFD-Reinf batches (`envioLoteEventos`)** in `SimpleSign.Brazil.Fiscal`. Signing one with the
+  `ESocial` or `Reinf` layout signed the batch itself (eSocial: the whole batch with `URI=""`); it is now refused with
+  an `ArgumentException` that says to sign each event before building the batch (`FiscalXmlSigner`, `brasil fiscal
+  sign`). Validating one checked each event's `URI=""` against the whole batch and reported correct signatures as
+  broken; each event is now validated as the document it was when signed, and `brasil fiscal validate` shows the event.
+
 ## [0.18.0] - 2026-11-27
 
 ### Added

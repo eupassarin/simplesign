@@ -18,6 +18,8 @@ namespace SimpleSign.Brazil.Cli.Tests;
 public sealed class BrasilFiscalCommandsTests : IDisposable
 {
     private const string Password = "test";
+    private const string ESocialEventId = "ID1112223330000002026110510000000000001";
+    private const string ESocialEvent = "<eSocial xmlns=\"http://www.esocial.gov.br/schema/evt/evtInfoEmpregador/v_S_01_03_00\"><evtInfoEmpregador Id=\"" + ESocialEventId + "\"><ideEvento><tpAmb>2</tpAmb></ideEvento></evtInfoEmpregador></eSocial>";
     private const string Nfe = "<NFe xmlns=\"http://www.portalfiscal.inf.br/nfe\"><infNFe versao=\"4.00\" Id=\"NFe35260711222333000181550010000000071123456780\"><ide><natOp>VENDA</natOp></ide></infNFe></NFe>";
     private readonly string _tempDir = Directory.CreateTempSubdirectory("simplesign-brasil-fiscal-").FullName;
     private readonly X509Certificate2 _cert = CreateECnpj("11222333000181");
@@ -50,6 +52,11 @@ public sealed class BrasilFiscalCommandsTests : IDisposable
         {
         }
     }
+
+    /// <summary>An eSocial batch (envioLoteEventos) with one event.</summary>
+    private static string ESocialBatch(string signedOrNotEvent) =>
+        "<eSocial xmlns=\"http://www.esocial.gov.br/schema/lote/eventos/envio/v1_1_1\"><envioLoteEventos grupo=\"1\"><eventos>"
+        + $"<evento Id=\"{ESocialEventId}\">{signedOrNotEvent}</evento></eventos></envioLoteEventos></eSocial>";
 
     private string Write(string name, string xml)
     {
@@ -104,6 +111,31 @@ public sealed class BrasilFiscalCommandsTests : IDisposable
 
         exit.ShouldNotBe(0);
         text.ShouldContain("--layout must be one of");
+    }
+
+    [Fact]
+    public async Task FiscalSign_ESocialBatch_IsRefused()
+    {
+        var (exit, text) = await BrasilCli.RunAsync("brasil", "fiscal", "sign", Write("lote.xml", ESocialBatch(ESocialEvent)), "--layout", "esocial",
+            "--cert", _pfxPath, "--password", Password, "--signing-policy", _policyPath, "--output", Path.Combine(_tempDir, "lote-signed.xml"));
+
+        exit.ShouldNotBe(0, text);
+        text.ShouldContain("envioLoteEventos");
+        File.Exists(Path.Combine(_tempDir, "lote-signed.xml")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task FiscalValidate_ESocialBatch_ShowsEachEvent()
+    {
+        string signedEvent = Path.Combine(_tempDir, "evento-signed.xml");
+        (await BrasilCli.RunAsync("brasil", "fiscal", "sign", Write("evento.xml", ESocialEvent), "--layout", "esocial",
+            "--cert", _pfxPath, "--password", Password, "--signing-policy", _policyPath, "--output", signedEvent)).Exit.ShouldBe(0);
+        string batch = Write("lote-ok.xml", ESocialBatch(await File.ReadAllTextAsync(signedEvent)));
+
+        var (exit, report) = await BrasilCli.RunAsync("brasil", "fiscal", "validate", batch, "--layout", "esocial", "--offline");
+
+        exit.ShouldBe(0, report);
+        report.ShouldContain($"event {ESocialEventId}");
     }
 
     [Fact]

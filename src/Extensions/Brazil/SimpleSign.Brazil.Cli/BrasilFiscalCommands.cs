@@ -139,7 +139,8 @@ internal sealed class BrasilFiscalValidateCommand : AsyncCommand<BrasilFiscalVal
         {
             var s = signature.Signature;
             string who = signature.Cnpj is { } cnpj ? $"CNPJ {cnpj}" : signature.Cpf is { } cpf ? $"CPF {cpf}" : s.Certificate?.Subject ?? "?";
-            AnsiConsole.MarkupLine($"{(signature.IsValid ? "[green]✓[/]" : "[red]✗[/]")} {(s.SignedElement ?? "?").EscapeMarkup()} {s.ReferenceUri.EscapeMarkup()} — {who.EscapeMarkup()}");
+            string inBatch = signature.BatchEventId is { } eventId ? $"event {eventId}: " : string.Empty;
+            AnsiConsole.MarkupLine($"{(signature.IsValid ? "[green]✓[/]" : "[red]✗[/]")} {inBatch.EscapeMarkup()}{(s.SignedElement ?? "?").EscapeMarkup()} {s.ReferenceUri.EscapeMarkup()} — {who.EscapeMarkup()}");
             AnsiConsole.MarkupLine($"    digest {Valid(s.IsDigestValid)}, signature {Valid(s.IsSignatureValid)}, ICP-Brasil chain {(s.IsChainValid is { } chain ? Valid(chain) : "not checked")}{(s.RevocationStatus is { } revocation ? $", revocation {revocation}" : string.Empty)}");
             foreach (string error in signature.Errors)
             {

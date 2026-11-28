@@ -74,6 +74,10 @@ byte[] signed = await XmlDsigDeferredSigner.Resume(prepared.SessionData, key).Co
 > ADN/Sefin Nacional manual. Profiles are records, so you can adjust one:
 > `FiscalDocumentProfile.NFSeDps with { HashAlgorithm = HashAlgorithmName.SHA1 }`.
 
+eSocial and EFD-Reinf sign each event on its own, as a document, before it goes in the batch (`envioLoteEventos`):
+the batch itself is not signed. Sign each event, then build the batch from the signed bytes. A batch given to
+`FiscalXmlSigner` (or to `brasil fiscal sign`) is refused with an `ArgumentException`.
+
 Another XML-DSig signature that is not a fiscal layout is `XmlDsigSigner` directly:
 
 ```csharp
@@ -94,6 +98,10 @@ foreach (var s in full.Signatures)
 
 References must resolve to exactly one element: a duplicate Id is refused, against XML signature wrapping. Given the
 layout, each signature must sign the layout's element with the layout's hash (`LayoutErrors`).
+
+An eSocial or EFD-Reinf batch (`envioLoteEventos`) is validated event by event, each as the document it was when
+signed: in eSocial `URI=""` means the event, not the batch. `BatchEventId` says which `evento` holds each signature;
+an event not signed, or a signature of the batch itself, is in `Errors`.
 
 ## CLI
 
